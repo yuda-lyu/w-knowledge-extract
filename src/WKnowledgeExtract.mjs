@@ -35,7 +35,7 @@ import { createExtractDomain } from './domain/extractDomain.mjs'
 import { createTriageDomain } from './domain/triageDomain.mjs'
 import { createRelateDomain } from './domain/relateDomain.mjs'
 import { createDistillDomain, buildDistillPrompt, buildAuditPrompt, buildRevisePrompt, buildFinalPrompt, renderCoreBody, checkCore, checkIssues, CORE_SCHEMA } from './domain/distillDomain.mjs'
-import { VOCAB_DEFAULT, resolveVocab, kbLabelOf } from './domain/vocabDefault.mjs'
+import { VOCAB_DEFAULT, GUIDE_FIELDS, guideDefaultOf, resolveVocab, kbLabelOf } from './domain/vocabDefault.mjs'
 // ── 內建抓取器與端點 ──
 import { createDefaultFetchers, mergeFetchers } from './fetchers/defaultFetchers.mjs'
 import { DEFAULT_SITE_ADAPTERS, mergeSiteAdapters } from './fetchers/siteAdapters.mjs'
@@ -183,6 +183,8 @@ let WKnowledgeExtract = {
     checkIssues,
     CORE_SCHEMA,
     VOCAB_DEFAULT,
+    GUIDE_FIELDS,
+    guideDefaultOf,
     resolveVocab,
     kbLabelOf,
     resolveSettings,

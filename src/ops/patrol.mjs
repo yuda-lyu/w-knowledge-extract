@@ -18,6 +18,7 @@
 import fs from 'fs'
 import path from 'path'
 import isobj from 'wsemi/src/isobj.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
 import { acquireLock } from '../core/lock.mjs'
 import { readJson, writeJson, queueAge } from '../util/misc.mjs'
 import { pickConcepts } from '../stores/conceptGroups.mjs'
@@ -81,6 +82,7 @@ const fin = (v) => (Number.isFinite(v) ? v : null)
  * @param {Array} [cfg.settingsWarnings] 輸入設定自洽警告字串陣列(resolveSettings.warnings)，以獨立判準(⑰)揭露
  * @param {String} [cfg.envFile] 輸入 Telegram 推送金鑰來源之 .env 檔路徑(含 TELEGRAM_BOT_TOKEN／TELEGRAM_CHAT_ID)，無則靜默略過推送
  * @param {Function} [cfg.notify] 輸入自訂推送函數 (text) => any，給了就不走內建 Telegram
+ * @param {String} [cfg.pushTitle='知識庫巡檢'] 輸入推送摘要首行之標題字串(總組裝預設以知識庫稱呼推導為「<稱呼>巡檢」)，非有效字串時用預設
  * @param {Integer} [cfg.maxFetchTries=3] 輸入抓取重試上限次數，僅用於待辦表①之說明文字
  * @returns {Object} 回傳巡檢器，含 patrolFromPipeline()、runCli(argv)、assess()、recordFile
  * @throws {Error} cfg 非物件(視為 {})、或缺 dirs.log／dirs.state／clock 時拋出
@@ -122,6 +124,8 @@ export function createPatrol(cfg) {
     const DEAD_FAIL_MIN = cfg.deadProviderFailMin ?? 6
     const DEAD_STREAK_MIN = cfg.deadProviderStreakMin ?? 2
     const KNOWN_STATUSES = new Set(cfg.knownStatuses || ['new', 'raw', 'noted', 'skip', 'dead', 'aggregated', 'extract-failed'])
+    // 推送標題:此前寫死「知識庫巡檢」,安裝方無從換成自己的知識庫稱呼(2026-09-23 開放)
+    const PUSH_TITLE = isestr(cfg.pushTitle) ? cfg.pushTitle : '知識庫巡檢'
     const limitMin = cfg.scheduleLimitMin ?? 60
     const tzSuffix = clock.iso8().slice(-6) // 檔名時間戳之時區(ageMin 計算用)
 
@@ -808,7 +812,7 @@ export function createPatrol(cfg) {
         const o = rows.filter((r) => r.day === today && (r.kind === 'run' || r.kind === 'organize'))
         const sum = (arr, k) => arr.reduce((a, x) => a + (x[k] || 0), 0)
         const summary = [
-            `${issues.length === 0 ? '✅' : '⚠️'} 知識庫巡檢 ${clock.date8()} ${clock.iso8().slice(11, 16)}`,
+            `${issues.length === 0 ? '✅' : '⚠️'} ${PUSH_TITLE} ${clock.date8()} ${clock.iso8().slice(11, 16)}`,
             `今日：新知識 ${sum(f, 'notes')} 篇（${f.length} 輪）｜關聯 +${sum(o, 'edges')} 條（${o.length} 輪）`,
             `總量：筆記 ${snap.notes}｜關聯 ${snap.edges}｜核心 ${snap.cores}｜待關聯 ${snap.pending}`,
             `AI 今日 ${usage.used} 次`,

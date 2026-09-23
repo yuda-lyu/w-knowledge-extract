@@ -1,9 +1,13 @@
 // extractDomain.mjs — 彙整(萃取)的內建領域預設:prompt、驗證、品質標注、筆記版型
 //
 // 【套件開發者擁有、隨版本演進】萃取指令/欄位 schema/md 版型是內建能力(領域中立);安裝方經 organize 物件之 opts
-//   逐項覆寫(buildPrompt/renderNote…),主題範圍(vocab.domain)與詞彙表經 cfg.data.vocab 整鍵替換。
+//   逐項覆寫(buildPrompt/renderNote…),主題範圍(vocab.domain)與詞彙表經 cfg.data.vocab 整鍵替換,
+//   prompt 之領域句(萃取對象、relevant 判準與排除、簡體字例、概念用語、證據等級定義、品質疑慮例、時效條件)
+//   經 vocab.guide.extract 逐欄覆寫;輸出欄位與格式說明不開放覆寫(套件解析輸出之契約)。
 // 【版型逐字保真】md 版型與 JSON 欄位自原專案原樣搬入(含全形標點)——版型變動會讓新舊筆記格式分裂,
 //   非套件升級之正當理由。2026-09-23 去除 prompt 之領域特化用語時亦只改措辭,不動欄位與版型。
+// 【regime_dependency 之稱呼與 md 章節名同為「時效與機制相依」】章節名綁定既有筆記(不可改);
+//   prompt 曾改稱「時效與條件相依」致兩處不一致,2026-09-23 改回同名(「機制」即 regime,不綁領域)。
 
 import isarr from 'wsemi/src/isarr.mjs'
 import isobj from 'wsemi/src/isobj.mjs'
@@ -32,9 +36,10 @@ function strArr(v, max = 6) {
  * 回傳物件之全部函數皆可被彙整物件之 opts 逐項覆寫(opt.domain 整組置換,或 tap 置換 renderNote 環)
  *
  * @param {Object} [opt={}] 輸入設定物件
- * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(整鍵替換內建 VOCAB_DEFAULT)，含 domain(主題範圍)、categories 等，預設null代表全用內建
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(見 resolveVocab)，含 domain(主題範圍)、kbLabel、categories、evidenceLevels、guide.extract(領域句)等，預設null代表全用內建
  * @param {Integer} [opt.extractCharsPerDoc=6000] 輸入每篇送入 prompt 之內文字數上限正整數，預設6000
  * @returns {Object} 回傳 domain 物件，含 vocab、buildPrompt(docs, conceptVocab)、isValidItem(it, count)、normalizeQuality(k)、renderNoteBody(k, doc, q)
+ * @throws {Error} opt.vocab 之 kbLabel 或 guide 不合規格時拋出(見 resolveVocab)
  * @example
  * let domain = createExtractDomain({ vocab: { domain: '機器學習' } })
  * let prompt = domain.buildPrompt([{ title: 'T', sourceName: 'S', url: 'https://e.com/a', text: '內文' }], [])
@@ -58,7 +63,11 @@ export function createExtractDomain(opt = {}) {
     charsPerDoc = cint(charsPerDoc)
 
     const kb = kbLabelOf(vocab)
-    const domainName = String(vocab.domain || '').trim()
+    const g = vocab.guide.extract // 領域句(安裝方可經 vocab.guide.extract 逐欄覆寫;輸出欄位與格式留在本檔)
+    // 證據等級擇一清單依 vocab.evidenceLevels 產生(此前寫死高／中／低:安裝方改了等級名稱,prompt 仍要求高／中／低,
+    // 而 normalizeQuality 依 evidenceLevels 驗證,產出全數落「未評估」;2026-09-23 修)
+    const evidenceChoices = (isarr(vocab.evidenceLevels) ? vocab.evidenceLevels : []).map((lv) => (g.evidenceLevelDefs[lv] ? `${lv}（${g.evidenceLevelDefs[lv]}）` : lv)).join('／')
+    const quoted = (arr) => arr.map((x) => `「${x}」`).join('')
 
     /**
      * 組單批萃取 prompt
@@ -79,16 +88,16 @@ export function createExtractDomain(opt = {}) {
             strTruncate(d.text, charsPerDoc),
         ].join('\n')).join('\n\n')
 
-        return `你是${kb}的萃取器。請閱讀以下 ${docs.length} 篇資料，逐篇萃取可長期複用的知識。
+        return `你是${kb}的萃取器。請閱讀以下 ${docs.length} 篇資料，逐篇萃取${g.target}。
 
 要求：
-1. 先判斷該篇是否含有${domainName ? `與「${domainName}」相關、` : ''}可長期複用之知識、方法、技術、參數或原理（relevant）。下列一律 relevant 為 false：
-   純新聞快訊、廣告、招募、無方法論的評論或觀點、免責聲明或版權頁、產品／月報更新${domainName ? `、與「${domainName}」無關之內容` : ''}，
+1. 先判斷該篇是否含有${g.relevance}（relevant）。下列一律 relevant 為 false：
+   ${g.rejects}，
    以及「連結彙整、每週精選、文章清單」這類本身不含方法論、只是把別處文章列出來的匯流貼文。
    這類匯流貼文雖不成筆記，但它列出的題目很有價值，請務必在 explore 給出對應的關鍵字線索。
 2. relevant 為 true 時，須以繁體中文萃取下列欄位；原文為英文時翻譯成繁體中文，專有名詞保留英文於括號內。
 3. 只寫原文確實提到的內容，不可自行補充原文沒有的數字、參數或結論。原文沒提到的欄位請給空陣列。
-4. concepts 是用於跨篇關聯與提煉的概念標籤，2 到 6 個，**必須使用繁體字形（不可寫「数据」「网络」這類簡體）**，用該領域的通用術語。
+4. concepts 是用於跨篇關聯與提煉的概念標籤，2 到 6 個，**必須使用繁體字形（不可寫${quoted(g.simplifiedExamples)}這類簡體）**，${g.conceptExamples}。
    標籤要「可跨篇共用」：優先用該領域的通用概念名稱，不要用只有這一篇才成立的長描述或論文專屬模型名。${conceptVocab.length
         ? `
    下列是知識庫既有的概念標籤（括號內為使用篇數）。若本篇的概念與其中某個語意相同，請「直接沿用既有寫法」，不要另創同義詞：
@@ -98,12 +107,12 @@ export function createExtractDomain(opt = {}) {
 6. category 從此清單擇一：${vocab.categories.join('、')}。
 7. 品質與證據標注（每篇必填，這是為了讓後續使用者看得到內容的可信度與邊界）：
    - claim_type 擇一：${vocab.claimTypes.join('／')}。
-   - evidence_level 擇一：高（有獨立驗證、重複驗證或實際應用結果）／中（僅單一研究、案例或統計分析）／低（示範性質、未驗證、或推廣內容）；evidence_note 一句話說明判定依據。
-   - caveats：內容品質問題（陣列，誠實列出，無則空）——例：「無獨立驗證」「樣本小或期間短」「倖存者偏差風險」「數據窺探風險」「適用範圍狹窄」「推廣性質」「結論與所附數據不符」。
+   - evidence_level 擇一：${evidenceChoices}；evidence_note 一句話說明判定依據。
+   - caveats：內容品質問題（陣列，誠實列出，無則空）——例：${quoted(g.caveatExamples)}。
    - sample_period：原文數據樣本期間（如 "2015-2025"；未載明填「未載明」）。
 8. 多元觀點（原文有依據才寫，不可捏造）：
    - pros／cons：此方法或觀點的利與弊，各 0-4 條。
-   - regime_dependency：時效與條件相依（0-3 條）——在什麼環境／時期／條件下有效、何時失效、利弊在何種條件下反轉。
+   - regime_dependency：時效與機制相依（0-3 條）——${g.regime}、何時失效、利弊在何種條件下反轉。
    - counter_views：原文提到的反方觀點、與主流相左的說法、或作者自己承認的爭議（0-3 條）。
 
 只回覆 JSON 陣列，不要任何其他說明文字，格式：

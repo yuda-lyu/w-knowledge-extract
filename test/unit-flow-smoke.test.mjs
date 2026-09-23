@@ -1,9 +1,10 @@
 // unit-flow-smoke.test.mjs — 端到端冒煙:近零注入跑 createKnowledgeExtract 完整兩輪
 //
-// 注入僅三處,且每一處都是套件宣稱的正當擴充口(冒煙同時驗證這些口):
+// 注入僅四處,且每一處都是套件宣稱的正當擴充口(冒煙同時驗證這些口):
 //   ①fetchers 同 id 置換(rss/article 換成 stub,避免真網路)
 //   ②aiAdapter 整組置換(stub callAI,避免燒額度)
 //   ③plugins 跨階段掛載(驗證插件真的被執行)
+//   ④domains 頂層注入(關聯 domain 包一層計數,prompt 仍為內建:驗證管線實際使用 cfg.domains,不只反映在 info())
 // 其餘全走內建預設:真 prompt/真版型/真 LMDB/真鎖/真索引。
 // 執行:npx mocha test/unit-flow-smoke.test.mjs(暫存落 test/_tmp/flow-smoke-<pid>,測完即刪)
 
@@ -69,6 +70,17 @@ const countingPlugin = {
     },
 }
 
+// ── 頂層 domains 注入:包一層計數的內建關聯 domain ──
+let relatePromptCalls = 0
+const builtinRelate = WKE.createRelateDomain({})
+const countingRelate = {
+    ...builtinRelate,
+    buildPrompt: (targets, candidateMap) => {
+        relatePromptCalls++
+        return builtinRelate.buildPrompt(targets, candidateMap)
+    },
+}
+
 describe('unit-flow-smoke', function() {
 
     let flow = null
@@ -97,6 +109,7 @@ describe('unit-flow-smoke', function() {
             ],
             aiAdapter,
             plugins: [countingPlugin],
+            domains: { relate: countingRelate },
             knowledge: { distillMinNotes: 99, categoryFallback: { minNotes: 999, minGain: 999 } },
             deadlineMs: 60_000,
             logFactory: () => silentLog,
@@ -141,6 +154,8 @@ describe('unit-flow-smoke', function() {
         assert.ok(pluginHits >= 2, `插件掛載須被執行(fetchDetail 後;實得 ${pluginHits})`)
         assert.equal(triagePluginHits, 2, `插件掛於 organize.triage 須被執行(每篇預篩落帳後一次;實得 ${triagePluginHits})`)
         assert.ok(aiCalls >= 2, `AI stub 須被呼叫(預篩＋萃取＋關聯;實得 ${aiCalls})`)
+        assert.ok(relatePromptCalls >= 1, `關聯段須使用頂層注入之 domain(實得 ${relatePromptCalls} 次)`)
+        assert.equal(flow.info().domains.relate, countingRelate, 'info() 回傳生效之同一 domain')
     })
 
     it('第一輪:抓取與彙整摘要格式保真(巡檢之正則退路依此解析)', function() {

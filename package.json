@@ -1,6 +1,6 @@
 {
   "name": "w-knowledge-extract",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "dist/w-knowledge-extract.umd.js",
   "dependencies": {
     "json5": "^2.2.3",

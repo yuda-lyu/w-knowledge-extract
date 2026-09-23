@@ -1,6 +1,7 @@
 // relateDomain.mjs — 關聯的內建領域預設:prompt 與品質標注摘要
 //
-// 關聯型別白名單與主題範圍來自詞彙表(內建預設,cfg.data.vocab 整鍵替換);
+// 關聯型別白名單與主題範圍來自詞彙表(內建預設,cfg.data.vocab 整鍵替換);prompt 之領域句
+// (泛泛關係例、空泛理由例、利弊轉換條件)經 vocab.guide.relate 逐欄覆寫。
 // 候選挑選、slug 容錯、衝突雙寫等機制在 stages/relateStage.mjs。
 
 import isarr from 'wsemi/src/isarr.mjs'
@@ -25,8 +26,9 @@ function qualityTag(n) {
  * 建立關聯之內建領域預設
  *
  * @param {Object} [opt={}] 輸入設定物件
- * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(整鍵替換內建 VOCAB_DEFAULT)，含 domain、relationTypes、conflictType、fallbackType 等，預設null代表全用內建
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(見 resolveVocab)，含 domain、kbLabel、relationTypes、conflictType、fallbackType、guide.relate(領域句)等，預設null代表全用內建
  * @returns {Object} 回傳 domain 物件，含 relationTypes、conflictType、fallbackType、buildPrompt(targets, candidateMap)
+ * @throws {Error} opt.vocab 之 kbLabel 或 guide 不合規格時拋出(見 resolveVocab)
  * @example
  * let domain = createRelateDomain({})
  * console.log(domain.conflictType, domain.relationTypes.includes(domain.fallbackType))
@@ -41,6 +43,7 @@ export function createRelateDomain(opt = {}) {
 
     const vocab = resolveVocab(opt.vocab)
     const kb = kbLabelOf(vocab)
+    const g = vocab.guide.relate // 領域句(安裝方可經 vocab.guide.relate 逐欄覆寫;輸出格式留在本檔)
 
     /**
      * 組單批關聯 prompt
@@ -70,10 +73,10 @@ export function createRelateDomain(opt = {}) {
 
 要求：
 1. 只能選候選清單內出現過的 slug，不可自創 slug。
-2. 每篇最多選 4 個，寧缺勿濫：只有題材撞名、同屬某一大領域這種泛泛關係，不算關聯，請不要選。
+2. 每篇最多選 4 個，寧缺勿濫：只有題材撞名、${g.broadRelation}這種泛泛關係，不算關聯，請不要選。
 3. type 從此清單擇一：${vocab.relationTypes.join('、')}。
-4. reason 用繁體中文一句話說明兩篇之間的具體關聯（要指出共同的機制、參數或前提，不可只寫「都與某主題有關」）。
-5. **主動獵取衝突**：兩篇結論相反、參數矛盾、或適用條件互斥時，務必選為「${vocab.conflictType}」並在 reason 寫明衝突的具體內容（甲說 X、乙說 Y）。衝突是知識庫裡最有價值的關聯——觀點本就多元、利弊會隨時間與環境條件轉換，絕不可因為衝突而不選、或硬把衝突寫成互補。
+4. reason 用繁體中文一句話說明兩篇之間的具體關聯（要指出共同的機制、參數或前提，不可只寫「${g.vagueReason}」）。
+5. **主動獵取衝突**：兩篇結論相反、參數矛盾、或適用條件互斥時，務必選為「${vocab.conflictType}」並在 reason 寫明衝突的具體內容（甲說 X、乙說 Y）。衝突是知識庫裡最有價值的關聯——觀點本就多元、利弊會${g.changeDrivers}，絕不可因為衝突而不選、或硬把衝突寫成互補。
 6. 若某篇確實找不到夠格的關聯，relations 給空陣列。
 
 只回覆 JSON 陣列，不要任何其他說明文字，格式：

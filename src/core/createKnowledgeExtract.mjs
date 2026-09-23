@@ -27,6 +27,7 @@
 import path from 'path'
 import * as OpenCC from 'opencc-js'
 import isobj from 'wsemi/src/isobj.mjs'
+import isarr from 'wsemi/src/isarr.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 import WOrmDefault from 'w-orm-lmdb/src/WOrmLmdb.mjs'
@@ -47,6 +48,7 @@ import { createTriageDomain } from '../domain/triageDomain.mjs'
 import { createExtractDomain } from '../domain/extractDomain.mjs'
 import { createRelateDomain } from '../domain/relateDomain.mjs'
 import { createDistillDomain } from '../domain/distillDomain.mjs'
+import { resolveVocab, kbLabelOf } from '../domain/vocabDefault.mjs'
 import { createAiAdapter } from '../ai/adapter.mjs'
 import { createLogger } from '../ops/logger.mjs'
 import { createPatrol } from '../ops/patrol.mjs'
@@ -95,12 +97,70 @@ function listSeats(ai) {
 }
 
 /**
+ * 網格與線索探測之 arXiv 類別設定之型別檢核(啟動期):型別錯誤時此前會被靜默當成「不限類別」,
+ * 或原樣傳入組網址,兩者都不會報錯而只是抓錯範圍
+ *
+ * @param {Object} f 輸入 settings.fetch(resolveSettings 之產物)
+ * @throws {Error} arxivCategories 非字串陣列、或 gridArxivCategories 既非字串陣列亦非 null 時拋出
+ */
+function checkArxivCategories(f) {
+    const isStrArr = (v) => isarr(v) && v.every((x) => typeof x === 'string')
+    if (!isStrArr(f.arxivCategories)) {
+        throw new Error('settings.fetch.arxivCategories 須為字串陣列(空陣列＝不限類別)')
+    }
+    if (f.gridArxivCategories !== null && f.gridArxivCategories !== undefined && !isStrArr(f.gridArxivCategories)) {
+        throw new Error('settings.fetch.gridArxivCategories 須為字串陣列或 null(null＝沿用 arxivCategories)')
+    }
+}
+
+/**
+ * 合併頂層注入之 domain 與內建 domain:給了的整組置換、沒給的沿用內建;結果同時餵入每輪 deps.domains 與 info().domains
+ * (此前只能在子階段 opt.domain 注入,info() 仍回內建者,安裝方之工具與管線因而用到兩套 prompt)
+ *
+ * 注入者須具備內建 domain 之全部成員(函數成員須為函數):子階段會呼叫之,缺一要到執行期才爆。
+ * 建議以對應工廠之產物展開後覆寫,如 { ...createExtractDomain({ vocab }), buildPrompt: myBuild }。
+ * 優先序:子階段 opt.domain ＞ cfg.domains ＞ 內建(依 cfg.data.vocab 建立)
+ *
+ * @param {Object} builtin 輸入內建 domain 物件 { triage, extract, relate, distill }
+ * @param {Object} [injected] 輸入 cfg.domains，未給(undefined 或 null)代表全用內建
+ * @returns {Object} 回傳生效之 domain 物件 { triage, extract, relate, distill }
+ * @throws {Error} injected 非物件、含不認得之鍵、某項非物件或缺成員時拋出
+ */
+function mergeDomains(builtin, injected) {
+    if (injected === undefined || injected === null) return builtin
+    if (!isobj(injected)) {
+        throw new Error('cfg.domains 須為物件 { triage?, extract?, relate?, distill? }')
+    }
+    const out = { ...builtin }
+    for (const [k, d] of Object.entries(injected)) {
+        if (!builtin[k]) {
+            throw new Error(`cfg.domains 含不認得的鍵「${k}」（可用：${Object.keys(builtin).join('、')}）`)
+        }
+        if (d === undefined || d === null) continue
+        if (!isobj(d)) {
+            throw new Error(`cfg.domains.${k} 須為 domain 物件`)
+        }
+        const missing = Object.keys(builtin[k]).filter((m) => (typeof builtin[k][m] === 'function' ? typeof d[m] !== 'function' : d[m] === undefined))
+        if (missing.length) {
+            throw new Error(`cfg.domains.${k} 缺成員「${missing.join('、')}」（須具備內建 domain 之全部成員；建議以 create${k[0].toUpperCase()}${k.slice(1)}Domain() 之產物展開後覆寫）`)
+        }
+        out[k] = d
+    }
+    return out
+}
+
+/**
  * 總組裝:安裝即用(僅 workDir 必填),逐層可覆寫(六個擴充入口見檔頭)
  *
  * @param {Object} [cfg={}] 輸入設定物件，非物件時視為{}(再由 workDir 檢查拋錯)；各鍵預設值見 core/settingsDefault,僅 workDir 必填
  * @param {String} cfg.workDir 輸入工作目錄路徑字串(唯一必填:所有輸出的路徑錨點)
+ * @param {Object} [cfg.data] 輸入資料物件 { seedSources, gridTopics, vocab, skipTitlePatterns }；vocab 之 kbLabel／guide(prompt 領域句)見 domain/vocabDefault 之 resolveVocab
+ * @param {Object} [cfg.domains] 輸入頂層 domain 注入 { triage?, extract?, relate?, distill? }，給了的整組置換內建(須具備內建之全部成員)，同時作用於管線與 info()
+ * @param {String} [cfg.indexTitle] 輸入知識庫索引標題，未給則為「<知識庫稱呼>索引」(稱呼見 kbLabelOf，無 domain 時為「知識庫索引」)
+ * @param {Object} [cfg.monitor] 輸入巡檢設定(逐鍵覆寫 createPatrol 之 cfg)，其中 pushTitle 未給則為「<知識庫稱呼>巡檢」
  * @returns {Object} 回傳 { run:Function, openStores:Function, closeStores:Function, info:Function }
- * @throws {Error} cfg.workDir 非有效字串時拋出
+ * @throws {Error} cfg.workDir 非有效字串、cfg.data.vocab 之 kbLabel／guide 不合規格、cfg.domains 不合規格、
+ *   settings.fetch.arxivCategories／gridArxivCategories 型別不符，或 AI 席位無法解析時拋出
  */
 export function createKnowledgeExtract(cfg = {}) {
 
@@ -140,6 +200,12 @@ export function createKnowledgeExtract(cfg = {}) {
         vocab: cfg.data?.vocab || null, // null=用內建預設(domain 內 resolveVocab)
         skipTitlePatterns: (cfg.data?.skipTitlePatterns || SKIP_TITLE_PATTERNS_DEFAULT).map(toTitleRe),
     }
+    checkArxivCategories(settings.fetch)
+
+    // 知識庫稱呼(prompt 首句、索引標題、巡檢推送標題共用):詞彙表於此先解析一次,kbLabel／guide 設定錯誤在建構期即爆
+    const kbLabel = kbLabelOf(resolveVocab(data.vocab))
+    // 索引標題預設由稱呼推導(無 domain 且無 kbLabel 時仍為「知識庫索引」);cfg.indexTitle 明給者優先
+    if (!isestr(cfg.indexTitle)) settings.indexTitle = `${kbLabel}索引`
 
     // 繁簡折疊(分群鍵用):內建 opencc cn→tw;cfg.conceptFold=false 可停用,給函數即自訂,其餘值(含 true)一律用內建。
     // why:模型偶爾無視「一律繁體」輸出簡體,NFKC 不做繁簡轉換,不折疊會讓同一概念
@@ -166,6 +232,7 @@ export function createKnowledgeExtract(cfg = {}) {
             openAlexMailto: cfg.openAlexMailto || '',
             // 網格來源之領域過濾(OpenAlex field id／arXiv 類別):通用套件預設不限,主題範圍由安裝方以 fetch 設定給
             openAlexFields: settings.fetch.openAlexFields,
+            gridArxivCategories: settings.fetch.gridArxivCategories,
             arxivCategories: settings.fetch.arxivCategories,
             // 站台 adapter:安裝方 cfg.siteAdapters 同 id 置換本套件自帶、其餘排前;不合契約者啟動期拋錯。
             // 合併結果再由 w-fetch-web 排在其內建清單(gelonghui/bloomberg/msn)之前
@@ -184,13 +251,13 @@ export function createKnowledgeExtract(cfg = {}) {
         cls: { docs: 'docs', sources: 'sources', frontier: 'frontier', notes: 'notes', relations: 'relations', cores: 'cores', ...(cfg.lmdb?.cls || {}) },
     }
 
-    // ── 內建領域預設(可由物件 opts 整組置換或 tap 逐環覆寫)──
-    const domains = {
+    // ── 領域預設:內建(依 vocab 建立)→ cfg.domains 整組置換;子階段 opts 之 domain 與 tap 仍可再覆寫 ──
+    const domains = mergeDomains({
         triage: createTriageDomain({ vocab: data.vocab, triageCharsPerDoc: settings.knowledge.triageCharsPerDoc }),
         extract: createExtractDomain({ vocab: data.vocab, extractCharsPerDoc: settings.knowledge.extractCharsPerDoc }),
         relate: createRelateDomain({ vocab: data.vocab }),
         distill: createDistillDomain({ vocab: data.vocab, notesPerTarget: settings.knowledge.distillNotesPerConcept }),
-    }
+    }, cfg.domains)
 
     // ── AI 調度層(內建;cfg.aiAdapter 整組置換——測試 stub/自建調度皆走這裡)──
     fsCreateFolder(dirs.state)
@@ -393,6 +460,8 @@ export function createKnowledgeExtract(cfg = {}) {
                 },
                 // 設定自洽與啟動期檢核之警告:巡檢以獨立判準(⑰)揭露,不靠日誌 WARN 掃描
                 settingsWarnings: [...(settings.warnings || []), ...startupWarnings],
+                // 推送標題與索引標題同源(知識庫稱呼);cfg.monitor.pushTitle 可覆寫
+                pushTitle: `${kbLabel}巡檢`,
                 ...(cfg.monitor || {}),
             })
         }

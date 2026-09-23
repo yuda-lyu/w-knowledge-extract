@@ -5,6 +5,7 @@
 // 回傳皆為「原始項目」,欄位映射由 toRecord(內建預設,可覆寫)處理。
 // 安裝方以 cfg.fetchers 追加自寫抓取器;同 id 者置換內建。
 // 【領域中立】grid 之領域過濾(OpenAlex field／arXiv 類別)由 opt 給,預設不限(2026-09-23 去除原專案之領域預設)。
+//   grid 遞補之 arXiv 類別(gridArxivCategories)與線索探測之類別(arxivCategories)可分別設定,前者未給時沿用後者。
 
 import isarr from 'wsemi/src/isarr.mjs'
 import isobj from 'wsemi/src/isobj.mjs'
@@ -37,13 +38,16 @@ function deinvertAbstract(inv) {
  * 【回應非 JSON 亦須遞補】此前 OpenAlex 回 200 但內容非 JSON(錯誤頁/維護頁)時直接拋錯,與「失敗時切 arXiv」之設計不符(2026-09-23 修)
  *
  * @param {Object} src 輸入 grid 來源記錄，需含 query，可含 cursor(頁碼)
- * @param {Object} opt 輸入設定物件，可含 openAlexMailto、openAlexFields、arxivCategories、fetchWebByCurl
+ * @param {Object} opt 輸入設定物件，可含 openAlexMailto、openAlexFields、gridArxivCategories、arxivCategories、fetchWebByCurl
  * @returns {Promise} 回傳 Promise，resolve 回傳原始項目陣列 [{ url, time, title, summary, text }]，雙供應商皆失敗時 reject
  */
 async function readGrid(src, opt) {
     const fetchByCurl = typeof opt.fetchWebByCurl === 'function' ? opt.fetchWebByCurl : fetchWebByCurl
     const fields = String(opt.openAlexFields || '').trim()
-    const cats = (Array.isArray(opt.arxivCategories) ? opt.arxivCategories : []).map((c) => String(c || '').trim()).filter(Boolean)
+    // 遞補 arXiv 之類別:gridArxivCategories(陣列)優先,未給(null/undefined)沿用 arxivCategories。原專案之網格遞補與
+    // 線索探測(stages/expand)各有一份類別清單;合成一鍵時安裝方無法兩者皆逐字重現(2026-09-23 拆分)
+    const catList = isarr(opt.gridArxivCategories) ? opt.gridArxivCategories : (isarr(opt.arxivCategories) ? opt.arxivCategories : [])
+    const cats = catList.map((c) => String(c || '').trim()).filter(Boolean)
     const page = Math.max(1, Number(src.cursor) || 1)
     const mailto = opt.openAlexMailto ? `&mailto=${encodeURIComponent(opt.openAlexMailto)}` : ''
     const u = `https://api.openalex.org/works?search=${encodeURIComponent(src.query)}&per-page=8&page=${page}` +
@@ -97,7 +101,8 @@ async function readGrid(src, opt) {
  * @param {Integer} [opt.articleTimeoutMs=30000] 輸入單篇正文抓取逾時毫秒正整數，預設30000
  * @param {String} [opt.openAlexMailto=''] 輸入 OpenAlex polite pool 聯絡信箱字串，預設''
  * @param {String} [opt.openAlexFields=''] 輸入 OpenAlex primary_topic.field.id 白名單字串(以 | 串接，如 '17|26')，預設''代表不限領域
- * @param {Array} [opt.arxivCategories=[]] 輸入 grid 遞補查 arXiv 時之類別過濾字串陣列(如 ['cs.LG'])，預設[]代表不限類別
+ * @param {Array} [opt.gridArxivCategories=null] 輸入 grid 遞補查 arXiv 時之類別過濾字串陣列(如 ['cs.LG', 'stat.ML'])，預設null代表沿用 opt.arxivCategories
+ * @param {Array} [opt.arxivCategories=[]] 輸入 arXiv 類別過濾字串陣列(gridArxivCategories 未給時 grid 遞補沿用之)，預設[]代表不限類別
  * @param {Array} [opt.siteAdapters] 輸入站台 adapter 陣列(排於 w-fetch-web 內建清單之前)，未給則用本套件自帶清單
  * @param {Function} [opt.fetchWebByCurl] 輸入 grid 抓取所用之 curl 抓取函數(測試或自訂網路層注入)，預設 w-fetch-web 之 fetchWebByCurl
  * @returns {Array} 回傳抓取器陣列，依序為 rss、grid、article、links

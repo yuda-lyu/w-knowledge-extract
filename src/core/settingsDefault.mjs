@@ -4,7 +4,8 @@
 //   舊料被餓死)、逾時取各家實測上限之 2~3 倍、批量以輸出截斷率調校。
 //   執行端只需覆寫想調的鍵(深一層逐鍵合併:fetch/knowledge/ai/sourcePolicy 各自展開)。
 // 【領域中立】本套件為通用知識套件:主題範圍(vocab.domain)、分類詞彙與網格來源之領域過濾(fetch.openAlexFields／
-//   fetch.arxivCategories)預設皆不限,由安裝方依自己的知識庫主題給定(2026-09-23 自原專案抽提時去除領域特化預設)。
+//   fetch.arxivCategories／fetch.gridArxivCategories)預設皆不限,由安裝方依自己的知識庫主題給定
+//   (2026-09-23 自原專案抽提時去除領域特化預設)。索引標題預設由總組裝依知識庫稱呼推導(見 createKnowledgeExtract)。
 
 import isobj from 'wsemi/src/isobj.mjs'
 
@@ -26,7 +27,10 @@ export const FETCH_DEFAULT = {
     // 網格來源(grid)與線索探測(arXiv)之領域過濾:預設不限(通用);安裝方依主題給定,例如
     // openAlexFields:'17|26'(OpenAlex primary_topic.field.id,以 | 串接)、arxivCategories:['cs.LG','stat.ML']
     openAlexFields: '',
-    arxivCategories: [],
+    arxivCategories: [], // 線索探測(expand)之 arXiv 類別;gridArxivCategories 未給時 grid 遞補亦沿用
+    // grid 遞補查 arXiv 之類別(字串陣列);null＝沿用 arxivCategories。兩者分設時可各給一份清單
+    // (原專案之網格遞補與線索探測各有一份,合成一鍵無法兩者皆逐字重現;2026-09-23 拆分)
+    gridArxivCategories: null,
 }
 
 /** 知識彙整/關聯/提煉節流 */

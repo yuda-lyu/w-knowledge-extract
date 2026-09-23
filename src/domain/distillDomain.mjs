@@ -1,7 +1,9 @@
 // distillDomain.mjs — 提煉的內建領域預設:各角色 prompt、稿件驗證、核心版型
 //
 // 角色鏈接線(宣告式 audit→revise→accept、自動編號、稿件/意見回推)與降級保底
-// 在 stages/distillStage.mjs;本檔只有「知識庫的提煉要求長什麼樣」(領域中立,知識庫稱呼由 vocab.domain 注入)。
+// 在 stages/distillStage.mjs;本檔只有「知識庫的提煉要求長什麼樣」(領域中立,知識庫稱呼由 vocab.kbLabel／domain 注入,
+// 起草 prompt 之領域句——規則落點、弱證據描述、時效說明——經 vocab.guide.distill 逐欄覆寫)。
+// temporal 之稱呼與核心 md 章節名同為「時效與機制相依」(章節名綁定既有核心檔;2026-09-23 改回同名)。
 // 護欄措辭(「意見未涉及的內容不可刪除」)是實測教訓:審計曾刪過頭把真實爭議誤刪,
 // 此護欄上線後未再發生。版型逐字保真(同 extractDomain 檔頭理由)。
 
@@ -83,8 +85,9 @@ function noteDigest(note) {
  * @param {String} [scope='concept'] 輸入選題層級字串，可選 'concept'、'category'，預設'concept'
  * @param {Object} [opt={}] 輸入設定物件
  * @param {Integer} [opt.notesPerTarget=8] 輸入最多納入之筆記數，預設8
- * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(見 resolveVocab)，取其 kbLabel／domain 作為知識庫稱呼、guide.distill 作為規則落點／弱證據／時效說明之領域句，預設null代表不限主題
  * @returns {String} 回傳 prompt 字串
+ * @throws {Error} opt.vocab 之 kbLabel 或 guide 不合規格時拋出(見 resolveVocab)
  */
 export function buildDistillPrompt(concept, notes, coreBody, scope = 'concept', opt = {}) {
 
@@ -96,7 +99,9 @@ export function buildDistillPrompt(concept, notes, coreBody, scope = 'concept', 
         opt = {}
     }
 
-    const kb = kbLabelOf(resolveVocab(opt.vocab))
+    const vocab = resolveVocab(opt.vocab)
+    const kb = kbLabelOf(vocab)
+    const g = vocab.guide.distill // 領域句(安裝方可經 vocab.guide.distill 逐欄覆寫;輸出格式留在本檔)
     const scopeWord = scope === 'category' ? '類別' : '概念'
     const digests = notes.slice(0, opt.notesPerTarget ?? 8).map(noteDigest).join('\n\n')
     const prior = coreBody
@@ -110,16 +115,15 @@ export function buildDistillPrompt(concept, notes, coreBody, scope = 'concept', 
 2. 只根據提供的筆記內容提煉，不可加入筆記中沒有的數字、參數或研究結論。
 3. essence：這個概念的本質是什麼、為什麼有效或為什麼失效，3 到 5 句。
 4. principles：跨篇歸納出的原理層知識（不是單篇的摘要重述），每條一句。
-5. rules：可直接應用的操作規則，寫成「若…則…」或明確步驟。
+5. rules：${g.ruleTarget}，寫成「若…則…」或明確步驟。
 6. parameters：跨篇出現過的關鍵參數與其建議值或區間，須註明出處篇名。
 7. pitfalls：實務上會踩的坑、失效條件。
 8. **證據加權**：各筆記已標注內容類型與證據等級——證據「低」或帶 ⚠ 標注者，其結論只能以
-   「有一說（證據弱）」的語氣呈現、不得寫成通則；「僅單一研究或未經獨立驗證」的參數須註明此限制。
+   「有一說（證據弱）」的語氣呈現、不得寫成通則；「${g.weakEvidence}」的參數須註明此限制。
 9. **disputes（爭議與未定論）**：筆記之間結論相反或參數矛盾時，必須把兩方說法與各自的
    適用條件都寫出來（甲在 X 條件下主張…、乙在 Y 條件下主張…），不可擇一抹平、不可硬調和。
    沒有爭議就給空陣列，不要硬造。
-10. **temporal（時效與條件相依）**：這個概念的有效性如何隨時間、環境條件或機制（regime）改變；
-   利與弊在什麼條件下會反轉。原文有依據才寫。
+10. **temporal（時效與機制相依）**：${g.temporal}
 11. open_questions：現有筆記還回答不了、值得日後再抓資料的問題。
 12. related_concepts：與此概念關係緊密的其他概念名稱。
 
@@ -139,7 +143,7 @@ ${digests}`
  * @param {Object} draft 輸入提煉稿(JSON 物件)
  * @param {String} basePrompt 輸入產生提煉稿所用之基底 prompt(含筆記材料)
  * @param {Object} [opt={}] 輸入設定物件
- * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(見 resolveVocab)，取其 kbLabel／domain 作為知識庫稱呼，預設null代表不限主題
  * @returns {String} 回傳 prompt 字串
  */
 export function buildAuditPrompt(concept, draft, basePrompt, opt = {}) {
@@ -168,7 +172,7 @@ ${basePrompt}`
  * @param {Object} draft 輸入提煉稿(JSON 物件)
  * @param {Array} issues 輸入審計意見陣列
  * @param {Object} [opt={}] 輸入設定物件
- * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(見 resolveVocab)，取其 kbLabel／domain 作為知識庫稱呼，預設null代表不限主題
  * @returns {String} 回傳 prompt 字串
  */
 export function buildRevisePrompt(draft, issues, opt = {}) {
@@ -197,7 +201,7 @@ ${JSON.stringify(issues)}`
  * @param {Object} revised 輸入修訂稿(JSON 物件)
  * @param {Array} issues 輸入審計意見陣列
  * @param {Object} [opt={}] 輸入設定物件
- * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(見 resolveVocab)，取其 kbLabel／domain 作為知識庫稱呼，預設null代表不限主題
  * @returns {String} 回傳 prompt 字串
  */
 export function buildFinalPrompt(revised, issues, opt = {}) {
@@ -270,7 +274,7 @@ export function renderCoreBody(concept, k, notes) {
  *
  * @param {Object} [opt={}] 輸入設定物件
  * @param {Integer} [opt.notesPerTarget=8] 輸入每概念最多納入之筆記數，預設8
- * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為各角色 prompt 之知識庫稱呼，預設null代表不限主題
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件(見 resolveVocab)，取其 kbLabel／domain 作為各角色 prompt 之知識庫稱呼、guide.distill 作為起草 prompt 之領域句，預設null代表不限主題
  * @returns {Object} 回傳 domain 物件，含 kinds(audit/revise/accept 之 { produces, check, build })、buildBasePrompt(t, used, priorBody)、checkCore、coreSchema、renderCore(t, data, used)
  * @example
  * let domain = createDistillDomain({ notesPerTarget: 8 })
