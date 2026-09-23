@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>ops/logger.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="MwContractError.html">MwContractError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#AI_DEFAULT">AI_DEFAULT</a></li><li><a href="global.html#COOL_DETECT">COOL_DETECT</a></li><li><a href="global.html#CORE_SCHEMA">CORE_SCHEMA</a></li><li><a href="global.html#DEFAULT_SITE_ADAPTERS">DEFAULT_SITE_ADAPTERS</a></li><li><a href="global.html#DF_DIRS">DF_DIRS</a></li><li><a href="global.html#FETCH_DEFAULT">FETCH_DEFAULT</a></li><li><a href="global.html#KIND_MAX_PROMPT_CHARS">KIND_MAX_PROMPT_CHARS</a></li><li><a href="global.html#KNOWLEDGE_DEFAULT">KNOWLEDGE_DEFAULT</a></li><li><a href="global.html#OBJECT_STAGES">OBJECT_STAGES</a></li><li><a href="global.html#ORGANIZE_SHARED_KEYS">ORGANIZE_SHARED_KEYS</a></li><li><a href="global.html#OUTCOME_TEXT">OUTCOME_TEXT</a></li><li><a href="global.html#SKIP_TITLE_PATTERNS_DEFAULT">SKIP_TITLE_PATTERNS_DEFAULT</a></li><li><a href="global.html#SOURCE_POLICY_DEFAULT">SOURCE_POLICY_DEFAULT</a></li><li><a href="global.html#STREAK_TYPES">STREAK_TYPES</a></li><li><a href="global.html#TELEGRAM_TEXT_MAX">TELEGRAM_TEXT_MAX</a></li><li><a href="global.html#VOCAB_DEFAULT">VOCAB_DEFAULT</a></li><li><a href="global.html#WKnowledgeExtract">WKnowledgeExtract</a></li><li><a href="global.html#accountSourceOutcome">accountSourceOutcome</a></li><li><a href="global.html#acquireLock">acquireLock</a></li><li><a href="global.html#admitFeedItems">admitFeedItems</a></li><li><a href="global.html#aggStats">aggStats</a></li><li><a href="global.html#applyRelationsToNote">applyRelationsToNote</a></li><li><a href="global.html#applyTaps">applyTaps</a></li><li><a href="global.html#arxivSearchUrl">arxivSearchUrl</a></li><li><a href="global.html#asObj">asObj</a></li><li><a href="global.html#bingNewsSearchUrl">bingNewsSearchUrl</a></li><li><a href="global.html#budgetOf">budgetOf</a></li><li><a href="global.html#buildAuditPrompt">buildAuditPrompt</a></li><li><a href="global.html#buildDistillPrompt">buildDistillPrompt</a></li><li><a href="global.html#buildFinalPrompt">buildFinalPrompt</a></li><li><a href="global.html#buildRevisePrompt">buildRevisePrompt</a></li><li><a href="global.html#buildRunSummary">buildRunSummary</a></li><li><a href="global.html#buildWorkflowStages">buildWorkflowStages</a></li><li><a href="global.html#byRetryTierFifo">byRetryTierFifo</a></li><li><a href="global.html#checkChain">checkChain</a></li><li><a href="global.html#checkCore">checkCore</a></li><li><a href="global.html#checkCtxDeps">checkCtxDeps</a></li><li><a href="global.html#checkIssues">checkIssues</a></li><li><a href="global.html#cliFail">cliFail</a></li><li><a href="global.html#cliFailDetail">cliFailDetail</a></li><li><a href="global.html#clueKey">clueKey</a></li><li><a href="global.html#cluePriority">cluePriority</a></li><li><a href="global.html#composeChain">composeChain</a></li><li><a href="global.html#conceptVocabulary">conceptVocabulary</a></li><li><a href="global.html#count">count</a></li><li><a href="global.html#createAiAdapter">createAiAdapter</a></li><li><a href="global.html#createAiCaller">createAiCaller</a></li><li><a href="global.html#createAiEventLogger">createAiEventLogger</a></li><li><a href="global.html#createClock">createClock</a></li><li><a href="global.html#createDefaultFetchers">createDefaultFetchers</a></li><li><a href="global.html#createDistillDomain">createDistillDomain</a></li><li><a href="global.html#createDistillObject">createDistillObject</a></li><li><a href="global.html#createExtractDomain">createExtractDomain</a></li><li><a href="global.html#createFetchObject">createFetchObject</a></li><li><a href="global.html#createKnowledgeExtract">createKnowledgeExtract</a></li><li><a href="global.html#createLogger">createLogger</a></li><li><a href="global.html#createOrganizeObject">createOrganizeObject</a></li><li><a href="global.html#createPatrol">createPatrol</a></li><li><a href="global.html#createProviderHealth">createProviderHealth</a></li><li><a href="global.html#createRelateDomain">createRelateDomain</a></li><li><a href="global.html#createRelateObject">createRelateObject</a></li><li><a href="global.html#createRunLogger">createRunLogger</a></li><li><a href="global.html#createSettingsHolder">createSettingsHolder</a></li><li><a href="global.html#createTelegramNotifier">createTelegramNotifier</a></li><li><a href="global.html#createTime">createTime</a></li><li><a href="global.html#createTriageDomain">createTriageDomain</a></li><li><a href="global.html#cullZeroYieldSources">cullZeroYieldSources</a></li><li><a href="global.html#deadMatcher">deadMatcher</a></li><li><a href="global.html#decorateSettings">decorateSettings</a></li><li><a href="global.html#defaultToLinkedRecord">defaultToLinkedRecord</a></li><li><a href="global.html#defaultToRecord">defaultToRecord</a></li><li><a href="global.html#defineFirstMw">defineFirstMw</a></li><li><a href="global.html#defineMw">defineMw</a></li><li><a href="global.html#deinvertAbstract">deinvertAbstract</a></li><li><a href="global.html#discoverFeed">discoverFeed</a></li><li><a href="global.html#docRecord">docRecord</a></li><li><a href="global.html#dropSection">dropSection</a></li><li><a href="global.html#elapsed">elapsed</a></li><li><a href="global.html#enable">enable</a></li><li><a href="global.html#enforceFrontierCap">enforceFrontierCap</a></li><li><a href="global.html#ensureSeedSources">ensureSeedSources</a></li><li><a href="global.html#escapeHtml">escapeHtml</a></li><li><a href="global.html#expandDirs">expandDirs</a></li><li><a href="global.html#expandSeeds">expandSeeds</a></li><li><a href="global.html#extractLinks">extractLinks</a></li><li><a href="global.html#failedNames">failedNames</a></li><li><a href="global.html#fetchArticle">fetchArticle</a></li><li><a href="global.html#fetchArticleLinks">fetchArticleLinks</a></li><li><a href="global.html#file">file</a></li><li><a href="global.html#filterFeedItems">filterFeedItems</a></li><li><a href="global.html#fin">fin</a></li><li><a href="global.html#firstLineClamp">firstLineClamp</a></li><li><a href="global.html#fitChain">fitChain</a></li><li><a href="global.html#formatTime">formatTime</a></li><li><a href="global.html#genericSummary">genericSummary</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#getDate">getDate</a></li><li><a href="global.html#getDay">getDay</a></li><li><a href="global.html#getTimestamp">getTimestamp</a></li><li><a href="global.html#gridSourceUrl">gridSourceUrl</a></li><li><a href="global.html#info">info</a></li><li><a href="global.html#ingestFeedItems">ingestFeedItems</a></li><li><a href="global.html#ingestNotes">ingestNotes</a></li><li><a href="global.html#installProcessGuards">installProcessGuards</a></li><li><a href="global.html#isLowYield">isLowYield</a></li><li><a href="global.html#judgeFromDocs">judgeFromDocs</a></li><li><a href="global.html#kbLabelOf">kbLabelOf</a></li><li><a href="global.html#keyIdOf">keyIdOf</a></li><li><a href="global.html#legacyClueKey">legacyClueKey</a></li><li><a href="global.html#listCores">listCores</a></li><li><a href="global.html#listSeats">listSeats</a></li><li><a href="global.html#load">load</a></li><li><a href="global.html#loadSettings">loadSettings</a></li><li><a href="global.html#logAiOutcome">logAiOutcome</a></li><li><a href="global.html#looksLikeFeed">looksLikeFeed</a></li><li><a href="global.html#makeArrayCoverageValidator">makeArrayCoverageValidator</a></li><li><a href="global.html#makeLineEmitter">makeLineEmitter</a></li><li><a href="global.html#makeMsg">makeMsg</a></li><li><a href="global.html#makeSlugResolver">makeSlugResolver</a></li><li><a href="global.html#markConflict">markConflict</a></li><li><a href="global.html#maxPromptCharsOf">maxPromptCharsOf</a></li><li><a href="global.html#mergeCatalogue">mergeCatalogue</a></li><li><a href="global.html#mergeFetchers">mergeFetchers</a></li><li><a href="global.html#mergeSiteAdapters">mergeSiteAdapters</a></li><li><a href="global.html#mergeTaps">mergeTaps</a></li><li><a href="global.html#mwAccountSource">mwAccountSource</a></li><li><a href="global.html#mwAdmitPersist">mwAdmitPersist</a></li><li><a href="global.html#mwAdoptResult">mwAdoptResult</a></li><li><a href="global.html#mwApplyToNote">mwApplyToNote</a></li><li><a href="global.html#mwBuildBase">mwBuildBase</a></li><li><a href="global.html#mwBuildEdges">mwBuildEdges</a></li><li><a href="global.html#mwConflictDualWrite">mwConflictDualWrite</a></li><li><a href="global.html#mwCullSources">mwCullSources</a></li><li><a href="global.html#mwFeedFallback">mwFeedFallback</a></li><li><a href="global.html#mwFetchDetail">mwFetchDetail</a></li><li><a href="global.html#mwFetchList">mwFetchList</a></li><li><a href="global.html#mwFilterItems">mwFilterItems</a></li><li><a href="global.html#mwMarkDoc">mwMarkDoc</a></li><li><a href="global.html#mwMarkRelated">mwMarkRelated</a></li><li><a href="global.html#mwNormalizeItems">mwNormalizeItems</a></li><li><a href="global.html#mwPersistCore">mwPersistCore</a></li><li><a href="global.html#mwPersistEdges">mwPersistEdges</a></li><li><a href="global.html#mwPersistNote">mwPersistNote</a></li><li><a href="global.html#mwPersistOutcome">mwPersistOutcome</a></li><li><a href="global.html#mwProbe">mwProbe</a></li><li><a href="global.html#mwRebuildKnowledgeIndex">mwRebuildKnowledgeIndex</a></li><li><a href="global.html#mwRebuildRelationIndex">mwRebuildRelationIndex</a></li><li><a href="global.html#mwRenderCore">mwRenderCore</a></li><li><a href="global.html#mwRenderNote">mwRenderNote</a></li><li><a href="global.html#mwRouteFetcher">mwRouteFetcher</a></li><li><a href="global.html#mwRunWorkflow">mwRunWorkflow</a></li><li><a href="global.html#mwSaveClues">mwSaveClues</a></li><li><a href="global.html#mwSettleClue">mwSettleClue</a></li><li><a href="global.html#mwSettleTriage">mwSettleTriage</a></li><li><a href="global.html#mwSkipGate">mwSkipGate</a></li><li><a href="global.html#mwSlim">mwSlim</a></li><li><a href="global.html#mwSyncSeeds">mwSyncSeeds</a></li><li><a href="global.html#mwTitleSkip">mwTitleSkip</a></li><li><a href="global.html#mwTranscodeLinks">mwTranscodeLinks</a></li><li><a href="global.html#newSource">newSource</a></li><li><a href="global.html#normalizeConcept">normalizeConcept</a></li><li><a href="global.html#normalizeFeedItems">normalizeFeedItems</a></li><li><a href="global.html#normalizeUrl">normalizeUrl</a></li><li><a href="global.html#normalizeWorkDir">normalizeWorkDir</a></li><li><a href="global.html#noteDigest">noteDigest</a></li><li><a href="global.html#num">num</a></li><li><a href="global.html#objectReport">objectReport</a></li><li><a href="global.html#oneline">oneline</a></li><li><a href="global.html#open">open</a></li><li><a href="global.html#openStores">openStores</a></li><li><a href="global.html#parseFrontmatter">parseFrontmatter</a></li><li><a href="global.html#parseIndexList">parseIndexList</a></li><li><a href="global.html#parseJson">parseJson</a></li><li><a href="global.html#parseJsonArray">parseJsonArray</a></li><li><a href="global.html#patrolFromPipeline">patrolFromPipeline</a></li><li><a href="global.html#pickCandidates">pickCandidates</a></li><li><a href="global.html#pickCategories">pickCategories</a></li><li><a href="global.html#pickClues">pickClues</a></li><li><a href="global.html#pickConcepts">pickConcepts</a></li><li><a href="global.html#pickDueSources">pickDueSources</a></li><li><a href="global.html#pidAlive">pidAlive</a></li><li><a href="global.html#probeSearchEndpoints">probeSearchEndpoints</a></li><li><a href="global.html#probeSiteFeed">probeSiteFeed</a></li><li><a href="global.html#qualityTag">qualityTag</a></li><li><a href="global.html#queueAge">queueAge</a></li><li><a href="global.html#quote">quote</a></li><li><a href="global.html#reEscape">reEscape</a></li><li><a href="global.html#readGrid">readGrid</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#readMd">readMd</a></li><li><a href="global.html#readRunSummary">readRunSummary</a></li><li><a href="global.html#rebuildKnowledgeIndex">rebuildKnowledgeIndex</a></li><li><a href="global.html#rebuildRelationIndex">rebuildRelationIndex</a></li><li><a href="global.html#recordFile">recordFile</a></li><li><a href="global.html#recordSourceOutcome">recordSourceOutcome</a></li><li><a href="global.html#regenCore">regenCore</a></li><li><a href="global.html#renderCoreBody">renderCoreBody</a></li><li><a href="global.html#renderFrontmatter">renderFrontmatter</a></li><li><a href="global.html#reset">reset</a></li><li><a href="global.html#resolveCatalogue">resolveCatalogue</a></li><li><a href="global.html#resolvePlugins">resolvePlugins</a></li><li><a href="global.html#resolveSettings">resolveSettings</a></li><li><a href="global.html#resolveVocab">resolveVocab</a></li><li><a href="global.html#reviveDeadDocs">reviveDeadDocs</a></li><li><a href="global.html#run">run</a></li><li><a href="global.html#runAiBatchStage">runAiBatchStage</a></li><li><a href="global.html#runChainOverMsgs">runChainOverMsgs</a></li><li><a href="global.html#runCli">runCli</a></li><li><a href="global.html#runJsonCli">runJsonCli</a></li><li><a href="global.html#runSubStages">runSubStages</a></li><li><a href="global.html#runTask">runTask</a></li><li><a href="global.html#sanitize">sanitize</a></li><li><a href="global.html#saveClues">saveClues</a></li><li><a href="global.html#section">section</a></li><li><a href="global.html#sectionOf">sectionOf</a></li><li><a href="global.html#send">send</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setConceptFold">setConceptFold</a></li><li><a href="global.html#settleClue">settleClue</a></li><li><a href="global.html#sha1">sha1</a></li><li><a href="global.html#skipDerived">skipDerived</a></li><li><a href="global.html#slimTerminalDocs">slimTerminalDocs</a></li><li><a href="global.html#slugify">slugify</a></li><li><a href="global.html#sortByEnforce">sortByEnforce</a></li><li><a href="global.html#sourceId">sourceId</a></li><li><a href="global.html#stageDetailFetch">stageDetailFetch</a></li><li><a href="global.html#stageDistill">stageDistill</a></li><li><a href="global.html#stageDocMaintain">stageDocMaintain</a></li><li><a href="global.html#stageExpand">stageExpand</a></li><li><a href="global.html#stageExtract">stageExtract</a></li><li><a href="global.html#stageFields">stageFields</a></li><li><a href="global.html#stageKnowledgeIndex">stageKnowledgeIndex</a></li><li><a href="global.html#stageListFetch">stageListFetch</a></li><li><a href="global.html#stageRelate">stageRelate</a></li><li><a href="global.html#stageRelationIndex">stageRelationIndex</a></li><li><a href="global.html#stageSeedSync">stageSeedSync</a></li><li><a href="global.html#stageTriage">stageTriage</a></li><li><a href="global.html#stdReport">stdReport</a></li><li><a href="global.html#strArr">strArr</a></li><li><a href="global.html#subReportOf">subReportOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#taskRunner">taskRunner</a></li><li><a href="global.html#timeoutPatch">timeoutPatch</a></li><li><a href="global.html#unquote">unquote</a></li><li><a href="global.html#unwrapNewsUrl">unwrapNewsUrl</a></li><li><a href="global.html#withTag">withTag</a></li><li><a href="global.html#writeJson">writeJson</a></li><li><a href="global.html#writeMd">writeMd</a></li><li><a href="global.html#writeRunSummary">writeRunSummary</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">ops/logger.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// logger.mjs — 內建日誌:每次執行一份日誌檔(兩種工廠,同一核心)
+//   createRunLogger({ root, getISO, echo }):open 與建立分離,檔名 {root}/{day}/{runId}[-{name}].log(執行殼件,自 tai-news 移入)
+//   createLogger(name, { dir, clock, echo }):建構即 open(clock.stamp8(), day, name),檔名 {dir}/{day}/{stamp}-{name}.log
+//     (本套件各段、trigger 與 ops/patrol 所用;另附 now／cliFail／elapsed)
+//
+// 【格式是套件契約】排程執行沒有 console 可看,日誌是唯一的事後診斷來源;ops/patrol 依此格式解析逐輪統計——
+//   logFactory 可被安裝方置換,但置換者須自負巡檢解析。
+// 【為何每次執行獨立成檔,而非按日／按大小輪替】排程與手動執行會交錯發生,混在同一檔內時,事後要看「某一次執行到底怎麼了」
+//   得先從時間戳把行挑出來,而長步驟(抓取、AI 呼叫)跨越數分鐘,兩次執行的行必然互相穿插。一次一檔則可精準讀取該次的
+//   完整歷程,也讓「列出最近 N 次執行」變成 ls 而非解析。
+// 【為何 open 與建立分離】行程層級的安全網(uncaughtException／unhandledRejection)必須在最早期就掛上,那時尚未決定 runId、
+//   也還沒有檔案可寫。分離後,open 之前的訊息仍會輸出 stdout 而不會拋錯,open 之後才落檔——這正是「連 catch 都接不到的
+//   例外」需要的行為。本套件之 createLogger 於建構期即知 stamp 與 name,故包一層立即 open;兩種工廠共用同一份 write。
+// 【為何同時輸出 stdout】手動執行時可即時觀察進度;排程執行時無人接收,無副作用。echo:false 可關(測試)。
+// 【為何寫檔失敗要吞掉】日誌是診斷手段而非業務目的,因磁碟滿或權限問題中斷整條管線是本末倒置。
+// 【同時提供兩套方法名】log／logWarn／logError 供人直接呼叫;info／warn／error 是多數套件(如 w-data-pipeline)約定的
+//   logger 介面,可把本物件整個傳進去而不必在呼叫端手寫轉接。
+
+import fs from 'fs'
+import path from 'path'
+import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
+import isobj from 'wsemi/src/isobj.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
+import isfun from 'wsemi/src/isfun.mjs'
+import { cliFailDetail } from '../util/misc.mjs'
+
+/**
+ * 建立通用日誌工廠:open 與建立分離,行程層級安全網可在最早期掛上(此時尚未決定 runId、也還沒有檔案可寫)。
+ * open 前之訊息仍輸出 stdout 而不拋錯,open 後才落檔(fs.appendFileSync);同時輸出 stdout 供手動執行即時觀察，
+ * 排程執行則無人接收、無副作用；寫檔失敗吞掉不中斷主流程。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.root 輸入日誌根目錄字串，必填
+ * @param {Function} opt.getISO 輸入時區錨定之時間戳函數，必填(如 util/clock 之 iso8／getISO)
+ * @param {Boolean} [opt.echo=true] 輸入是否同時輸出 stdout
+ * @returns {Object} 回傳 { open(runId,day?,name?), file, log／logWarn／logError, info／warn／error, withTag(tag) }
+ * @throws {Error} 缺 root 或 getISO 非函數時拋出
+ * @example
+ * need test in nodejs.
+ *
+ * let lg = createRunLogger({ root: './log', getISO: () => new Date().toISOString() })
+ * lg.open('20260921120000')
+ * lg.log('hello')
+ */
+export function createRunLogger(opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const { root, getISO, echo = true } = opt
+    if (!isestr(root)) throw new Error('createRunLogger 需要 root')
+    if (!isfun(getISO)) throw new Error('createRunLogger 需要 getISO（時區錨定之時間戳函數）')
+    let file = null
+
+    /**
+     * 寫一行日誌(帶時間戳與層級);落檔失敗僅吞掉不拋出，echo 開啟時同時輸出 stdout
+     *
+     * @param {String} level 輸入層級標籤字串(如 'INFO '、'WARN '、'ERROR')
+     * @param {*} msg 輸入訊息內容
+     * @returns {String} 回傳組好之整行字串
+     */
+    const write = (level, msg) => {
+        const line = `[${getISO()}] ${level} ${msg}`
+        if (file) {
+            try {
+                fs.appendFileSync(file, line + '\n', 'utf8')
+            }
+            catch { /* 日誌寫入失敗不影響主流程 */ }
+        }
+        if (echo) console.log(line)
+        return line
+    }
+    /** 寫入一行 INFO 層級日誌 */
+    const log = (msg) => write('INFO ', msg)
+    /** 寫入一行 WARN 層級日誌 */
+    const logWarn = (msg) => write('WARN ', msg)
+    /** 寫入一行 ERROR 層級日誌 */
+    const logError = (msg) => write('ERROR', msg)
+
+    return {
+    /**
+     * 建立當次執行的日誌檔並開始落檔,回傳其路徑。
+     * @param {String} runId 輸入本次執行識別字串(預設形態 YYYYMMDDHHmmss)
+     * @param {String} [day] 輸入日期分層目錄名，未給時取 runId 前 8 碼
+     * @param {String} [name] 輸入檔名尾碼，給了成 {runId}-{name}.log(本套件之 createLogger 用)
+     * @returns {String} 回傳日誌檔路徑
+     */
+        open: (runId, day, name) => {
+            const dir = path.join(root, day || String(runId).slice(0, 8))
+            fsCreateFolder(dir)
+            file = path.join(dir, `${runId}${name ? `-${name}` : ''}.log`)
+            return file
+        },
+        /** 當次日誌檔路徑(尚未 open 時為 null) */
+        get file() {
+            return file
+        },
+        log,
+        logWarn,
+        logError,
+        info: log,
+        warn: logWarn,
+        error: logError,
+        /**
+         * 帶前綴之子記錄器(如各步驟標籤),前綴一致才能事後以 grep 逐步驟抽取
+         *
+         * @param {String} tag 輸入前綴字串(如 '步驟1：')
+         * @returns {Object} 回傳 { log, logWarn, logError, info, warn, error }，各方法呼叫時自動於訊息前加上 tag
+         */
+        withTag: (tag) => {
+            const wrap = (f) => (msg) => f(`${tag}${msg}`)
+            const l = wrap(log)
+            const w = wrap(logWarn)
+            const e = wrap(logError)
+            return { log: l, logWarn: w, logError: e, info: l, warn: w, error: e }
+        },
+    }
+}
+
+/**
+ * 本套件之日誌工廠:建構即開檔 {dir}/{day}/{stamp}-{name}.log(本套件各段、trigger 與 ops/patrol 所用)。
+ *
+ * @param {String} name 輸入日誌名字串(檔名尾段)，必填
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.dir 輸入日誌根目錄字串，必填
+ * @param {Object} opt.clock 輸入時鐘物件(util/clock 之 createClock 產物)，必填
+ * @param {Boolean} [opt.echo=true] 輸入是否同時輸出 stdout
+ * @returns {Object} 回傳 createRunLogger 之全部方法,另含 now(本次 stamp)、cliFail(r)、elapsed()
+ * @throws {Error} name 非有效字串時拋出；opt 缺 dir 或 clock 時拋出
+ * @example
+ * need test in nodejs.
+ *
+ * let lg = createLogger('run', { dir: './log', clock: createClock('Asia/Taipei') })
+ * lg.info('hello')
+ */
+export function createLogger(name, opt = {}) {
+
+    //check
+    if (!isestr(name)) {
+        throw new Error('createLogger 需要 name（日誌名）')
+    }
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const { dir, clock, echo } = opt
+    if (!dir || !clock) throw new Error('createLogger 需要 { dir, clock }')
+    const now = clock.stamp8()
+    const base = createRunLogger({ root: dir, getISO: clock.iso8, ...(echo === false ? { echo: false } : {}) })
+    base.open(now, now.slice(0, 8), name)
+    const startedAt = Date.now()
+    return {
+        open: base.open,
+        get file() {
+            return base.file
+        },
+        now,
+        log: base.log,
+        logWarn: base.logWarn,
+        logError: base.logError,
+        info: base.info,
+        warn: base.warn,
+        error: base.error,
+        withTag: base.withTag,
+        /**
+         * 外部 CLI 失敗詳情:錯誤＋嘗試次數＋stderr 前 300 字(格式委派 util/misc.cliFailDetail,不再另寫一份)
+         *
+         * @param {Object} r 輸入執行結果物件(如 wsemi execCli 之結果)，取 error、attempts、stderr
+         * @returns {String} 回傳失敗詳情字串
+         */
+        cliFail: (r) => `${r?.error || 'unknown'}${cliFailDetail(r)}`,
+        /** 回傳自建構以來經過秒數(字串，小數 1 位) */
+        elapsed: () => ((Date.now() - startedAt) / 1000).toFixed(1),
+    }
+}
+
+export default createLogger
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Sep 23 2026 22:21:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

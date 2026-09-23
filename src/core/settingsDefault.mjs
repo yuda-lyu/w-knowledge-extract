@@ -1,0 +1,220 @@
+// settingsDefault.mjs — 套件內建設定預設值(安裝即用;執行端 cfg 逐鍵覆寫)
+//
+// 【數值皆為生產知識庫實測定案】節流對齊處理速率(進料 ≫ 處理會讓佇列無上限累積、
+//   舊料被餓死)、逾時取各家實測上限之 2~3 倍、批量以輸出截斷率調校。
+//   執行端只需覆寫想調的鍵(深一層逐鍵合併:fetch/knowledge/ai/sourcePolicy 各自展開)。
+// 【領域中立】本套件為通用知識套件:主題範圍(vocab.domain)、分類詞彙與網格來源之領域過濾(fetch.openAlexFields／
+//   fetch.arxivCategories)預設皆不限,由安裝方依自己的知識庫主題給定(2026-09-23 自原專案抽提時去除領域特化預設)。
+
+import isobj from 'wsemi/src/isobj.mjs'
+
+/** 抓取節流與門檻 */
+export const FETCH_DEFAULT = {
+    sourcesPerRun: 6, // 每輪輪抓來源數(tier/lastFetchAt 最舊優先)
+    itemsPerSource: 8, // 每來源最多取用新項目數
+    // 每輪最多補抓幾篇全文。萃取容量(fetchExtractRounds×aiParallel×docsPerExtract＝6×3×3＝54)須 ≥
+    // 本值＋feed 自帶內文直入 raw 之量(實測 10~24/輪),否則 raw 在萃取關堆積;改任一容量鍵時各處同步。
+    // 曾為 8 而使萃取容量空 2/3、tier-3 文章每日約 350 篇未讀即過期(2026-09-07 盤查)
+    articlesPerRun: 27,
+    articleTimeoutMs: 30_000,
+    minSourceIntervalMs: 21_600_000, // 同一來源最短重抓間隔 6 小時
+    maxTextChars: 20_000, // 單篇原文入庫上限
+    aggregatorLinksPerDoc: 12, // 彙整貼文最多轉錄幾條外部連結
+    maxFetchTries: 3, // 試滿即 dead——抓取失敗唯一的丟棄判準(沒有時間型過期,見 docPolicy)
+    minFallbackChars: 300,
+    terminalStatuses: ['noted', 'skip', 'dead', 'aggregated', 'extract-failed'],
+    // 網格來源(grid)與線索探測(arXiv)之領域過濾:預設不限(通用);安裝方依主題給定,例如
+    // openAlexFields:'17|26'(OpenAlex primary_topic.field.id,以 | 串接)、arxivCategories:['cs.LG','stat.ML']
+    openAlexFields: '',
+    arxivCategories: [],
+}
+
+/** 知識彙整/關聯/提煉節流 */
+export const KNOWLEDGE_DEFAULT = {
+    docsPerExtract: 3, // 每次 AI 彙整處理幾篇(縮批量控輸出截斷,配合部分接受)
+    extractCharsPerDoc: 6000,
+    // 預篩(stages/triageStage):標題＋開頭片段判「明確無關」即攔下,萃取只讀放行者。生產實測萃取呼叫 59% 判非知識,
+    // 預篩一次看 20 篇(約萃取 1/10 成本),同樣 AI 預算可判定的文件數約 2 倍以上;拿不準一律放行、預篩失敗達上限亦放行
+    triageEnabled: true,
+    docsPerTriage: 20, // 每次預篩呼叫看幾篇(只給標題＋片段,20 篇約 9k 字、40 篇約 16k)
+    triageCharsPerDoc: 400, // 每篇給模型的開頭片段字數
+    triageMaxTries: 2, // 預篩失敗幾次即放行交萃取(fail-open)
+    triagePassRate: 0.5, // 放行率估計值(容量自洽檢核用,非門檻):檢核方向是「進料上界 ≤ 容量」,故取偏高之實測值;安裝端校準
+    noteYieldRate: 0.5, // 萃取產出率(新知識÷處理篇數)估計值(2026-09-14 實測 42~47%,取偏高):關聯容量檢核用
+    frontierPerRun: 12, // 每輪消化幾筆待探索線索(2026-09-12 由 8 調高:探測便宜、探測文件經預篩不再壓垮萃取)
+    // 待探索線索上限:超過即淘汰優先序最低者(hits 低、來自 skip 文件、最舊),記錄保留、再被提及即復活。
+    // 線索產生量(每輪 ~100)≫消化量,無上限則永無止境成長(2026-09-09 實測 pending 27864);0 即不設限
+    frontierMaxPending: 2000,
+    relateBatch: 6,
+    relateCandidates: 25, // 候選再多會稀釋模型判斷力;實測 6 篇×25 候選之關聯 prompt 為 4.0～4.4 萬字元(2026-09-12),超過命令列型供應商上限者由 ai/capability 於呼叫前剔除
+    distillMinNotes: 2,
+    distillPerRun: 2,
+    distillNotesPerConcept: 8,
+    categoryFallback: { minNotes: 6, minGain: 4 },
+}
+
+/** 來源品質政策 */
+export const SOURCE_POLICY_DEFAULT = {
+    maxConsecFails: 8,
+    maxConsecEmpty: 5,
+    cullMinJudged: 6,
+    // 產出率回饋:已判定 ≥ cullMinJudged 篇且產出率(noted/(noted+skip))低於此值者,輪抓時排到同層級之末(降序不停用);0 即關閉
+    lowYieldRate: 0.1,
+    isAutoSource: (s) => /^frontier:/.test(s.origin || ''),
+    // grid 來源逐輪前進 cursor(翻頁);其他來源無 extraPatch
+    extraPatchOf: (s) => (s.kind === 'grid' ? { cursor: Math.max(1, Number(s.cursor) || 1) + 1 } : {}),
+}
+
+/** AI 調度預設(供應商鏈/名額/逾時——依實測定案;金鑰一律 envFile,不在此) */
+export const AI_DEFAULT = {
+    aiParallel: 3,
+    // 萃取容量＝本值×aiParallel×docsPerExtract。3(27 篇)時 raw 進料(補全文 27＋feed 直入 10~24)大於容量,
+    // tier-3 raw 每輪淨增 15~24(2026-09-07 兩輪實測 0→10→29);6(54 篇,18 次呼叫,約 16 分鐘)留有餘裕
+    fetchExtractRounds: 6,
+    triageRounds: 2, // 預篩容量＝本值×aiParallel×docsPerTriage(2×3×20＝120 篇/輪,約萃取容量 2 倍;放行率實測 4~5 成)
+    organizeRounds: 2,
+    timeoutMs: 300_000, // 未列於 providerTimeouts 之條目的單次逾時(條目自帶者優先;與 w-dispatch-ai 預設同值)
+    cooldownMs: 900_000, // 限流/逾時之冷卻:移到鏈尾不移除,任一次成功即解除
+    maxRetries: 0, // 同家不重試,韌性由換家提供(重試只是把 timeout 乘次數)
+    // 【內建目錄之 id 會隨模型輪替增刪,升版後須回頭對齊】w-dispatch-ai 1.0.25(2026-09-14)把 agnes-2.5-flash 換成 3.0;
+    //   1.0.32(2026-09-22)移除 zen:deepseek-v4-flash-free 與全部對話型 zen: REST 免費條目——本檔同步改。不改則零設定安裝會在
+    //   啟動期拋「providerPick 含未知 id」而整輪不執行(2026-09-06 曾因同一形狀空窗一小時;09-22 這次由 unit-objects 抓到,
+    //   生產未受影響——安裝端 settings.json 整鍵覆蓋本清單)。
+    //   驗法:比對本檔 providerPick 與各席位所列 id 是否皆在 w-dispatch-ai 內建目錄(src/providers.mjs);test/unit-objects 之零設定組裝亦會抓到。
+    //   免費尾席取 oc:opencode/muse-spark-1.3-contributor-free(CLI 路徑、匿名免費)。
+    //   【本檔只能引用內建目錄之 id】零設定安裝沒有 extraProviders:安裝端以自帶條目接上的模型(如 2026-09-23 之 codex:gpt-6-luna,
+    //   1.0.35 目錄尚未收錄)不可寫進這裡,否則零設定安裝啟動即拋「含未知 id」。故 luna 仍為 codex:gpt-5.6-luna,待套件收錄 gpt-6-luna 再換。
+    providerPick: [
+        'agnes:agnes-3.0-flash',
+        'poolside:laguna-s-2.1',
+        'agy:gemini-3.8-flash-high',
+        'claude:sonnet',
+        'codex:gpt-5.6-luna',
+        'oc:opencode/muse-spark-1.3-contributor-free',
+    ],
+    providerTimeouts: {
+        'agnes:agnes-3.0-flash': 180_000,
+        'poolside:laguna-s-2.1': 240_000,
+        'agy:gemini-3.8-flash-high': 240_000,
+        'claude:sonnet': 360_000,
+        'codex:gpt-5.6-luna': 180_000,
+        'oc:opencode/muse-spark-1.3-contributor-free': 300_000, // CLI 路徑,啟動開銷較大
+    },
+    extract: { executor: { use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] } },
+    triage: { executor: null }, // 預篩席位;null＝沿用 extract.executor(prompt 短、輸出短,任何一家皆可勝任)
+    relate: { executor: { use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] } },
+    distill: {
+        fanout: {
+            indeps: [
+                { use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
+                { use: 'poolside:laguna-s-2.1', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
+                { use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
+            ],
+            integrate: { use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
+        },
+        pipeline: [
+            { stage: 'audit', use: 'poolside:laguna-s-2.1', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
+            { stage: 'revise', use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
+            { stage: 'accept', use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
+        ],
+    },
+}
+
+/**
+ * 標題層預篩(確定不含知識的例行彙整貼文,進 AI 前攔下改走連結轉錄;{p,f} 形式供 JSON 覆寫)
+ * 只收通用樣式;特定站台之例行貼文標題(原專案曾列之站台專屬月報/更新樣式)由安裝方以 cfg.data.skipTitlePatterns 給定
+ */
+export const SKIP_TITLE_PATTERNS_DEFAULT = [
+    { p: '^Recent [\\w\\s-]*Links\\b', f: 'i' },
+    { p: '^Weekly (Roundup|Links|Recap|Digest)', f: 'i' },
+    { p: '^(Links|Reading) (Roundup|Digest)', f: 'i' },
+    { p: '\\bweekly\\s*#?\\d+', f: 'i' },
+    { p: '\\b(roundup|digest)\\s*#?\\d*\\s*$', f: 'i' },
+]
+
+/** 內部:非物件視為空物件(cfg 逐鍵合併前之正規化;cfg 子鍵給了但形狀錯誤時視為未給,不拋錯) */
+const asObj = (v) => (isobj(v) ? v : {})
+
+/**
+ * 深一層逐鍵合併(fetch/knowledge/ai/sourcePolicy 各自展開;其餘頂層鍵直接覆寫)
+ *
+ * @param {Object} [cfg={}] 輸入執行端設定覆寫物件，非物件時視為{}
+ * @param {Object} [cfg.fetch] 輸入抓取節流覆寫，非物件時視為未給(沿用 FETCH_DEFAULT)
+ * @param {Object} [cfg.knowledge] 輸入知識彙整/關聯/提煉節流覆寫，非物件時視為未給(沿用 KNOWLEDGE_DEFAULT)
+ * @param {Object} [cfg.sourcePolicy] 輸入來源品質政策覆寫，非物件時視為未給(沿用 SOURCE_POLICY_DEFAULT)
+ * @param {Object} [cfg.ai] 輸入 AI 調度覆寫(含 extract/triage/relate/distill 子鍵各自深一層合併)，非物件時視為未給(沿用 AI_DEFAULT)
+ * @param {String} [cfg.indexTitle] 輸入知識庫索引標題，預設'知識庫索引'
+ * @param {String} [cfg.relationIndexTitle] 輸入知識關聯總覽標題，預設'知識關聯總覽'
+ * @returns {Object} 回傳完整設定物件(fetch/knowledge/sourcePolicy/ai/indexTitle/relationIndexTitle，
+ *   另含容量自洽推導出之 knowledge.extractCapacity／relateCapacity／triageCapacity 與 warnings 字串陣列)
+ * @example
+ * let s = resolveSettings({ fetch: { sourcesPerRun: 9 } })
+ * console.log(s.fetch.sourcesPerRun, s.fetch.itemsPerSource)
+ * // => 9 8
+ */
+export function resolveSettings(cfg = {}) {
+
+    //check
+    if (!isobj(cfg)) {
+        cfg = {}
+    }
+
+    const s = {
+        fetch: { ...FETCH_DEFAULT, ...asObj(cfg.fetch) },
+        knowledge: { ...KNOWLEDGE_DEFAULT, ...asObj(cfg.knowledge) },
+        sourcePolicy: { ...SOURCE_POLICY_DEFAULT, ...asObj(cfg.sourcePolicy) },
+        ai: {
+            ...AI_DEFAULT,
+            ...asObj(cfg.ai),
+            extract: { ...AI_DEFAULT.extract, ...asObj(cfg.ai?.extract) },
+            triage: { ...AI_DEFAULT.triage, ...asObj(cfg.ai?.triage) },
+            relate: { ...AI_DEFAULT.relate, ...asObj(cfg.ai?.relate) },
+            distill: { ...AI_DEFAULT.distill, ...asObj(cfg.ai?.distill) },
+        },
+        indexTitle: cfg.indexTitle || '知識庫索引',
+        relationIndexTitle: cfg.relationIndexTitle || '知識關聯總覽',
+    }
+    // 容量自洽(2026-09-07):萃取容量由三鍵推導,不手寫;各段日誌與巡檢據此判容量不足。
+    // 補全文名額(articlesPerRun)不直接由容量推導——feed 自帶內文直入 raw 之量靜態不可知,且逐篇序列
+    // curl 受時間預算限制——故仍由安裝端定,但不得大於容量:抓進來萃不完只會在 raw 堆積,不是丟棄
+    // 但同樣是「進料大於容量」;detailFetch 每輪 WARN(巡檢會列為未知警告),不在此拋錯以免設定微調
+    // 讓每小時輪次整個停擺(輪次不跑比 raw 堆積更糟)
+    s.knowledge.extractCapacity = s.ai.fetchExtractRounds * s.ai.aiParallel * s.knowledge.docsPerExtract
+    s.knowledge.relateCapacity = s.ai.organizeRounds * s.ai.aiParallel * s.knowledge.relateBatch // 關聯每輪容量(巡檢積壓門檻據此)
+    s.knowledge.triageCapacity = s.knowledge.triageEnabled === false ? 0 : s.ai.triageRounds * s.ai.aiParallel * s.knowledge.docsPerTriage
+    // 容量自洽(2026-09-07 建立;2026-09-14 依使用者原則改寫):關卡依序為 補全文 → 預篩 → 萃取 → 關聯,
+    // **每一關的每輪容量須 ≥ 該關進料之上界**——寧可稍慢,不可讓積壓持續大於處理量(積壓只會逼人停排程手動清)。
+    // 【只警告「進料 > 容量」,不警告「容量閒置」】容量是上限不是成本(批次層池空即停,不空轉)。此前曾加
+    //   「放行量不到萃取容量之半即警告吃不飽」,它把閒置當問題而引導人開大進料、縮小容量,與原則相反
+    //   (2026-09-14 12:03 據此把 sourcesPerRun 6→40、萃取容量 72→63,同日撤回)。
+    // 【進料取上界】raw 進料＝articlesPerRun＋feed 直入(實測 10~24,取 24);放行率(triagePassRate)與產出率(noteYieldRate)
+    //   為安裝端校準之估計值,方向一律取偏高——估低了會讓真實積壓通過檢核。
+    // 預篩啟用時萃取吃到的是「預篩放行量」而非全部進料,故不拿 articlesPerRun 直接比萃取容量(2026-09-12);
+    // 放行量以 min(預篩容量, 進料)×放行率計:預篩容量是清積壓時的上限,積壓清完後每輪能預篩的只有當輪進料。
+    const warnings = []
+    const feedDirect = 24
+    const inflow = s.fetch.articlesPerRun + feedDirect
+    if (s.knowledge.triageCapacity > 0) {
+        if (s.knowledge.triageCapacity < inflow) {
+            warnings.push(`預篩容量 ${s.knowledge.triageCapacity}（triageRounds×aiParallel×docsPerTriage）小於 raw 進料 ${inflow}（articlesPerRun ${s.fetch.articlesPerRun}＋feed 直入約 ${feedDirect}）：raw 會在預篩關堆積；調高預篩容量或降名額`)
+        }
+        const rate = s.knowledge.triagePassRate ?? 0.5
+        const passed = Math.round(Math.min(s.knowledge.triageCapacity, inflow) * rate)
+        if (passed > s.knowledge.extractCapacity) {
+            warnings.push(`預篩放行上界約 ${passed} 篇（每輪進料 ${inflow}×放行率 ${rate}）大於萃取容量 ${s.knowledge.extractCapacity}（fetchExtractRounds×aiParallel×docsPerExtract）：放行者萃不完會在萃取關堆積；調高 fetchExtractRounds 或降 articlesPerRun`)
+        }
+    }
+    else if (s.fetch.articlesPerRun > s.knowledge.extractCapacity) {
+        warnings.push(`fetch.articlesPerRun(${s.fetch.articlesPerRun}) 大於萃取容量 ${s.knowledge.extractCapacity}（fetchExtractRounds×aiParallel×docsPerExtract）：抓進來萃不完，raw 會逐輪堆積；調高容量或降名額`)
+    }
+    // 關聯關:筆記進料上界＝萃取容量×產出率;串不進知識網的新筆記同樣是積壓(2026-09-14 待關聯 978 篇即此)
+    const yieldRate = s.knowledge.noteYieldRate ?? 0.5
+    const notesIn = Math.round(s.knowledge.extractCapacity * yieldRate)
+    if (notesIn > s.knowledge.relateCapacity) {
+        warnings.push(`筆記進料上界約 ${notesIn} 篇（萃取容量 ${s.knowledge.extractCapacity}×產出率 ${yieldRate}）大於關聯容量 ${s.knowledge.relateCapacity}（organizeRounds×aiParallel×relateBatch）：新筆記串不進知識網而堆積；調高 organizeRounds 或降萃取容量`)
+    }
+    s.warnings = warnings
+    return s
+}
+
+export default { FETCH_DEFAULT, KNOWLEDGE_DEFAULT, SOURCE_POLICY_DEFAULT, AI_DEFAULT, SKIP_TITLE_PATTERNS_DEFAULT, resolveSettings }

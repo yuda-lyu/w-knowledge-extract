@@ -1,0 +1,192 @@
+// defaultFetchers.mjs — 內建抓取器(w-data-pipeline DI 規格):rss/grid(list)＋article/links(detail)
+//
+// list 角色:rss(fetchRSS)與 grid(OpenAlex＋arXiv 雙供應商容錯);
+// detail 角色:article(正文)與 links(彙整貼文抽連結)。
+// 回傳皆為「原始項目」,欄位映射由 toRecord(內建預設,可覆寫)處理。
+// 安裝方以 cfg.fetchers 追加自寫抓取器;同 id 者置換內建。
+// 【領域中立】grid 之領域過濾(OpenAlex field／arXiv 類別)由 opt 給,預設不限(2026-09-23 去除原專案之領域預設)。
+
+import isarr from 'wsemi/src/isarr.mjs'
+import isobj from 'wsemi/src/isobj.mjs'
+import ispint from 'wsemi/src/ispint.mjs'
+import cint from 'wsemi/src/cint.mjs'
+import fetchWebByCurl from 'w-fetch-web/src/fetchWebByCurl.mjs'
+import decodeEntities from 'w-dwdata-hub/src/decodeEntities.mjs'
+import fetchRSS from 'w-dwdata-hub/src/fetchRSS.mjs'
+import W from 'w-data-pipeline/src/WDataPipeline.mjs'
+import { fetchArticle, fetchArticleLinks } from './articleParse.mjs'
+const { defineFetcher } = W
+
+
+/**
+ * OpenAlex 摘要 inverted index 還原為文字
+ *
+ * @param {Object} inv 輸入 inverted index 物件(詞 → 位置陣列)
+ * @returns {String} 回傳摘要文字(壓平空白)
+ */
+function deinvertAbstract(inv) {
+    const arr = []
+    for (const [w, positions] of Object.entries(inv || {})) for (const p of positions) arr[p] = w
+    return arr.join(' ').replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * grid 來源:OpenAlex 依 query＋cursor 翻頁;OpenAlex 失敗(429/網路/回應非 JSON)時切 arXiv(雙供應商容錯)
+ *
+ * 領域過濾皆由 opt 給(通用套件預設不限):OpenAlex 以 primary_topic.field.id 白名單擋跨域雜訊、arXiv 以類別 OR 過濾。
+ * 【回應非 JSON 亦須遞補】此前 OpenAlex 回 200 但內容非 JSON(錯誤頁/維護頁)時直接拋錯,與「失敗時切 arXiv」之設計不符(2026-09-23 修)
+ *
+ * @param {Object} src 輸入 grid 來源記錄，需含 query，可含 cursor(頁碼)
+ * @param {Object} opt 輸入設定物件，可含 openAlexMailto、openAlexFields、arxivCategories、fetchWebByCurl
+ * @returns {Promise} 回傳 Promise，resolve 回傳原始項目陣列 [{ url, time, title, summary, text }]，雙供應商皆失敗時 reject
+ */
+async function readGrid(src, opt) {
+    const fetchByCurl = typeof opt.fetchWebByCurl === 'function' ? opt.fetchWebByCurl : fetchWebByCurl
+    const fields = String(opt.openAlexFields || '').trim()
+    const cats = (Array.isArray(opt.arxivCategories) ? opt.arxivCategories : []).map((c) => String(c || '').trim()).filter(Boolean)
+    const page = Math.max(1, Number(src.cursor) || 1)
+    const mailto = opt.openAlexMailto ? `&mailto=${encodeURIComponent(opt.openAlexMailto)}` : ''
+    const u = `https://api.openalex.org/works?search=${encodeURIComponent(src.query)}&per-page=8&page=${page}` +
+    (fields ? `&filter=${encodeURIComponent(`primary_topic.field.id:${fields}`)}` : '') +
+    `&select=title,publication_year,doi,abstract_inverted_index,primary_location${mailto}`
+    const r = await fetchByCurl(u, { timeoutMs: 15_000, maxRetries: 1 })
+    let openAlexWhy = r.message || r.reason || ''
+    if (r.status === 'success') {
+        let j = null
+        try {
+            j = JSON.parse(r.html)
+        }
+        catch {
+            openAlexWhy = '回應非 JSON'
+        }
+        if (j && typeof j === 'object') {
+            const items = []
+            for (const p of j.results || []) {
+                const abstract = deinvertAbstract(p.abstract_inverted_index)
+                if (abstract.length < 250) continue
+                const url = p.doi || p.primary_location?.landing_page_url || ''
+                if (!/^https?:\/\//.test(url)) continue
+                items.push({ url, time: String(p.publication_year || ''), title: decodeEntities(String(p.title || '')).trim(), summary: abstract.slice(0, 300), text: abstract.slice(0, 4000) })
+            }
+            return items
+        }
+    }
+    const q2 = cats.length ? `all:${src.query} AND (${cats.map((c) => `cat:${c}`).join(' OR ')})` : `all:${src.query}`
+    const u2 = `https://export.arxiv.org/api/query?search_query=${encodeURIComponent(q2)}&sortBy=relevance&max_results=8`
+    const r2 = await fetchByCurl(u2, { timeoutMs: 15_000, maxRetries: 1 })
+    if (r2.status !== 'success') throw new Error(`網格雙供應商皆失敗：OpenAlex ${openAlexWhy}；arXiv ${r2.message || r2.reason}`)
+    const items = []
+    for (const [, e] of String(r2.html || '').matchAll(/<entry>([\s\S]*?)<\/entry>/g)) {
+        const id = (e.match(/<id>([^<]+)<\/id>/) || [])[1] || ''
+        const title = decodeEntities((e.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '').replace(/\s+/g, ' ').trim()
+        const summary = decodeEntities((e.match(/<summary>([\s\S]*?)<\/summary>/) || [])[1] || '').replace(/\s+/g, ' ').trim()
+        const published = ((e.match(/<published>([^<]+)<\/published>/) || [])[1] || '').slice(0, 10)
+        if (!id || summary.length < 250) continue
+        items.push({ url: id.replace('http://', 'https://').replace(/v\d+$/, ''), time: published, title, summary: summary.slice(0, 300), text: summary.slice(0, 4000) })
+    }
+    return items
+}
+
+/**
+ * 建立內建四支抓取器(w-data-pipeline defineFetcher 規格)
+ *
+ * list 角色:rss(fetchRSS,curl)、grid(OpenAlex＋arXiv 雙供應商容錯);detail 角色:article(正文,經站台 adapter 與 Readability)、
+ * links(彙整貼文抽外部連結,僅供指名路由)
+ *
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Integer} [opt.articleTimeoutMs=30000] 輸入單篇正文抓取逾時毫秒正整數，預設30000
+ * @param {String} [opt.openAlexMailto=''] 輸入 OpenAlex polite pool 聯絡信箱字串，預設''
+ * @param {String} [opt.openAlexFields=''] 輸入 OpenAlex primary_topic.field.id 白名單字串(以 | 串接，如 '17|26')，預設''代表不限領域
+ * @param {Array} [opt.arxivCategories=[]] 輸入 grid 遞補查 arXiv 時之類別過濾字串陣列(如 ['cs.LG'])，預設[]代表不限類別
+ * @param {Array} [opt.siteAdapters] 輸入站台 adapter 陣列(排於 w-fetch-web 內建清單之前)，未給則用本套件自帶清單
+ * @param {Function} [opt.fetchWebByCurl] 輸入 grid 抓取所用之 curl 抓取函數(測試或自訂網路層注入)，預設 w-fetch-web 之 fetchWebByCurl
+ * @returns {Array} 回傳抓取器陣列，依序為 rss、grid、article、links
+ * @example
+ * need test in nodejs.
+ *
+ * let fetchers = createDefaultFetchers({ articleTimeoutMs: 30000, arxivCategories: ['cs.LG'] })
+ * console.log(fetchers.map((f) => f.id))
+ * // => [ 'rss', 'grid', 'article', 'links' ]
+ */
+export function createDefaultFetchers(opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    //articleTimeoutMs
+    let articleTimeoutMs = opt.articleTimeoutMs
+    if (!ispint(articleTimeoutMs)) {
+        articleTimeoutMs = 30_000
+    }
+    articleTimeoutMs = cint(articleTimeoutMs)
+
+    return [
+    // method:'curl' 不用 auto:TLS 指紋站台 curl 過不了 fetch 更不可能過,auto 只讓最壞耗時翻倍
+        defineFetcher({ id: 'rss', kinds: ['rss'], timeoutMs: 120_000, fetch: (src) => fetchRSS(src.url, { method: 'curl', withContent: true, maxRetries: 2, timeout: 20_000, showLog: false }) }),
+        defineFetcher({ id: 'grid', kinds: ['grid'], timeoutMs: 45_000, fetch: (src) => readGrid(src, opt) }),
+        defineFetcher({
+            id: 'article',
+            role: 'detail',
+            match: () => true,
+            timeoutMs: articleTimeoutMs + 60_000,
+            fetch: async (d) => {
+                const a = await fetchArticle(d.url, { timeoutMs: articleTimeoutMs, adapters: opt.siteAdapters })
+                // extra 經 normalizeContent 原樣帶到 doc._fetched.extra,供落庫標記內容來源(textFrom)
+                return a.ok
+                    ? { ok: true, text: a.content, title: a.title, extra: { method: a.method, adapterId: a.adapterId } }
+                    : { ok: false, reason: a.reason, message: a.message }
+            },
+        }),
+        defineFetcher({
+            id: 'links',
+            role: 'detail',
+            kinds: ['__named-only__'],
+            timeoutMs: articleTimeoutMs + 60_000,
+            fetch: async (d) => {
+                const a = await fetchArticleLinks(d.url, { timeoutMs: articleTimeoutMs })
+                return a.ok ? { ok: true, links: a.links } : { ok: false, reason: a.reason, message: a.message }
+            },
+        }),
+    ]
+}
+
+/**
+ * 合併內建抓取器與安裝方注入者:同 id 置換內建,新 id 追加(置換語意讓安裝方可整支換掉 rss 抓法)
+ *
+ * @param {Array} defaults 輸入內建抓取器陣列(createDefaultFetchers 之產出)
+ * @param {Array} [injected=[]] 輸入安裝方注入之抓取器陣列(cfg.fetchers)，預設[]
+ * @returns {Array} 回傳合併後抓取器陣列(不改動輸入陣列)
+ * @throws {Error} defaults 或 injected 非陣列、注入項非物件時拋出——單一物件誤傳會讓注入靜默失效
+ * @example
+ * let merged = mergeFetchers([{ id: 'rss' }, { id: 'grid' }], [{ id: 'rss', mine: true }, { id: 'pdf' }])
+ * console.log(merged.map((f) => `${f.id}${f.mine ? '*' : ''}`))
+ * // => [ 'rss*', 'grid', 'pdf' ]
+ */
+export function mergeFetchers(defaults, injected = []) {
+
+    //check
+    if (!isarr(defaults)) {
+        throw new Error('mergeFetchers 之 defaults 須為抓取器陣列')
+    }
+    if (injected === undefined || injected === null) {
+        injected = []
+    }
+    if (!isarr(injected)) {
+        throw new Error('cfg.fetchers 須為抓取器陣列（單一抓取器亦須包成陣列）')
+    }
+    injected.forEach((f, i) => {
+        if (!isobj(f)) throw new Error(`cfg.fetchers[${i}] 須為抓取器物件（defineFetcher 規格）`)
+    })
+
+    const out = [...defaults]
+    for (const f of injected) {
+        const i = out.findIndex((x) => x.id === f.id)
+        if (i >= 0) out[i] = f
+        else out.push(f)
+    }
+    return out
+}
+
+export default { createDefaultFetchers, mergeFetchers }

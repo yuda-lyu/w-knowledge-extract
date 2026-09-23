@@ -1,0 +1,35 @@
+{
+  "name": "w-knowledge-extract",
+  "version": "1.0.0",
+  "main": "dist/w-knowledge-extract.umd.js",
+  "dependencies": {
+    "json5": "^2.2.3",
+    "opencc-js": "^1.4.2",
+    "w-data-pipeline": "^1.0.14",
+    "w-dispatch-ai": "^1.0.35",
+    "w-dwdata-hub": "^1.0.18",
+    "w-fetch-web": "^1.0.22",
+    "w-orm-lmdb": "^1.0.34",
+    "wsemi": "^1.9.3"
+  },
+  "devDependencies": {
+    "w-package-tools": "^1.1.16"
+  },
+  "scripts": {
+    "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",
+    "deploy": "gh-pages -d docs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yuda-lyu/w-knowledge-extract.git"
+  },
+  "keywords": [
+    "package",
+    "tool",
+    "knowledge",
+    "extract",
+    "nodejs"
+  ],
+  "author": "yuda-lyu(semisphere)",
+  "license": "MIT"
+}

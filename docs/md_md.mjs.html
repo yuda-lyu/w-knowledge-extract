@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>md/md.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="MwContractError.html">MwContractError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#AI_DEFAULT">AI_DEFAULT</a></li><li><a href="global.html#COOL_DETECT">COOL_DETECT</a></li><li><a href="global.html#CORE_SCHEMA">CORE_SCHEMA</a></li><li><a href="global.html#DEFAULT_SITE_ADAPTERS">DEFAULT_SITE_ADAPTERS</a></li><li><a href="global.html#DF_DIRS">DF_DIRS</a></li><li><a href="global.html#FETCH_DEFAULT">FETCH_DEFAULT</a></li><li><a href="global.html#KIND_MAX_PROMPT_CHARS">KIND_MAX_PROMPT_CHARS</a></li><li><a href="global.html#KNOWLEDGE_DEFAULT">KNOWLEDGE_DEFAULT</a></li><li><a href="global.html#OBJECT_STAGES">OBJECT_STAGES</a></li><li><a href="global.html#ORGANIZE_SHARED_KEYS">ORGANIZE_SHARED_KEYS</a></li><li><a href="global.html#OUTCOME_TEXT">OUTCOME_TEXT</a></li><li><a href="global.html#SKIP_TITLE_PATTERNS_DEFAULT">SKIP_TITLE_PATTERNS_DEFAULT</a></li><li><a href="global.html#SOURCE_POLICY_DEFAULT">SOURCE_POLICY_DEFAULT</a></li><li><a href="global.html#STREAK_TYPES">STREAK_TYPES</a></li><li><a href="global.html#TELEGRAM_TEXT_MAX">TELEGRAM_TEXT_MAX</a></li><li><a href="global.html#VOCAB_DEFAULT">VOCAB_DEFAULT</a></li><li><a href="global.html#WKnowledgeExtract">WKnowledgeExtract</a></li><li><a href="global.html#accountSourceOutcome">accountSourceOutcome</a></li><li><a href="global.html#acquireLock">acquireLock</a></li><li><a href="global.html#admitFeedItems">admitFeedItems</a></li><li><a href="global.html#aggStats">aggStats</a></li><li><a href="global.html#applyRelationsToNote">applyRelationsToNote</a></li><li><a href="global.html#applyTaps">applyTaps</a></li><li><a href="global.html#arxivSearchUrl">arxivSearchUrl</a></li><li><a href="global.html#asObj">asObj</a></li><li><a href="global.html#bingNewsSearchUrl">bingNewsSearchUrl</a></li><li><a href="global.html#budgetOf">budgetOf</a></li><li><a href="global.html#buildAuditPrompt">buildAuditPrompt</a></li><li><a href="global.html#buildDistillPrompt">buildDistillPrompt</a></li><li><a href="global.html#buildFinalPrompt">buildFinalPrompt</a></li><li><a href="global.html#buildRevisePrompt">buildRevisePrompt</a></li><li><a href="global.html#buildRunSummary">buildRunSummary</a></li><li><a href="global.html#buildWorkflowStages">buildWorkflowStages</a></li><li><a href="global.html#byRetryTierFifo">byRetryTierFifo</a></li><li><a href="global.html#checkChain">checkChain</a></li><li><a href="global.html#checkCore">checkCore</a></li><li><a href="global.html#checkCtxDeps">checkCtxDeps</a></li><li><a href="global.html#checkIssues">checkIssues</a></li><li><a href="global.html#cliFail">cliFail</a></li><li><a href="global.html#cliFailDetail">cliFailDetail</a></li><li><a href="global.html#clueKey">clueKey</a></li><li><a href="global.html#cluePriority">cluePriority</a></li><li><a href="global.html#composeChain">composeChain</a></li><li><a href="global.html#conceptVocabulary">conceptVocabulary</a></li><li><a href="global.html#count">count</a></li><li><a href="global.html#createAiAdapter">createAiAdapter</a></li><li><a href="global.html#createAiCaller">createAiCaller</a></li><li><a href="global.html#createAiEventLogger">createAiEventLogger</a></li><li><a href="global.html#createClock">createClock</a></li><li><a href="global.html#createDefaultFetchers">createDefaultFetchers</a></li><li><a href="global.html#createDistillDomain">createDistillDomain</a></li><li><a href="global.html#createDistillObject">createDistillObject</a></li><li><a href="global.html#createExtractDomain">createExtractDomain</a></li><li><a href="global.html#createFetchObject">createFetchObject</a></li><li><a href="global.html#createKnowledgeExtract">createKnowledgeExtract</a></li><li><a href="global.html#createLogger">createLogger</a></li><li><a href="global.html#createOrganizeObject">createOrganizeObject</a></li><li><a href="global.html#createPatrol">createPatrol</a></li><li><a href="global.html#createProviderHealth">createProviderHealth</a></li><li><a href="global.html#createRelateDomain">createRelateDomain</a></li><li><a href="global.html#createRelateObject">createRelateObject</a></li><li><a href="global.html#createRunLogger">createRunLogger</a></li><li><a href="global.html#createSettingsHolder">createSettingsHolder</a></li><li><a href="global.html#createTelegramNotifier">createTelegramNotifier</a></li><li><a href="global.html#createTime">createTime</a></li><li><a href="global.html#createTriageDomain">createTriageDomain</a></li><li><a href="global.html#cullZeroYieldSources">cullZeroYieldSources</a></li><li><a href="global.html#deadMatcher">deadMatcher</a></li><li><a href="global.html#decorateSettings">decorateSettings</a></li><li><a href="global.html#defaultToLinkedRecord">defaultToLinkedRecord</a></li><li><a href="global.html#defaultToRecord">defaultToRecord</a></li><li><a href="global.html#defineFirstMw">defineFirstMw</a></li><li><a href="global.html#defineMw">defineMw</a></li><li><a href="global.html#deinvertAbstract">deinvertAbstract</a></li><li><a href="global.html#discoverFeed">discoverFeed</a></li><li><a href="global.html#docRecord">docRecord</a></li><li><a href="global.html#dropSection">dropSection</a></li><li><a href="global.html#elapsed">elapsed</a></li><li><a href="global.html#enable">enable</a></li><li><a href="global.html#enforceFrontierCap">enforceFrontierCap</a></li><li><a href="global.html#ensureSeedSources">ensureSeedSources</a></li><li><a href="global.html#escapeHtml">escapeHtml</a></li><li><a href="global.html#expandDirs">expandDirs</a></li><li><a href="global.html#expandSeeds">expandSeeds</a></li><li><a href="global.html#extractLinks">extractLinks</a></li><li><a href="global.html#failedNames">failedNames</a></li><li><a href="global.html#fetchArticle">fetchArticle</a></li><li><a href="global.html#fetchArticleLinks">fetchArticleLinks</a></li><li><a href="global.html#file">file</a></li><li><a href="global.html#filterFeedItems">filterFeedItems</a></li><li><a href="global.html#fin">fin</a></li><li><a href="global.html#firstLineClamp">firstLineClamp</a></li><li><a href="global.html#fitChain">fitChain</a></li><li><a href="global.html#formatTime">formatTime</a></li><li><a href="global.html#genericSummary">genericSummary</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#getDate">getDate</a></li><li><a href="global.html#getDay">getDay</a></li><li><a href="global.html#getTimestamp">getTimestamp</a></li><li><a href="global.html#gridSourceUrl">gridSourceUrl</a></li><li><a href="global.html#info">info</a></li><li><a href="global.html#ingestFeedItems">ingestFeedItems</a></li><li><a href="global.html#ingestNotes">ingestNotes</a></li><li><a href="global.html#installProcessGuards">installProcessGuards</a></li><li><a href="global.html#isLowYield">isLowYield</a></li><li><a href="global.html#judgeFromDocs">judgeFromDocs</a></li><li><a href="global.html#kbLabelOf">kbLabelOf</a></li><li><a href="global.html#keyIdOf">keyIdOf</a></li><li><a href="global.html#legacyClueKey">legacyClueKey</a></li><li><a href="global.html#listCores">listCores</a></li><li><a href="global.html#listSeats">listSeats</a></li><li><a href="global.html#load">load</a></li><li><a href="global.html#loadSettings">loadSettings</a></li><li><a href="global.html#logAiOutcome">logAiOutcome</a></li><li><a href="global.html#looksLikeFeed">looksLikeFeed</a></li><li><a href="global.html#makeArrayCoverageValidator">makeArrayCoverageValidator</a></li><li><a href="global.html#makeLineEmitter">makeLineEmitter</a></li><li><a href="global.html#makeMsg">makeMsg</a></li><li><a href="global.html#makeSlugResolver">makeSlugResolver</a></li><li><a href="global.html#markConflict">markConflict</a></li><li><a href="global.html#maxPromptCharsOf">maxPromptCharsOf</a></li><li><a href="global.html#mergeCatalogue">mergeCatalogue</a></li><li><a href="global.html#mergeFetchers">mergeFetchers</a></li><li><a href="global.html#mergeSiteAdapters">mergeSiteAdapters</a></li><li><a href="global.html#mergeTaps">mergeTaps</a></li><li><a href="global.html#mwAccountSource">mwAccountSource</a></li><li><a href="global.html#mwAdmitPersist">mwAdmitPersist</a></li><li><a href="global.html#mwAdoptResult">mwAdoptResult</a></li><li><a href="global.html#mwApplyToNote">mwApplyToNote</a></li><li><a href="global.html#mwBuildBase">mwBuildBase</a></li><li><a href="global.html#mwBuildEdges">mwBuildEdges</a></li><li><a href="global.html#mwConflictDualWrite">mwConflictDualWrite</a></li><li><a href="global.html#mwCullSources">mwCullSources</a></li><li><a href="global.html#mwFeedFallback">mwFeedFallback</a></li><li><a href="global.html#mwFetchDetail">mwFetchDetail</a></li><li><a href="global.html#mwFetchList">mwFetchList</a></li><li><a href="global.html#mwFilterItems">mwFilterItems</a></li><li><a href="global.html#mwMarkDoc">mwMarkDoc</a></li><li><a href="global.html#mwMarkRelated">mwMarkRelated</a></li><li><a href="global.html#mwNormalizeItems">mwNormalizeItems</a></li><li><a href="global.html#mwPersistCore">mwPersistCore</a></li><li><a href="global.html#mwPersistEdges">mwPersistEdges</a></li><li><a href="global.html#mwPersistNote">mwPersistNote</a></li><li><a href="global.html#mwPersistOutcome">mwPersistOutcome</a></li><li><a href="global.html#mwProbe">mwProbe</a></li><li><a href="global.html#mwRebuildKnowledgeIndex">mwRebuildKnowledgeIndex</a></li><li><a href="global.html#mwRebuildRelationIndex">mwRebuildRelationIndex</a></li><li><a href="global.html#mwRenderCore">mwRenderCore</a></li><li><a href="global.html#mwRenderNote">mwRenderNote</a></li><li><a href="global.html#mwRouteFetcher">mwRouteFetcher</a></li><li><a href="global.html#mwRunWorkflow">mwRunWorkflow</a></li><li><a href="global.html#mwSaveClues">mwSaveClues</a></li><li><a href="global.html#mwSettleClue">mwSettleClue</a></li><li><a href="global.html#mwSettleTriage">mwSettleTriage</a></li><li><a href="global.html#mwSkipGate">mwSkipGate</a></li><li><a href="global.html#mwSlim">mwSlim</a></li><li><a href="global.html#mwSyncSeeds">mwSyncSeeds</a></li><li><a href="global.html#mwTitleSkip">mwTitleSkip</a></li><li><a href="global.html#mwTranscodeLinks">mwTranscodeLinks</a></li><li><a href="global.html#newSource">newSource</a></li><li><a href="global.html#normalizeConcept">normalizeConcept</a></li><li><a href="global.html#normalizeFeedItems">normalizeFeedItems</a></li><li><a href="global.html#normalizeUrl">normalizeUrl</a></li><li><a href="global.html#normalizeWorkDir">normalizeWorkDir</a></li><li><a href="global.html#noteDigest">noteDigest</a></li><li><a href="global.html#num">num</a></li><li><a href="global.html#objectReport">objectReport</a></li><li><a href="global.html#oneline">oneline</a></li><li><a href="global.html#open">open</a></li><li><a href="global.html#openStores">openStores</a></li><li><a href="global.html#parseFrontmatter">parseFrontmatter</a></li><li><a href="global.html#parseIndexList">parseIndexList</a></li><li><a href="global.html#parseJson">parseJson</a></li><li><a href="global.html#parseJsonArray">parseJsonArray</a></li><li><a href="global.html#patrolFromPipeline">patrolFromPipeline</a></li><li><a href="global.html#pickCandidates">pickCandidates</a></li><li><a href="global.html#pickCategories">pickCategories</a></li><li><a href="global.html#pickClues">pickClues</a></li><li><a href="global.html#pickConcepts">pickConcepts</a></li><li><a href="global.html#pickDueSources">pickDueSources</a></li><li><a href="global.html#pidAlive">pidAlive</a></li><li><a href="global.html#probeSearchEndpoints">probeSearchEndpoints</a></li><li><a href="global.html#probeSiteFeed">probeSiteFeed</a></li><li><a href="global.html#qualityTag">qualityTag</a></li><li><a href="global.html#queueAge">queueAge</a></li><li><a href="global.html#quote">quote</a></li><li><a href="global.html#reEscape">reEscape</a></li><li><a href="global.html#readGrid">readGrid</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#readMd">readMd</a></li><li><a href="global.html#readRunSummary">readRunSummary</a></li><li><a href="global.html#rebuildKnowledgeIndex">rebuildKnowledgeIndex</a></li><li><a href="global.html#rebuildRelationIndex">rebuildRelationIndex</a></li><li><a href="global.html#recordFile">recordFile</a></li><li><a href="global.html#recordSourceOutcome">recordSourceOutcome</a></li><li><a href="global.html#regenCore">regenCore</a></li><li><a href="global.html#renderCoreBody">renderCoreBody</a></li><li><a href="global.html#renderFrontmatter">renderFrontmatter</a></li><li><a href="global.html#reset">reset</a></li><li><a href="global.html#resolveCatalogue">resolveCatalogue</a></li><li><a href="global.html#resolvePlugins">resolvePlugins</a></li><li><a href="global.html#resolveSettings">resolveSettings</a></li><li><a href="global.html#resolveVocab">resolveVocab</a></li><li><a href="global.html#reviveDeadDocs">reviveDeadDocs</a></li><li><a href="global.html#run">run</a></li><li><a href="global.html#runAiBatchStage">runAiBatchStage</a></li><li><a href="global.html#runChainOverMsgs">runChainOverMsgs</a></li><li><a href="global.html#runCli">runCli</a></li><li><a href="global.html#runJsonCli">runJsonCli</a></li><li><a href="global.html#runSubStages">runSubStages</a></li><li><a href="global.html#runTask">runTask</a></li><li><a href="global.html#sanitize">sanitize</a></li><li><a href="global.html#saveClues">saveClues</a></li><li><a href="global.html#section">section</a></li><li><a href="global.html#sectionOf">sectionOf</a></li><li><a href="global.html#send">send</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setConceptFold">setConceptFold</a></li><li><a href="global.html#settleClue">settleClue</a></li><li><a href="global.html#sha1">sha1</a></li><li><a href="global.html#skipDerived">skipDerived</a></li><li><a href="global.html#slimTerminalDocs">slimTerminalDocs</a></li><li><a href="global.html#slugify">slugify</a></li><li><a href="global.html#sortByEnforce">sortByEnforce</a></li><li><a href="global.html#sourceId">sourceId</a></li><li><a href="global.html#stageDetailFetch">stageDetailFetch</a></li><li><a href="global.html#stageDistill">stageDistill</a></li><li><a href="global.html#stageDocMaintain">stageDocMaintain</a></li><li><a href="global.html#stageExpand">stageExpand</a></li><li><a href="global.html#stageExtract">stageExtract</a></li><li><a href="global.html#stageFields">stageFields</a></li><li><a href="global.html#stageKnowledgeIndex">stageKnowledgeIndex</a></li><li><a href="global.html#stageListFetch">stageListFetch</a></li><li><a href="global.html#stageRelate">stageRelate</a></li><li><a href="global.html#stageRelationIndex">stageRelationIndex</a></li><li><a href="global.html#stageSeedSync">stageSeedSync</a></li><li><a href="global.html#stageTriage">stageTriage</a></li><li><a href="global.html#stdReport">stdReport</a></li><li><a href="global.html#strArr">strArr</a></li><li><a href="global.html#subReportOf">subReportOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#taskRunner">taskRunner</a></li><li><a href="global.html#timeoutPatch">timeoutPatch</a></li><li><a href="global.html#unquote">unquote</a></li><li><a href="global.html#unwrapNewsUrl">unwrapNewsUrl</a></li><li><a href="global.html#withTag">withTag</a></li><li><a href="global.html#writeJson">writeJson</a></li><li><a href="global.html#writeMd">writeMd</a></li><li><a href="global.html#writeRunSummary">writeRunSummary</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">md/md.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// md.mjs — 知識 md 的 frontmatter 讀寫與組裝（自原專案原樣抽提，泛用件）
+//
+// frontmatter 只用「純量 + 一維字串陣列」兩種型別，並自行序列化／解析，
+// 不引入 YAML 套件：知識檔要能被任何工具（含 AI、grep、編輯器）穩定讀取，
+// 型別越少越不會出現「寫得出來卻解析不回去」的不對稱。
+
+import fs from 'fs'
+import path from 'path'
+import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
+import isobj from 'wsemi/src/isobj.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
+import isstr from 'wsemi/src/isstr.mjs'
+
+/**
+ * frontmatter 值轉為雙引號包覆字串(跳脫反斜線與雙引號,換行壓成空格)
+ *
+ * @param {*} s 輸入任意值，null／undefined 視為空字串，其餘轉字串
+ * @returns {String} 回傳雙引號包覆之字串(內容已跳脫)
+ */
+function quote(s) {
+    return `"${String(s ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, ' ')}"`
+}
+
+/**
+ * 去除 frontmatter 值兩側之雙引號並還原跳脫字元;非雙引號包覆之字串原樣回傳(去頭尾空白)
+ *
+ * @param {*} s 輸入任意值，null／undefined 視為空字串，其餘轉字串
+ * @returns {String} 回傳還原後字串
+ */
+function unquote(s) {
+    const t = String(s ?? '').trim()
+    if (t.startsWith('"') &amp;&amp; t.endsWith('"')) {
+        return t.slice(1, -1).replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+    }
+    return t
+}
+
+/**
+ * 組出 frontmatter 區塊字串(--- 包夾之 key: value 清單);陣列值以雙引號逗號分隔清單呈現,數字／布林原樣,其餘字串加雙引號
+ *
+ * @param {Object} front 輸入 frontmatter 物件，非物件視為{}；值為 undefined／null 之鍵略過不輸出
+ * @returns {String} 回傳 frontmatter 區塊字串(含首尾 --- 行)
+ * @example
+ * console.log(renderFrontmatter({ title: 'T', tags: ['a', 'b'], n: 3, ok: true }))
+ * // => ---
+ * //    title: "T"
+ * //    tags: ["a", "b"]
+ * //    n: 3
+ * //    ok: true
+ * //    ---
+ */
+export function renderFrontmatter(front) {
+
+    //check
+    if (!isobj(front)) {
+        front = {}
+    }
+
+    const lines = ['---']
+    for (const [k, v] of Object.entries(front)) {
+        if (v === undefined || v === null) continue
+        if (Array.isArray(v)) {
+            lines.push(`${k}: [${v.map((x) => quote(x)).join(', ')}]`)
+        }
+        else if (typeof v === 'number' || typeof v === 'boolean') {
+            lines.push(`${k}: ${v}`)
+        }
+        else {
+            lines.push(`${k}: ${quote(v)}`)
+        }
+    }
+    lines.push('---')
+    return lines.join('\n')
+}
+
+/**
+ * 解析 md 檔頭之 frontmatter 區塊(--- 包夾),還原純量與一維字串陣列;無 frontmatter 區塊時回空 front、原文全文為 body
+ *
+ * @param {*} text 輸入 md 檔案全文，null／undefined 視為空字串
+ * @returns {Object} 回傳 { front:Object, body:String }
+ * @example
+ * const { front, body } = parseFrontmatter('---\ntitle: "T"\ntags: ["a", "b"]\n---\n\n內文')
+ * console.log(front, JSON.stringify(body))
+ * // => { title: 'T', tags: [ 'a', 'b' ] } "\n內文"
+ *
+ * const { front: f2, body: b2 } = parseFrontmatter('no frontmatter here')
+ * console.log(f2, JSON.stringify(b2))
+ * // => {} "no frontmatter here"
+ */
+export function parseFrontmatter(text) {
+    const m = String(text || '').match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/)
+    if (!m) return { front: {}, body: String(text || '') }
+    const front = {}
+    for (const line of m[1].split(/\r?\n/)) {
+        const kv = line.match(/^([A-Za-z0-9_]+):\s*(.*)$/)
+        if (!kv) continue
+        const [, k, rawV] = kv
+        const v = rawV.trim()
+        if (v.startsWith('[') &amp;&amp; v.endsWith(']')) {
+            // 逐一抓出被雙引號包住的元素（允許 \" 轉義）；用切割字串的做法會被含逗號的元素咬到
+            const inner = v.slice(1, -1)
+            front[k] = [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)]
+                .map((mm) => mm[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\'))
+        }
+        else if (v === 'true' || v === 'false') {
+            front[k] = v === 'true'
+        }
+        else if (/^-?\d+(\.\d+)?$/.test(v)) {
+            front[k] = Number(v)
+        }
+        else {
+            front[k] = unquote(v)
+        }
+    }
+    return { front, body: m[2] }
+}
+
+/**
+ * 寫入 md 檔(frontmatter ＋ 空行 ＋ 本文),自動建立父目錄
+ *
+ * body 非字串視為空字串(2026-09-23 修 F17:此前以 String(body) 轉換,body 為 undefined 時會把字面 'undefined' 寫進筆記)
+ *
+ * @param {String} file 輸入 md 檔案路徑字串
+ * @param {Object} front 輸入 frontmatter 物件，非物件視為{}
+ * @param {*} body 輸入本文，非字串視為''
+ * @returns {String} 回傳寫入之 file 路徑(原樣回傳輸入)
+ * @throws {Error} file 非有效字串時拋出
+ * @example
+ * need test in nodejs.
+ *
+ * writeMd('./tmp/note.md', { title: 'T' }, '# 內容')
+ */
+export function writeMd(file, front, body) {
+
+    //check
+    if (!isestr(file)) {
+        throw new Error('writeMd 需要 file（檔案路徑字串）')
+    }
+    if (!isobj(front)) {
+        front = {}
+    }
+    if (!isstr(body)) {
+        body = ''
+    }
+
+    fsCreateFolder(path.dirname(file))
+    fs.writeFileSync(file, `${renderFrontmatter(front)}\n\n${body.trim()}\n`, 'utf8')
+    return file
+}
+
+/**
+ * 讀 md 檔並解析 frontmatter;file 非有效字串、讀取失敗或解析拋錯皆回 null(維持「失敗回 null」語意)
+ *
+ * @param {String} file 輸入 md 檔案路徑字串
+ * @returns {Object|null} 回傳 { front, body }，失敗時回傳 null
+ * @example
+ * need test in nodejs.
+ *
+ * console.log(readMd('./not-exist.md'))
+ * // => null
+ */
+export function readMd(file) {
+
+    //check
+    if (!isestr(file)) {
+        return null
+    }
+
+    try {
+        return parseFrontmatter(fs.readFileSync(file, 'utf8'))
+    }
+    catch {
+        return null
+    }
+}
+
+/**
+ * 以 md 章節組裝：section('標題', 內容) → '## 標題\n\n內容' 或空字串(內容為陣列時逐項轉為 - 開頭清單,過濾空白項)
+ *
+ * @param {String} title 輸入章節標題字串
+ * @param {*} content 輸入章節內容，字串則直接使用(去頭尾空白)，陣列則逐項轉字串、去空白、過濾空值後轉為清單，其餘視為空
+ * @returns {String} 回傳組好之章節字串，內容為空時回傳空字串(呼叫端可用 .filter(Boolean) 濾掉)
+ * @example
+ * console.log(JSON.stringify(section('重點', ['a', '', 'b'])))
+ * // => "## 重點\n\n- a\n- b"
+ *
+ * console.log(section('重點', ''))
+ * // =>
+ */
+export function section(title, content) {
+    const c = Array.isArray(content)
+        ? content.filter((x) => String(x || '').trim()).map((x) => `- ${String(x).trim()}`).join('\n')
+        : String(content || '').trim()
+    if (!c) return ''
+    return `## ${title}\n\n${c}`
+}
+
+/**
+ * 跳脫正規表示式特殊字元,供 sectionOf 動態組出比對標題用的 RegExp
+ *
+ * @param {*} s 輸入任意值(轉字串後跳脫)
+ * @returns {String} 回傳已跳脫正規表示式特殊字元之字串
+ */
+const reEscape = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&amp;')
+
+/**
+ * 找出 H2 章節「## title」的範圍：自標題起、到下一個 H2 之前(或檔尾)。找不到回 null。
+ *
+ * 【為何要「到下一個 H2 為止」】章節操作若一律延伸到檔尾,只在該章節恰為最後一章時正確；
+ *   筆記的「關聯」與「⚠ 衝突與反例」兩章寫入時機不同、先後順序不定(2026-09-06 生產實測：
+ *   133 篇衝突章在前、3823 篇關聯章在前),延伸到檔尾會把後面的章節一起算進來——
+ *   衝突雙寫因此誤判「已寫過」而漏寫(86 篇),提煉輸入也把衝突章一併剝掉。
+ *
+ * @param {*} body 輸入 md 本文，null／undefined 視為空字串
+ * @param {String} title 輸入章節標題字串(不含 ## 前綴)
+ * @returns {Object|null} 找到時回傳 { start:Number, end:Number, text:String }(end 為下一章之前的換行位置,不含)；找不到回傳 null
+ * @example
+ * const body = '前言\n\n## 甲\n\n內容甲\n\n## 乙\n\n內容乙'
+ * console.log(sectionOf(body, '甲'))
+ * // => { start: 4, end: 14, text: '## 甲\n\n內容甲\n' }
+ *
+ * console.log(sectionOf('無此章節', '甲'))
+ * // => null
+ */
+export function sectionOf(body, title) {
+    const src = String(body || '')
+    const m = new RegExp('(^|\\n)## ' + reEscape(title) + '[ \\t]*(?:\\n|$)').exec(src)
+    if (!m) return null
+    const start = m.index + (m[1] ? 1 : 0)
+    const rest = src.slice(start + 3)
+    const nx = rest.search(/\n## /)
+    const end = nx &lt; 0 ? src.length : start + 3 + nx
+    return { start, end, text: src.slice(start, end) }
+}
+
+/**
+ * 移除 H2 章節「## title」(僅該章,不動其後章節),回傳整理過空行的正文
+ *
+ * @param {*} body 輸入 md 本文，null／undefined 視為空字串
+ * @param {String} title 輸入章節標題字串(不含 ## 前綴)
+ * @returns {String} 回傳移除該章節後之正文(該章不存在時回傳去尾空白後之原文)
+ * @example
+ * const body = '前言\n\n## 甲\n\n內容甲\n\n## 乙\n\n內容乙'
+ * console.log(JSON.stringify(dropSection(body, '甲')))
+ * // => "前言\n\n## 乙\n\n內容乙"
+ */
+export function dropSection(body, title) {
+    const src = String(body || '')
+    const sec = sectionOf(src, title)
+    if (!sec) return src.trimEnd()
+    const head = src.slice(0, sec.start).trimEnd()
+    const tail = src.slice(sec.end).replace(/^\n+/, '').trimEnd()
+    return [head, tail].filter(Boolean).join('\n\n')
+}
+
+export default { renderFrontmatter, parseFrontmatter, writeMd, readMd, section, sectionOf, dropSection }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Sep 23 2026 22:21:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

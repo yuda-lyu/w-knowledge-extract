@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>domain/distillDomain.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="MwContractError.html">MwContractError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#AI_DEFAULT">AI_DEFAULT</a></li><li><a href="global.html#COOL_DETECT">COOL_DETECT</a></li><li><a href="global.html#CORE_SCHEMA">CORE_SCHEMA</a></li><li><a href="global.html#DEFAULT_SITE_ADAPTERS">DEFAULT_SITE_ADAPTERS</a></li><li><a href="global.html#DF_DIRS">DF_DIRS</a></li><li><a href="global.html#FETCH_DEFAULT">FETCH_DEFAULT</a></li><li><a href="global.html#KIND_MAX_PROMPT_CHARS">KIND_MAX_PROMPT_CHARS</a></li><li><a href="global.html#KNOWLEDGE_DEFAULT">KNOWLEDGE_DEFAULT</a></li><li><a href="global.html#OBJECT_STAGES">OBJECT_STAGES</a></li><li><a href="global.html#ORGANIZE_SHARED_KEYS">ORGANIZE_SHARED_KEYS</a></li><li><a href="global.html#OUTCOME_TEXT">OUTCOME_TEXT</a></li><li><a href="global.html#SKIP_TITLE_PATTERNS_DEFAULT">SKIP_TITLE_PATTERNS_DEFAULT</a></li><li><a href="global.html#SOURCE_POLICY_DEFAULT">SOURCE_POLICY_DEFAULT</a></li><li><a href="global.html#STREAK_TYPES">STREAK_TYPES</a></li><li><a href="global.html#TELEGRAM_TEXT_MAX">TELEGRAM_TEXT_MAX</a></li><li><a href="global.html#VOCAB_DEFAULT">VOCAB_DEFAULT</a></li><li><a href="global.html#WKnowledgeExtract">WKnowledgeExtract</a></li><li><a href="global.html#accountSourceOutcome">accountSourceOutcome</a></li><li><a href="global.html#acquireLock">acquireLock</a></li><li><a href="global.html#admitFeedItems">admitFeedItems</a></li><li><a href="global.html#aggStats">aggStats</a></li><li><a href="global.html#applyRelationsToNote">applyRelationsToNote</a></li><li><a href="global.html#applyTaps">applyTaps</a></li><li><a href="global.html#arxivSearchUrl">arxivSearchUrl</a></li><li><a href="global.html#asObj">asObj</a></li><li><a href="global.html#bingNewsSearchUrl">bingNewsSearchUrl</a></li><li><a href="global.html#budgetOf">budgetOf</a></li><li><a href="global.html#buildAuditPrompt">buildAuditPrompt</a></li><li><a href="global.html#buildDistillPrompt">buildDistillPrompt</a></li><li><a href="global.html#buildFinalPrompt">buildFinalPrompt</a></li><li><a href="global.html#buildRevisePrompt">buildRevisePrompt</a></li><li><a href="global.html#buildRunSummary">buildRunSummary</a></li><li><a href="global.html#buildWorkflowStages">buildWorkflowStages</a></li><li><a href="global.html#byRetryTierFifo">byRetryTierFifo</a></li><li><a href="global.html#checkChain">checkChain</a></li><li><a href="global.html#checkCore">checkCore</a></li><li><a href="global.html#checkCtxDeps">checkCtxDeps</a></li><li><a href="global.html#checkIssues">checkIssues</a></li><li><a href="global.html#cliFail">cliFail</a></li><li><a href="global.html#cliFailDetail">cliFailDetail</a></li><li><a href="global.html#clueKey">clueKey</a></li><li><a href="global.html#cluePriority">cluePriority</a></li><li><a href="global.html#composeChain">composeChain</a></li><li><a href="global.html#conceptVocabulary">conceptVocabulary</a></li><li><a href="global.html#count">count</a></li><li><a href="global.html#createAiAdapter">createAiAdapter</a></li><li><a href="global.html#createAiCaller">createAiCaller</a></li><li><a href="global.html#createAiEventLogger">createAiEventLogger</a></li><li><a href="global.html#createClock">createClock</a></li><li><a href="global.html#createDefaultFetchers">createDefaultFetchers</a></li><li><a href="global.html#createDistillDomain">createDistillDomain</a></li><li><a href="global.html#createDistillObject">createDistillObject</a></li><li><a href="global.html#createExtractDomain">createExtractDomain</a></li><li><a href="global.html#createFetchObject">createFetchObject</a></li><li><a href="global.html#createKnowledgeExtract">createKnowledgeExtract</a></li><li><a href="global.html#createLogger">createLogger</a></li><li><a href="global.html#createOrganizeObject">createOrganizeObject</a></li><li><a href="global.html#createPatrol">createPatrol</a></li><li><a href="global.html#createProviderHealth">createProviderHealth</a></li><li><a href="global.html#createRelateDomain">createRelateDomain</a></li><li><a href="global.html#createRelateObject">createRelateObject</a></li><li><a href="global.html#createRunLogger">createRunLogger</a></li><li><a href="global.html#createSettingsHolder">createSettingsHolder</a></li><li><a href="global.html#createTelegramNotifier">createTelegramNotifier</a></li><li><a href="global.html#createTime">createTime</a></li><li><a href="global.html#createTriageDomain">createTriageDomain</a></li><li><a href="global.html#cullZeroYieldSources">cullZeroYieldSources</a></li><li><a href="global.html#deadMatcher">deadMatcher</a></li><li><a href="global.html#decorateSettings">decorateSettings</a></li><li><a href="global.html#defaultToLinkedRecord">defaultToLinkedRecord</a></li><li><a href="global.html#defaultToRecord">defaultToRecord</a></li><li><a href="global.html#defineFirstMw">defineFirstMw</a></li><li><a href="global.html#defineMw">defineMw</a></li><li><a href="global.html#deinvertAbstract">deinvertAbstract</a></li><li><a href="global.html#discoverFeed">discoverFeed</a></li><li><a href="global.html#docRecord">docRecord</a></li><li><a href="global.html#dropSection">dropSection</a></li><li><a href="global.html#elapsed">elapsed</a></li><li><a href="global.html#enable">enable</a></li><li><a href="global.html#enforceFrontierCap">enforceFrontierCap</a></li><li><a href="global.html#ensureSeedSources">ensureSeedSources</a></li><li><a href="global.html#escapeHtml">escapeHtml</a></li><li><a href="global.html#expandDirs">expandDirs</a></li><li><a href="global.html#expandSeeds">expandSeeds</a></li><li><a href="global.html#extractLinks">extractLinks</a></li><li><a href="global.html#failedNames">failedNames</a></li><li><a href="global.html#fetchArticle">fetchArticle</a></li><li><a href="global.html#fetchArticleLinks">fetchArticleLinks</a></li><li><a href="global.html#file">file</a></li><li><a href="global.html#filterFeedItems">filterFeedItems</a></li><li><a href="global.html#fin">fin</a></li><li><a href="global.html#firstLineClamp">firstLineClamp</a></li><li><a href="global.html#fitChain">fitChain</a></li><li><a href="global.html#formatTime">formatTime</a></li><li><a href="global.html#genericSummary">genericSummary</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#getDate">getDate</a></li><li><a href="global.html#getDay">getDay</a></li><li><a href="global.html#getTimestamp">getTimestamp</a></li><li><a href="global.html#gridSourceUrl">gridSourceUrl</a></li><li><a href="global.html#info">info</a></li><li><a href="global.html#ingestFeedItems">ingestFeedItems</a></li><li><a href="global.html#ingestNotes">ingestNotes</a></li><li><a href="global.html#installProcessGuards">installProcessGuards</a></li><li><a href="global.html#isLowYield">isLowYield</a></li><li><a href="global.html#judgeFromDocs">judgeFromDocs</a></li><li><a href="global.html#kbLabelOf">kbLabelOf</a></li><li><a href="global.html#keyIdOf">keyIdOf</a></li><li><a href="global.html#legacyClueKey">legacyClueKey</a></li><li><a href="global.html#listCores">listCores</a></li><li><a href="global.html#listSeats">listSeats</a></li><li><a href="global.html#load">load</a></li><li><a href="global.html#loadSettings">loadSettings</a></li><li><a href="global.html#logAiOutcome">logAiOutcome</a></li><li><a href="global.html#looksLikeFeed">looksLikeFeed</a></li><li><a href="global.html#makeArrayCoverageValidator">makeArrayCoverageValidator</a></li><li><a href="global.html#makeLineEmitter">makeLineEmitter</a></li><li><a href="global.html#makeMsg">makeMsg</a></li><li><a href="global.html#makeSlugResolver">makeSlugResolver</a></li><li><a href="global.html#markConflict">markConflict</a></li><li><a href="global.html#maxPromptCharsOf">maxPromptCharsOf</a></li><li><a href="global.html#mergeCatalogue">mergeCatalogue</a></li><li><a href="global.html#mergeFetchers">mergeFetchers</a></li><li><a href="global.html#mergeSiteAdapters">mergeSiteAdapters</a></li><li><a href="global.html#mergeTaps">mergeTaps</a></li><li><a href="global.html#mwAccountSource">mwAccountSource</a></li><li><a href="global.html#mwAdmitPersist">mwAdmitPersist</a></li><li><a href="global.html#mwAdoptResult">mwAdoptResult</a></li><li><a href="global.html#mwApplyToNote">mwApplyToNote</a></li><li><a href="global.html#mwBuildBase">mwBuildBase</a></li><li><a href="global.html#mwBuildEdges">mwBuildEdges</a></li><li><a href="global.html#mwConflictDualWrite">mwConflictDualWrite</a></li><li><a href="global.html#mwCullSources">mwCullSources</a></li><li><a href="global.html#mwFeedFallback">mwFeedFallback</a></li><li><a href="global.html#mwFetchDetail">mwFetchDetail</a></li><li><a href="global.html#mwFetchList">mwFetchList</a></li><li><a href="global.html#mwFilterItems">mwFilterItems</a></li><li><a href="global.html#mwMarkDoc">mwMarkDoc</a></li><li><a href="global.html#mwMarkRelated">mwMarkRelated</a></li><li><a href="global.html#mwNormalizeItems">mwNormalizeItems</a></li><li><a href="global.html#mwPersistCore">mwPersistCore</a></li><li><a href="global.html#mwPersistEdges">mwPersistEdges</a></li><li><a href="global.html#mwPersistNote">mwPersistNote</a></li><li><a href="global.html#mwPersistOutcome">mwPersistOutcome</a></li><li><a href="global.html#mwProbe">mwProbe</a></li><li><a href="global.html#mwRebuildKnowledgeIndex">mwRebuildKnowledgeIndex</a></li><li><a href="global.html#mwRebuildRelationIndex">mwRebuildRelationIndex</a></li><li><a href="global.html#mwRenderCore">mwRenderCore</a></li><li><a href="global.html#mwRenderNote">mwRenderNote</a></li><li><a href="global.html#mwRouteFetcher">mwRouteFetcher</a></li><li><a href="global.html#mwRunWorkflow">mwRunWorkflow</a></li><li><a href="global.html#mwSaveClues">mwSaveClues</a></li><li><a href="global.html#mwSettleClue">mwSettleClue</a></li><li><a href="global.html#mwSettleTriage">mwSettleTriage</a></li><li><a href="global.html#mwSkipGate">mwSkipGate</a></li><li><a href="global.html#mwSlim">mwSlim</a></li><li><a href="global.html#mwSyncSeeds">mwSyncSeeds</a></li><li><a href="global.html#mwTitleSkip">mwTitleSkip</a></li><li><a href="global.html#mwTranscodeLinks">mwTranscodeLinks</a></li><li><a href="global.html#newSource">newSource</a></li><li><a href="global.html#normalizeConcept">normalizeConcept</a></li><li><a href="global.html#normalizeFeedItems">normalizeFeedItems</a></li><li><a href="global.html#normalizeUrl">normalizeUrl</a></li><li><a href="global.html#normalizeWorkDir">normalizeWorkDir</a></li><li><a href="global.html#noteDigest">noteDigest</a></li><li><a href="global.html#num">num</a></li><li><a href="global.html#objectReport">objectReport</a></li><li><a href="global.html#oneline">oneline</a></li><li><a href="global.html#open">open</a></li><li><a href="global.html#openStores">openStores</a></li><li><a href="global.html#parseFrontmatter">parseFrontmatter</a></li><li><a href="global.html#parseIndexList">parseIndexList</a></li><li><a href="global.html#parseJson">parseJson</a></li><li><a href="global.html#parseJsonArray">parseJsonArray</a></li><li><a href="global.html#patrolFromPipeline">patrolFromPipeline</a></li><li><a href="global.html#pickCandidates">pickCandidates</a></li><li><a href="global.html#pickCategories">pickCategories</a></li><li><a href="global.html#pickClues">pickClues</a></li><li><a href="global.html#pickConcepts">pickConcepts</a></li><li><a href="global.html#pickDueSources">pickDueSources</a></li><li><a href="global.html#pidAlive">pidAlive</a></li><li><a href="global.html#probeSearchEndpoints">probeSearchEndpoints</a></li><li><a href="global.html#probeSiteFeed">probeSiteFeed</a></li><li><a href="global.html#qualityTag">qualityTag</a></li><li><a href="global.html#queueAge">queueAge</a></li><li><a href="global.html#quote">quote</a></li><li><a href="global.html#reEscape">reEscape</a></li><li><a href="global.html#readGrid">readGrid</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#readMd">readMd</a></li><li><a href="global.html#readRunSummary">readRunSummary</a></li><li><a href="global.html#rebuildKnowledgeIndex">rebuildKnowledgeIndex</a></li><li><a href="global.html#rebuildRelationIndex">rebuildRelationIndex</a></li><li><a href="global.html#recordFile">recordFile</a></li><li><a href="global.html#recordSourceOutcome">recordSourceOutcome</a></li><li><a href="global.html#regenCore">regenCore</a></li><li><a href="global.html#renderCoreBody">renderCoreBody</a></li><li><a href="global.html#renderFrontmatter">renderFrontmatter</a></li><li><a href="global.html#reset">reset</a></li><li><a href="global.html#resolveCatalogue">resolveCatalogue</a></li><li><a href="global.html#resolvePlugins">resolvePlugins</a></li><li><a href="global.html#resolveSettings">resolveSettings</a></li><li><a href="global.html#resolveVocab">resolveVocab</a></li><li><a href="global.html#reviveDeadDocs">reviveDeadDocs</a></li><li><a href="global.html#run">run</a></li><li><a href="global.html#runAiBatchStage">runAiBatchStage</a></li><li><a href="global.html#runChainOverMsgs">runChainOverMsgs</a></li><li><a href="global.html#runCli">runCli</a></li><li><a href="global.html#runJsonCli">runJsonCli</a></li><li><a href="global.html#runSubStages">runSubStages</a></li><li><a href="global.html#runTask">runTask</a></li><li><a href="global.html#sanitize">sanitize</a></li><li><a href="global.html#saveClues">saveClues</a></li><li><a href="global.html#section">section</a></li><li><a href="global.html#sectionOf">sectionOf</a></li><li><a href="global.html#send">send</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setConceptFold">setConceptFold</a></li><li><a href="global.html#settleClue">settleClue</a></li><li><a href="global.html#sha1">sha1</a></li><li><a href="global.html#skipDerived">skipDerived</a></li><li><a href="global.html#slimTerminalDocs">slimTerminalDocs</a></li><li><a href="global.html#slugify">slugify</a></li><li><a href="global.html#sortByEnforce">sortByEnforce</a></li><li><a href="global.html#sourceId">sourceId</a></li><li><a href="global.html#stageDetailFetch">stageDetailFetch</a></li><li><a href="global.html#stageDistill">stageDistill</a></li><li><a href="global.html#stageDocMaintain">stageDocMaintain</a></li><li><a href="global.html#stageExpand">stageExpand</a></li><li><a href="global.html#stageExtract">stageExtract</a></li><li><a href="global.html#stageFields">stageFields</a></li><li><a href="global.html#stageKnowledgeIndex">stageKnowledgeIndex</a></li><li><a href="global.html#stageListFetch">stageListFetch</a></li><li><a href="global.html#stageRelate">stageRelate</a></li><li><a href="global.html#stageRelationIndex">stageRelationIndex</a></li><li><a href="global.html#stageSeedSync">stageSeedSync</a></li><li><a href="global.html#stageTriage">stageTriage</a></li><li><a href="global.html#stdReport">stdReport</a></li><li><a href="global.html#strArr">strArr</a></li><li><a href="global.html#subReportOf">subReportOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#taskRunner">taskRunner</a></li><li><a href="global.html#timeoutPatch">timeoutPatch</a></li><li><a href="global.html#unquote">unquote</a></li><li><a href="global.html#unwrapNewsUrl">unwrapNewsUrl</a></li><li><a href="global.html#withTag">withTag</a></li><li><a href="global.html#writeJson">writeJson</a></li><li><a href="global.html#writeMd">writeMd</a></li><li><a href="global.html#writeRunSummary">writeRunSummary</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">domain/distillDomain.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// distillDomain.mjs — 提煉的內建領域預設:各角色 prompt、稿件驗證、核心版型
+//
+// 角色鏈接線(宣告式 audit→revise→accept、自動編號、稿件/意見回推)與降級保底
+// 在 stages/distillStage.mjs;本檔只有「知識庫的提煉要求長什麼樣」(領域中立,知識庫稱呼由 vocab.domain 注入)。
+// 護欄措辭(「意見未涉及的內容不可刪除」)是實測教訓:審計曾刪過頭把真實爭議誤刪,
+// 此護欄上線後未再發生。版型逐字保真(同 extractDomain 檔頭理由)。
+
+import isarr from 'wsemi/src/isarr.mjs'
+import isobj from 'wsemi/src/isobj.mjs'
+import strTruncate from 'wsemi/src/strTruncate.mjs'
+import { readMd, section, dropSection } from '../md/md.mjs'
+import { resolveVocab, kbLabelOf } from './vocabDefault.mjs'
+
+
+/**
+ * 核心知識之 JSON 輸出格式(提煉 prompt 與工作流 schema 共用)
+ *
+ * @type {String}
+ */
+export const CORE_SCHEMA = '{"essence":"...","principles":["..."],"rules":["..."],"parameters":[{"name":"","value":"","note":"出處篇名"}],"pitfalls":["..."],"disputes":["..."],"temporal":["..."],"open_questions":["..."],"related_concepts":["..."]}'
+
+
+/**
+ * 審計意見之結構驗證:須為物件且含 issues 陣列
+ *
+ * @param {*} d 輸入待驗證之資料
+ * @returns {Boolean} 回傳是否合格
+ * @example
+ * console.log(checkIssues({ issues: [] }), checkIssues({}))
+ * // => true false
+ */
+export const checkIssues = (d) => !!d &amp;&amp; typeof d === 'object' &amp;&amp; Array.isArray(d.issues)
+
+
+/**
+ * 核心知識稿件之結構驗證:須為物件、essence 非空、principles 為非空陣列、rules 為陣列
+ *
+ * @param {*} data 輸入待驗證之稿件
+ * @returns {Boolean} 回傳是否合格
+ * @example
+ * console.log(checkCore({ essence: '本質', principles: ['原理'], rules: [] }))
+ * // => true
+ *
+ * console.log(checkCore({ essence: '', principles: [] }))
+ * // => false
+ */
+export function checkCore(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false
+    if (!String(data.essence || '').trim()) return false
+    if (!Array.isArray(data.principles) || data.principles.length === 0) return false
+    if (!Array.isArray(data.rules)) return false
+    return true
+}
+
+
+/**
+ * 取筆記 md 正文(去掉關聯章節),作為提煉輸入;標注行讓模型能對證據強弱加權。
+ * 只去「關聯」一章:其後的「⚠ 衝突與反例」章節保留——它正是 disputes 欄位的直接材料
+ * (曾以「關聯章到檔尾」剝除,關聯在前的筆記其衝突章一併被剝掉,2026-09-06 實測 3823 篇)。
+ *
+ * @param {Object} note 輸入筆記記錄，需含 file、id、title，可含 claimType、evidenceLevel、samplePeriod、caveats、sourceName、sourceUrl
+ * @returns {String} 回傳該筆記之摘要文字(正文限 1800 字)
+ */
+function noteDigest(note) {
+    const md = readMd(note.file)
+    const body = md ? dropSection(md.body, '關聯') : ''
+    const caveats = (note.caveats || []).length ? `｜⚠ ${(note.caveats || []).join('/')}` : ''
+    return [
+        `### ${note.title}（slug: ${note.id}）`,
+        `標注：${note.claimType || '未標注'}｜證據 ${note.evidenceLevel || '未評估'}｜樣本期 ${note.samplePeriod || '未載明'}${caveats}`,
+        `來源：${note.sourceName}｜${note.sourceUrl}`,
+        strTruncate(body.trim(), 1800),
+    ].join('\n')
+}
+
+
+/**
+ * 組提煉(起草)之基底 prompt:同概念(或類別)之多篇筆記 → 核心知識 JSON
+ *
+ * @param {String} concept 輸入概念(或類別)名稱字串
+ * @param {Array} notes 輸入筆記記錄陣列(依新舊排序後之選用筆記)
+ * @param {String} [coreBody=''] 輸入既有核心知識 md 本文，給定時要求在此基礎上深化，預設''代表首版
+ * @param {String} [scope='concept'] 輸入選題層級字串，可選 'concept'、'category'，預設'concept'
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Integer} [opt.notesPerTarget=8] 輸入最多納入之筆記數，預設8
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @returns {String} 回傳 prompt 字串
+ */
+export function buildDistillPrompt(concept, notes, coreBody, scope = 'concept', opt = {}) {
+
+    //check
+    if (!isarr(notes)) {
+        notes = []
+    }
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const kb = kbLabelOf(resolveVocab(opt.vocab))
+    const scopeWord = scope === 'category' ? '類別' : '概念'
+    const digests = notes.slice(0, opt.notesPerTarget ?? 8).map(noteDigest).join('\n\n')
+    const prior = coreBody
+        ? `\n\n【既有的核心知識（請在此基礎上深化與修正，不要推翻重寫；若新資料與既有內容衝突，請在 pitfalls 指出衝突點）】\n${strTruncate(coreBody, 2500)}`
+        : ''
+
+    return `你是${kb}的提煉器。以下是「${concept}」這個${scopeWord}底下的多篇知識筆記，請提煉出比單篇更核心、更可操作的知識。
+
+要求：
+1. 一律繁體中文，專有名詞保留英文於括號內。
+2. 只根據提供的筆記內容提煉，不可加入筆記中沒有的數字、參數或研究結論。
+3. essence：這個概念的本質是什麼、為什麼有效或為什麼失效，3 到 5 句。
+4. principles：跨篇歸納出的原理層知識（不是單篇的摘要重述），每條一句。
+5. rules：可直接應用的操作規則，寫成「若…則…」或明確步驟。
+6. parameters：跨篇出現過的關鍵參數與其建議值或區間，須註明出處篇名。
+7. pitfalls：實務上會踩的坑、失效條件。
+8. **證據加權**：各筆記已標注內容類型與證據等級——證據「低」或帶 ⚠ 標注者，其結論只能以
+   「有一說（證據弱）」的語氣呈現、不得寫成通則；「僅單一研究或未經獨立驗證」的參數須註明此限制。
+9. **disputes（爭議與未定論）**：筆記之間結論相反或參數矛盾時，必須把兩方說法與各自的
+   適用條件都寫出來（甲在 X 條件下主張…、乙在 Y 條件下主張…），不可擇一抹平、不可硬調和。
+   沒有爭議就給空陣列，不要硬造。
+10. **temporal（時效與條件相依）**：這個概念的有效性如何隨時間、環境條件或機制（regime）改變；
+   利與弊在什麼條件下會反轉。原文有依據才寫。
+11. open_questions：現有筆記還回答不了、值得日後再抓資料的問題。
+12. related_concepts：與此概念關係緊密的其他概念名稱。
+
+只回覆 JSON 物件，不要任何其他說明文字，格式：
+${CORE_SCHEMA}
+${prior}
+
+【筆記內容】
+${digests}`
+}
+
+
+/**
+ * 組審計員 prompt:對照原始任務與筆記材料逐項挑錯
+ *
+ * @param {String} concept 輸入概念名稱字串
+ * @param {Object} draft 輸入提煉稿(JSON 物件)
+ * @param {String} basePrompt 輸入產生提煉稿所用之基底 prompt(含筆記材料)
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @returns {String} 回傳 prompt 字串
+ */
+export function buildAuditPrompt(concept, draft, basePrompt, opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const kb = kbLabelOf(resolveVocab(opt.vocab))
+    return `你是${kb}的審計員。以下是「${concept}」的提煉稿（JSON，由多份獨立提煉整合而成），以及產生它所用的原始任務與筆記材料。請對照原始筆記逐項挑錯，只挑真問題：①幻覺（筆記中沒有的數字、結論或比較被寫進稿中）；②證據加權錯誤（低證據／廠商內容被寫成通則、證據等級標錯）；③爭議遺漏（筆記間有矛盾但 disputes 未收）；④空話（無資訊量的填充句）；⑤出處錯誤（參數出處篇名張冠李戴）。
+
+只回覆 JSON：{"issues":[{"severity":"高|中|低","type":"幻覺|證據加權|爭議遺漏|空話|出處錯誤","where":"欄位或條目","detail":"具體說明（引筆記為證）"}]}
+
+【提煉稿】
+${JSON.stringify(draft)}
+
+【原始任務與筆記材料】
+${basePrompt}`
+}
+
+
+/**
+ * 組修訂者 prompt:逐條回應審計意見並修訂稿件
+ *
+ * @param {Object} draft 輸入提煉稿(JSON 物件)
+ * @param {Array} issues 輸入審計意見陣列
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @returns {String} 回傳 prompt 字串
+ */
+export function buildRevisePrompt(draft, issues, opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const kb = kbLabelOf(resolveVocab(opt.vocab))
+    return `你是${kb}的修訂者。以下是提煉稿與審計員意見，請逐條回應意見並修訂：屬實的修正、不屬實的維持。不可加入意見與稿件之外的新數字或新結論；意見未涉及的內容不可刪除。
+
+只回覆修訂後的完整 JSON 物件（與原稿同格式），不要任何其他文字。
+
+【提煉稿】
+${JSON.stringify(draft)}
+
+【審計意見】
+${JSON.stringify(issues)}`
+}
+
+
+/**
+ * 組終審者 prompt:確認高嚴重度意見已處理並定稿
+ *
+ * @param {Object} revised 輸入修訂稿(JSON 物件)
+ * @param {Array} issues 輸入審計意見陣列
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為知識庫稱呼，預設null代表不限主題
+ * @returns {String} 回傳 prompt 字串
+ */
+export function buildFinalPrompt(revised, issues, opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const kb = kbLabelOf(resolveVocab(opt.vocab))
+    return `你是${kb}的終審者。以下是修訂稿與審計意見，請把關：確認高嚴重度意見都已被正確處理（未處理者代為修正），刪除仍存在的空話後定稿。不可加入新數字或新結論；意見未涉及的內容不可刪除。
+
+只回覆定稿的完整 JSON 物件（與修訂稿同格式），不要任何其他文字。
+
+【修訂稿】
+${JSON.stringify(revised)}
+
+【審計意見】
+${JSON.stringify(issues)}`
+}
+
+
+/**
+ * 由核心知識 JSON 組裝核心 md 本文(版型逐字保真)
+ *
+ * @param {String} concept 輸入概念名稱字串
+ * @param {Object} k 輸入核心知識物件(checkCore 合格者)
+ * @param {Array} notes 輸入提煉所依據之筆記記錄陣列(列於「提煉自」章節)
+ * @returns {String} 回傳 md 本文字串(不含 frontmatter)
+ * @example
+ * let body = renderCoreBody('概念A', { essence: '本質', principles: ['原理'], rules: [] }, [{ id: 'n1', title: '筆記', sourceName: '來源' }])
+ * console.log(body.split('\n')[0])
+ * // => # 核心知識：概念A
+ */
+export function renderCoreBody(concept, k, notes) {
+
+    //check
+    if (!isobj(k)) {
+        k = {}
+    }
+    if (!isarr(notes)) {
+        notes = []
+    }
+
+    // 表格儲存格一律轉義 |(此前只轉義說明欄,名稱/值含 | 即撐破表格;2026-09-23 修)
+    const cell = (v) => String(v || '').trim().replace(/\|/g, '／')
+    const paramTable = Array.isArray(k.parameters) &amp;&amp; k.parameters.length
+        ? ['| 參數 | 值／區間 | 出處／說明 |', '| --- | --- | --- |',
+            ...k.parameters.map((p) => `| ${cell(p?.name)} | ${cell(p?.value)} | ${cell(p?.note)} |`)].join('\n')
+        : ''
+    return [
+        `# 核心知識：${concept}`,
+        '',
+        section('本質', k.essence),
+        section('原理', k.principles),
+        section('可操作規則', k.rules),
+        paramTable ? `## 關鍵參數\n\n${paramTable}` : '',
+        section('陷阱與失效條件', k.pitfalls),
+        section('爭議與未定論', k.disputes),
+        section('時效與機制相依', k.temporal),
+        section('待解問題（供日後抓取）', k.open_questions),
+        section('相關概念', k.related_concepts),
+        section('提煉自', notes.map((n) => `[[${n.id}]] ${n.title}（${n.sourceName}）`)),
+    ].filter(Boolean).join('\n\n')
+}
+
+
+/**
+ * 建立提煉之內建領域預設(角色種類表＋基底 prompt＋驗證＋版型)
+ *
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Integer} [opt.notesPerTarget=8] 輸入每概念最多納入之筆記數，預設8
+ * @param {Object} [opt.vocab=null] 輸入詞彙表覆寫物件，取其 domain 作為各角色 prompt 之知識庫稱呼，預設null代表不限主題
+ * @returns {Object} 回傳 domain 物件，含 kinds(audit/revise/accept 之 { produces, check, build })、buildBasePrompt(t, used, priorBody)、checkCore、coreSchema、renderCore(t, data, used)
+ * @example
+ * let domain = createDistillDomain({ notesPerTarget: 8 })
+ * console.log(Object.keys(domain.kinds))
+ * // => [ 'audit', 'revise', 'accept' ]
+ */
+export function createDistillDomain(opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    return {
+        kinds: {
+            audit: { produces: 'issues', check: checkIssues, build: ({ concept, basePrompt, draft }) => buildAuditPrompt(concept, draft, basePrompt, opt) },
+            revise: { produces: 'draft', check: checkCore, build: ({ draft, issues }) => buildRevisePrompt(draft, issues, opt) },
+            accept: { produces: 'draft', check: checkCore, build: ({ draft, issues }) => buildFinalPrompt(draft, issues, opt) },
+        },
+        buildBasePrompt: (t, used, priorBody) => buildDistillPrompt(t.concept, used, priorBody, t.scope || 'concept', opt),
+        checkCore,
+        coreSchema: CORE_SCHEMA,
+        renderCore: (t, data, used) => ({
+            front: { title: `核心知識：${t.concept}`, related_concepts: (data.related_concepts || []).map(String).slice(0, 8) },
+            body: renderCoreBody(t.concept, data, used),
+        }),
+    }
+}
+
+
+export default createDistillDomain
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Sep 23 2026 22:21:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>ops/patrol.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="MwContractError.html">MwContractError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#AI_DEFAULT">AI_DEFAULT</a></li><li><a href="global.html#COOL_DETECT">COOL_DETECT</a></li><li><a href="global.html#CORE_SCHEMA">CORE_SCHEMA</a></li><li><a href="global.html#DEFAULT_SITE_ADAPTERS">DEFAULT_SITE_ADAPTERS</a></li><li><a href="global.html#DF_DIRS">DF_DIRS</a></li><li><a href="global.html#FETCH_DEFAULT">FETCH_DEFAULT</a></li><li><a href="global.html#KIND_MAX_PROMPT_CHARS">KIND_MAX_PROMPT_CHARS</a></li><li><a href="global.html#KNOWLEDGE_DEFAULT">KNOWLEDGE_DEFAULT</a></li><li><a href="global.html#OBJECT_STAGES">OBJECT_STAGES</a></li><li><a href="global.html#ORGANIZE_SHARED_KEYS">ORGANIZE_SHARED_KEYS</a></li><li><a href="global.html#OUTCOME_TEXT">OUTCOME_TEXT</a></li><li><a href="global.html#SKIP_TITLE_PATTERNS_DEFAULT">SKIP_TITLE_PATTERNS_DEFAULT</a></li><li><a href="global.html#SOURCE_POLICY_DEFAULT">SOURCE_POLICY_DEFAULT</a></li><li><a href="global.html#STREAK_TYPES">STREAK_TYPES</a></li><li><a href="global.html#TELEGRAM_TEXT_MAX">TELEGRAM_TEXT_MAX</a></li><li><a href="global.html#VOCAB_DEFAULT">VOCAB_DEFAULT</a></li><li><a href="global.html#WKnowledgeExtract">WKnowledgeExtract</a></li><li><a href="global.html#accountSourceOutcome">accountSourceOutcome</a></li><li><a href="global.html#acquireLock">acquireLock</a></li><li><a href="global.html#admitFeedItems">admitFeedItems</a></li><li><a href="global.html#aggStats">aggStats</a></li><li><a href="global.html#applyRelationsToNote">applyRelationsToNote</a></li><li><a href="global.html#applyTaps">applyTaps</a></li><li><a href="global.html#arxivSearchUrl">arxivSearchUrl</a></li><li><a href="global.html#asObj">asObj</a></li><li><a href="global.html#bingNewsSearchUrl">bingNewsSearchUrl</a></li><li><a href="global.html#budgetOf">budgetOf</a></li><li><a href="global.html#buildAuditPrompt">buildAuditPrompt</a></li><li><a href="global.html#buildDistillPrompt">buildDistillPrompt</a></li><li><a href="global.html#buildFinalPrompt">buildFinalPrompt</a></li><li><a href="global.html#buildRevisePrompt">buildRevisePrompt</a></li><li><a href="global.html#buildRunSummary">buildRunSummary</a></li><li><a href="global.html#buildWorkflowStages">buildWorkflowStages</a></li><li><a href="global.html#byRetryTierFifo">byRetryTierFifo</a></li><li><a href="global.html#checkChain">checkChain</a></li><li><a href="global.html#checkCore">checkCore</a></li><li><a href="global.html#checkCtxDeps">checkCtxDeps</a></li><li><a href="global.html#checkIssues">checkIssues</a></li><li><a href="global.html#cliFail">cliFail</a></li><li><a href="global.html#cliFailDetail">cliFailDetail</a></li><li><a href="global.html#clueKey">clueKey</a></li><li><a href="global.html#cluePriority">cluePriority</a></li><li><a href="global.html#composeChain">composeChain</a></li><li><a href="global.html#conceptVocabulary">conceptVocabulary</a></li><li><a href="global.html#count">count</a></li><li><a href="global.html#createAiAdapter">createAiAdapter</a></li><li><a href="global.html#createAiCaller">createAiCaller</a></li><li><a href="global.html#createAiEventLogger">createAiEventLogger</a></li><li><a href="global.html#createClock">createClock</a></li><li><a href="global.html#createDefaultFetchers">createDefaultFetchers</a></li><li><a href="global.html#createDistillDomain">createDistillDomain</a></li><li><a href="global.html#createDistillObject">createDistillObject</a></li><li><a href="global.html#createExtractDomain">createExtractDomain</a></li><li><a href="global.html#createFetchObject">createFetchObject</a></li><li><a href="global.html#createKnowledgeExtract">createKnowledgeExtract</a></li><li><a href="global.html#createLogger">createLogger</a></li><li><a href="global.html#createOrganizeObject">createOrganizeObject</a></li><li><a href="global.html#createPatrol">createPatrol</a></li><li><a href="global.html#createProviderHealth">createProviderHealth</a></li><li><a href="global.html#createRelateDomain">createRelateDomain</a></li><li><a href="global.html#createRelateObject">createRelateObject</a></li><li><a href="global.html#createRunLogger">createRunLogger</a></li><li><a href="global.html#createSettingsHolder">createSettingsHolder</a></li><li><a href="global.html#createTelegramNotifier">createTelegramNotifier</a></li><li><a href="global.html#createTime">createTime</a></li><li><a href="global.html#createTriageDomain">createTriageDomain</a></li><li><a href="global.html#cullZeroYieldSources">cullZeroYieldSources</a></li><li><a href="global.html#deadMatcher">deadMatcher</a></li><li><a href="global.html#decorateSettings">decorateSettings</a></li><li><a href="global.html#defaultToLinkedRecord">defaultToLinkedRecord</a></li><li><a href="global.html#defaultToRecord">defaultToRecord</a></li><li><a href="global.html#defineFirstMw">defineFirstMw</a></li><li><a href="global.html#defineMw">defineMw</a></li><li><a href="global.html#deinvertAbstract">deinvertAbstract</a></li><li><a href="global.html#discoverFeed">discoverFeed</a></li><li><a href="global.html#docRecord">docRecord</a></li><li><a href="global.html#dropSection">dropSection</a></li><li><a href="global.html#elapsed">elapsed</a></li><li><a href="global.html#enable">enable</a></li><li><a href="global.html#enforceFrontierCap">enforceFrontierCap</a></li><li><a href="global.html#ensureSeedSources">ensureSeedSources</a></li><li><a href="global.html#escapeHtml">escapeHtml</a></li><li><a href="global.html#expandDirs">expandDirs</a></li><li><a href="global.html#expandSeeds">expandSeeds</a></li><li><a href="global.html#extractLinks">extractLinks</a></li><li><a href="global.html#failedNames">failedNames</a></li><li><a href="global.html#fetchArticle">fetchArticle</a></li><li><a href="global.html#fetchArticleLinks">fetchArticleLinks</a></li><li><a href="global.html#file">file</a></li><li><a href="global.html#filterFeedItems">filterFeedItems</a></li><li><a href="global.html#fin">fin</a></li><li><a href="global.html#firstLineClamp">firstLineClamp</a></li><li><a href="global.html#fitChain">fitChain</a></li><li><a href="global.html#formatTime">formatTime</a></li><li><a href="global.html#genericSummary">genericSummary</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#getDate">getDate</a></li><li><a href="global.html#getDay">getDay</a></li><li><a href="global.html#getTimestamp">getTimestamp</a></li><li><a href="global.html#gridSourceUrl">gridSourceUrl</a></li><li><a href="global.html#info">info</a></li><li><a href="global.html#ingestFeedItems">ingestFeedItems</a></li><li><a href="global.html#ingestNotes">ingestNotes</a></li><li><a href="global.html#installProcessGuards">installProcessGuards</a></li><li><a href="global.html#isLowYield">isLowYield</a></li><li><a href="global.html#judgeFromDocs">judgeFromDocs</a></li><li><a href="global.html#kbLabelOf">kbLabelOf</a></li><li><a href="global.html#keyIdOf">keyIdOf</a></li><li><a href="global.html#legacyClueKey">legacyClueKey</a></li><li><a href="global.html#listCores">listCores</a></li><li><a href="global.html#listSeats">listSeats</a></li><li><a href="global.html#load">load</a></li><li><a href="global.html#loadSettings">loadSettings</a></li><li><a href="global.html#logAiOutcome">logAiOutcome</a></li><li><a href="global.html#looksLikeFeed">looksLikeFeed</a></li><li><a href="global.html#makeArrayCoverageValidator">makeArrayCoverageValidator</a></li><li><a href="global.html#makeLineEmitter">makeLineEmitter</a></li><li><a href="global.html#makeMsg">makeMsg</a></li><li><a href="global.html#makeSlugResolver">makeSlugResolver</a></li><li><a href="global.html#markConflict">markConflict</a></li><li><a href="global.html#maxPromptCharsOf">maxPromptCharsOf</a></li><li><a href="global.html#mergeCatalogue">mergeCatalogue</a></li><li><a href="global.html#mergeFetchers">mergeFetchers</a></li><li><a href="global.html#mergeSiteAdapters">mergeSiteAdapters</a></li><li><a href="global.html#mergeTaps">mergeTaps</a></li><li><a href="global.html#mwAccountSource">mwAccountSource</a></li><li><a href="global.html#mwAdmitPersist">mwAdmitPersist</a></li><li><a href="global.html#mwAdoptResult">mwAdoptResult</a></li><li><a href="global.html#mwApplyToNote">mwApplyToNote</a></li><li><a href="global.html#mwBuildBase">mwBuildBase</a></li><li><a href="global.html#mwBuildEdges">mwBuildEdges</a></li><li><a href="global.html#mwConflictDualWrite">mwConflictDualWrite</a></li><li><a href="global.html#mwCullSources">mwCullSources</a></li><li><a href="global.html#mwFeedFallback">mwFeedFallback</a></li><li><a href="global.html#mwFetchDetail">mwFetchDetail</a></li><li><a href="global.html#mwFetchList">mwFetchList</a></li><li><a href="global.html#mwFilterItems">mwFilterItems</a></li><li><a href="global.html#mwMarkDoc">mwMarkDoc</a></li><li><a href="global.html#mwMarkRelated">mwMarkRelated</a></li><li><a href="global.html#mwNormalizeItems">mwNormalizeItems</a></li><li><a href="global.html#mwPersistCore">mwPersistCore</a></li><li><a href="global.html#mwPersistEdges">mwPersistEdges</a></li><li><a href="global.html#mwPersistNote">mwPersistNote</a></li><li><a href="global.html#mwPersistOutcome">mwPersistOutcome</a></li><li><a href="global.html#mwProbe">mwProbe</a></li><li><a href="global.html#mwRebuildKnowledgeIndex">mwRebuildKnowledgeIndex</a></li><li><a href="global.html#mwRebuildRelationIndex">mwRebuildRelationIndex</a></li><li><a href="global.html#mwRenderCore">mwRenderCore</a></li><li><a href="global.html#mwRenderNote">mwRenderNote</a></li><li><a href="global.html#mwRouteFetcher">mwRouteFetcher</a></li><li><a href="global.html#mwRunWorkflow">mwRunWorkflow</a></li><li><a href="global.html#mwSaveClues">mwSaveClues</a></li><li><a href="global.html#mwSettleClue">mwSettleClue</a></li><li><a href="global.html#mwSettleTriage">mwSettleTriage</a></li><li><a href="global.html#mwSkipGate">mwSkipGate</a></li><li><a href="global.html#mwSlim">mwSlim</a></li><li><a href="global.html#mwSyncSeeds">mwSyncSeeds</a></li><li><a href="global.html#mwTitleSkip">mwTitleSkip</a></li><li><a href="global.html#mwTranscodeLinks">mwTranscodeLinks</a></li><li><a href="global.html#newSource">newSource</a></li><li><a href="global.html#normalizeConcept">normalizeConcept</a></li><li><a href="global.html#normalizeFeedItems">normalizeFeedItems</a></li><li><a href="global.html#normalizeUrl">normalizeUrl</a></li><li><a href="global.html#normalizeWorkDir">normalizeWorkDir</a></li><li><a href="global.html#noteDigest">noteDigest</a></li><li><a href="global.html#num">num</a></li><li><a href="global.html#objectReport">objectReport</a></li><li><a href="global.html#oneline">oneline</a></li><li><a href="global.html#open">open</a></li><li><a href="global.html#openStores">openStores</a></li><li><a href="global.html#parseFrontmatter">parseFrontmatter</a></li><li><a href="global.html#parseIndexList">parseIndexList</a></li><li><a href="global.html#parseJson">parseJson</a></li><li><a href="global.html#parseJsonArray">parseJsonArray</a></li><li><a href="global.html#patrolFromPipeline">patrolFromPipeline</a></li><li><a href="global.html#pickCandidates">pickCandidates</a></li><li><a href="global.html#pickCategories">pickCategories</a></li><li><a href="global.html#pickClues">pickClues</a></li><li><a href="global.html#pickConcepts">pickConcepts</a></li><li><a href="global.html#pickDueSources">pickDueSources</a></li><li><a href="global.html#pidAlive">pidAlive</a></li><li><a href="global.html#probeSearchEndpoints">probeSearchEndpoints</a></li><li><a href="global.html#probeSiteFeed">probeSiteFeed</a></li><li><a href="global.html#qualityTag">qualityTag</a></li><li><a href="global.html#queueAge">queueAge</a></li><li><a href="global.html#quote">quote</a></li><li><a href="global.html#reEscape">reEscape</a></li><li><a href="global.html#readGrid">readGrid</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#readMd">readMd</a></li><li><a href="global.html#readRunSummary">readRunSummary</a></li><li><a href="global.html#rebuildKnowledgeIndex">rebuildKnowledgeIndex</a></li><li><a href="global.html#rebuildRelationIndex">rebuildRelationIndex</a></li><li><a href="global.html#recordFile">recordFile</a></li><li><a href="global.html#recordSourceOutcome">recordSourceOutcome</a></li><li><a href="global.html#regenCore">regenCore</a></li><li><a href="global.html#renderCoreBody">renderCoreBody</a></li><li><a href="global.html#renderFrontmatter">renderFrontmatter</a></li><li><a href="global.html#reset">reset</a></li><li><a href="global.html#resolveCatalogue">resolveCatalogue</a></li><li><a href="global.html#resolvePlugins">resolvePlugins</a></li><li><a href="global.html#resolveSettings">resolveSettings</a></li><li><a href="global.html#resolveVocab">resolveVocab</a></li><li><a href="global.html#reviveDeadDocs">reviveDeadDocs</a></li><li><a href="global.html#run">run</a></li><li><a href="global.html#runAiBatchStage">runAiBatchStage</a></li><li><a href="global.html#runChainOverMsgs">runChainOverMsgs</a></li><li><a href="global.html#runCli">runCli</a></li><li><a href="global.html#runJsonCli">runJsonCli</a></li><li><a href="global.html#runSubStages">runSubStages</a></li><li><a href="global.html#runTask">runTask</a></li><li><a href="global.html#sanitize">sanitize</a></li><li><a href="global.html#saveClues">saveClues</a></li><li><a href="global.html#section">section</a></li><li><a href="global.html#sectionOf">sectionOf</a></li><li><a href="global.html#send">send</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setConceptFold">setConceptFold</a></li><li><a href="global.html#settleClue">settleClue</a></li><li><a href="global.html#sha1">sha1</a></li><li><a href="global.html#skipDerived">skipDerived</a></li><li><a href="global.html#slimTerminalDocs">slimTerminalDocs</a></li><li><a href="global.html#slugify">slugify</a></li><li><a href="global.html#sortByEnforce">sortByEnforce</a></li><li><a href="global.html#sourceId">sourceId</a></li><li><a href="global.html#stageDetailFetch">stageDetailFetch</a></li><li><a href="global.html#stageDistill">stageDistill</a></li><li><a href="global.html#stageDocMaintain">stageDocMaintain</a></li><li><a href="global.html#stageExpand">stageExpand</a></li><li><a href="global.html#stageExtract">stageExtract</a></li><li><a href="global.html#stageFields">stageFields</a></li><li><a href="global.html#stageKnowledgeIndex">stageKnowledgeIndex</a></li><li><a href="global.html#stageListFetch">stageListFetch</a></li><li><a href="global.html#stageRelate">stageRelate</a></li><li><a href="global.html#stageRelationIndex">stageRelationIndex</a></li><li><a href="global.html#stageSeedSync">stageSeedSync</a></li><li><a href="global.html#stageTriage">stageTriage</a></li><li><a href="global.html#stdReport">stdReport</a></li><li><a href="global.html#strArr">strArr</a></li><li><a href="global.html#subReportOf">subReportOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#taskRunner">taskRunner</a></li><li><a href="global.html#timeoutPatch">timeoutPatch</a></li><li><a href="global.html#unquote">unquote</a></li><li><a href="global.html#unwrapNewsUrl">unwrapNewsUrl</a></li><li><a href="global.html#withTag">withTag</a></li><li><a href="global.html#writeJson">writeJson</a></li><li><a href="global.html#writeMd">writeMd</a></li><li><a href="global.html#writeRunSummary">writeRunSummary</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">ops/patrol.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// patrol.mjs — 內建巡檢:逐輪執行摘要＋庫況統計＋異常判定,寫入監控紀錄 md
+//
+// 【為何入套件】執行摘要(run.json)與日誌格式是套件契約,解析器必須跟著格式走——留在執行端,
+//   套件每次改版執行端巡檢就失準。環境相依(排程上限、紀錄檔路徑、推送出口)全由 cfg 注入。
+//
+// 【數字來源:JSON 優先,正則退路】每輪收尾由 createKnowledgeExtract 落地 log/&lt;day>/&lt;stamp>-run.json
+//   (ops/runSummary);巡檢對同名日誌優先讀它——數字直接取自各段 report,不再靠正則從人讀的
+//   摘要字串解回來(字串格式曾多次成為隱性契約而失準)。無 JSON 者(被砍的輪次、舊日誌)退回正則。
+//   WARN/ERROR 的「未列入已知常態」掃描仍讀日誌文字——那是人讀的訊息,本就沒有結構化對應。
+//
+// 【主要觸發方式】管線收尾(afterRun 預設)呼叫 patrolFromPipeline():管線每輪執行,
+//   結束時順手巡檢——「管線有跑 → 必有巡檢紀錄」。CLI 高頻輪詢情境另有自適應節流
+//   (階梯 1→60 分鐘,異常立即降回最密)。assess() 只判定不落地,供健康檢查等工具共用同一套判準。
+//
+// 【紀錄檔兩區設計】①近況總覽:每次「重寫」,由 log 目錄重建——md 是 log 的衍生視圖,
+//   不會與 log 失真;②異常事件:只「追加」,永久保留(log 會輪替,異常史要留)。
+
+import fs from 'fs'
+import path from 'path'
+import isobj from 'wsemi/src/isobj.mjs'
+import { acquireLock } from '../core/lock.mjs'
+import { readJson, writeJson, queueAge } from '../util/misc.mjs'
+import { pickConcepts } from '../stores/conceptGroups.mjs'
+import { sha1 } from '../util/text.mjs'
+import { readRunSummary, subReportOf } from './runSummary.mjs'
+import { createTelegramNotifier, escapeHtml } from './notify.mjs'
+
+// 自適應巡檢頻率階梯(CLI 輪詢用;管線收尾呼叫走 force 不節流)
+export const LADDER = [1, 2, 3, 4, 5, 60]
+export const STEP_UP_AFTER = 3
+
+/**
+ * 由文字取第一個數字擷取組
+ *
+ * @param {*} s 輸入待比對之文字
+ * @param {RegExp} re 輸入正則(第一個擷取組須為數字)
+ * @returns {Number} 回傳擷取到之數字；不匹配時回傳 null
+ */
+const num = (s, re) => {
+    const m = String(s).match(re); return m ? Number(m[1]) : null
+}
+/**
+ * 非有限數值一律視為無資料
+ *
+ * @param {*} v 輸入任意值
+ * @returns {Number} 回傳 v 本身(為有限數時)；否則回傳 null
+ */
+const fin = (v) => (Number.isFinite(v) ? v : null)
+
+/**
+ * 建立內建巡檢器:彙整近 N 日逐輪執行摘要與庫況統計,依既定判準(①～⑰,見 judge() 內逐條註解)判定異常,
+ * 寫入監控紀錄 md(近況總覽每次重寫、異常事件只追加,見檔頭說明)並可選推送
+ *
+ * 環境相依(排程上限、紀錄檔路徑、推送出口)全由 cfg 注入,套件本身不寫死任何專案特定值
+ *
+ * @param {Object} cfg 輸入設定物件
+ * @param {Object} cfg.dirs 輸入目錄物件，必填，需含 log、state；另可含 tmp(runCli 鎖檔路徑，未給退 state)
+ * @param {Object} cfg.clock 輸入時鐘物件(util/clock 之 createClock 產物)，必填
+ * @param {String} [cfg.workDir] 輸入專案工作目錄字串，recordFile 未給時用以推導預設路徑(退回 dirname(dirs.log))
+ * @param {String} [cfg.recordFile] 輸入監控紀錄 md 路徑字串，預設 workDir/監控運維紀錄.md
+ * @param {Function} [cfg.openStores] 輸入開啟集合之函數 () => stores(唯讀，庫況統計用)
+ * @param {Function} [cfg.closeStores] 輸入關閉集合之函數 (stores) => Promise
+ * @param {Function} [cfg.aiUsageToday] 輸入 AI 今日用量摘要函數 () => { used, byKey, chain, providers }
+ * @param {Array} [cfg.primaryProviderIds] 輸入各名額之主力供應商 id 陣列(用量占比判定用)，未給則退回 usage.providers[0]
+ * @param {Integer} [cfg.scheduleLimitMin=60] 輸入排程執行上限分鐘數，作「進行中 vs 被砍」判界
+ * @param {Integer} [cfg.recentDays=3] 輸入近況總覽涵蓋之天數
+ * @param {Number} [cfg.backlogWarn] 輸入待關聯積壓門檻篇數，未給則＝capacity.relate×6(六輪容量)，再無則 72
+ * @param {Integer} [cfg.queueAgeWarnDays=14] 輸入補全文佇列最舊者天數告警門檻
+ * @param {Integer} [cfg.rawAgeWarnDays=2] 輸入 raw 池最舊者天數告警門檻
+ * @param {Integer} [cfg.queueWindowRuns=6] 輸入判「佇列無淨消化」之觀察視窗輪數
+ * @param {Number} [cfg.rawRoundsWarn=10] 輸入 raw 池達此倍數之萃取容量即告警(絕對量判準;不老化的大積壓靠天數測不到)
+ * @param {Number} [cfg.elapsedWarnRatio=0.9] 輸入整輪耗時達排程上限之此比例即告警(逼近被砍)
+ * @param {Number} [cfg.skipRateWarn=0.7] 輸入萃取判非知識比例告警門檻(今日累計)
+ * @param {Integer} [cfg.skipRateMinProcessed=30] 輸入判非知識比例告警之最低已處理篇數(樣本太少不判)
+ * @param {Number} [cfg.frontierWarn=5000] 輸入待探索線索積壓告警門檻
+ * @param {Number} [cfg.deadProviderFailMin=6] 輸入供應商零成功告警之最低失敗數(呼叫次數太少不足以判定)
+ * @param {Integer} [cfg.deadProviderStreakMin=2] 輸入供應商零成功告警之最低連續輪數(單輪全敗可能只是一時抖動)
+ * @param {Array} [cfg.knownStatuses] 輸入文件狀態機全集字串陣列，預設 ['new','raw','noted','skip','dead','aggregated','extract-failed']，多出來的狀態即告警
+ * @param {Object} [cfg.capacity={}] 輸入四階段每輪容量物件 { fetch, extract, relate, distill }(待辦表之「每輪容量」欄與門檻推導)
+ * @param {Number} [cfg.distillMinNotes] 輸入提煉選題門檻(算「可提煉概念數」用)，未給則不顯示該欄
+ * @param {Array} [cfg.settingsWarnings] 輸入設定自洽警告字串陣列(resolveSettings.warnings)，以獨立判準(⑰)揭露
+ * @param {String} [cfg.envFile] 輸入 Telegram 推送金鑰來源之 .env 檔路徑(含 TELEGRAM_BOT_TOKEN／TELEGRAM_CHAT_ID)，無則靜默略過推送
+ * @param {Function} [cfg.notify] 輸入自訂推送函數 (text) => any，給了就不走內建 Telegram
+ * @param {Integer} [cfg.maxFetchTries=3] 輸入抓取重試上限次數，僅用於待辦表①之說明文字
+ * @returns {Object} 回傳巡檢器，含 patrolFromPipeline()、runCli(argv)、assess()、recordFile
+ * @throws {Error} cfg 非物件(視為 {})、或缺 dirs.log／dirs.state／clock 時拋出
+ * @example
+ * need test in nodejs.
+ *
+ * let patrol = createPatrol({ dirs: { log: './log', state: './state', tmp: './tmp' }, clock, openStores, closeStores })
+ * await patrol.patrolFromPipeline()
+ */
+export function createPatrol(cfg) {
+
+    //check
+    if (!isobj(cfg)) {
+        cfg = {}
+    }
+
+    const { dirs, clock } = cfg
+    if (!dirs?.log || !dirs?.state || !clock) throw new Error('createPatrol 需要 { dirs:{log,state,tmp}, clock }')
+    const RECORD_FILE = cfg.recordFile || path.join(cfg.workDir || path.dirname(dirs.log), '監控運維紀錄.md')
+    const STATE_FILE = path.join(dirs.state, 'patrol-state.json')
+    const RECENT_DAYS = cfg.recentDays ?? 3
+    const CAP = cfg.capacity || {}
+    // 待關聯門檻與關聯容量掛鉤(六輪容量):固定 72 對容量 36/輪＝兩輪,而積壓 1331 篇正以每輪 108～130 條邊
+    // 正常消化,卻每輪誤報「關聯段可能持續失敗」,okStreak 因此永遠歸零、自適應階梯卡死(2026-09-12 複審 A7)
+    const BACKLOG_WARN = cfg.backlogWarn ?? (CAP.relate > 0 ? CAP.relate * 6 : 72)
+    // 佇列告警門檻(2026-09-07):知識庫沒有時間型丟棄,積壓只告警。補全文佇列「過長且未在消化」、raw 池
+    // 「跨輪未清/連續淨增」皆為進料大於容量之訊號;未定義狀態則是「未判定即丟棄」類機制被重新引入之訊號
+    const QUEUE_AGE_WARN = cfg.queueAgeWarnDays ?? 14
+    const RAW_AGE_WARN = cfg.rawAgeWarnDays ?? 2
+    const QUEUE_WINDOW = cfg.queueWindowRuns ?? 6 // 「無淨消化」之觀察視窗輪數(末 vs 首,容忍逐輪起伏)
+    const RAW_ROUNDS_WARN = cfg.rawRoundsWarn ?? 10
+    // 2026-09-12 新增:整輪耗時逼近排程上限、供應商健康(連續失敗降序/席位不相容)、萃取判非知識比例、線索積壓
+    const ELAPSED_RATIO = cfg.elapsedWarnRatio ?? 0.9
+    const SKIP_RATE_WARN = cfg.skipRateWarn ?? 0.7
+    const SKIP_MIN_PROCESSED = cfg.skipRateMinProcessed ?? 30
+    const FRONTIER_WARN = cfg.frontierWarn ?? 5000
+    // 零成功告警:最低失敗數(低於此視為呼叫次數太少不足以判定,遞補條目常整日只被叫到個位數次)
+    //   與最低連續輪數(單輪全敗可能是上游一時抖動,連兩輪才視為斷供)
+    const DEAD_FAIL_MIN = cfg.deadProviderFailMin ?? 6
+    const DEAD_STREAK_MIN = cfg.deadProviderStreakMin ?? 2
+    const KNOWN_STATUSES = new Set(cfg.knownStatuses || ['new', 'raw', 'noted', 'skip', 'dead', 'aggregated', 'extract-failed'])
+    const limitMin = cfg.scheduleLimitMin ?? 60
+    const tzSuffix = clock.iso8().slice(-6) // 檔名時間戳之時區(ageMin 計算用)
+
+    /**
+     * 讀取巡檢自適應節流狀態(STATE_FILE);讀不到、壞檔或欄位缺漏皆回退為安全預設值
+     *
+     * @returns {Object} 回傳 { intervalMin:Integer(須為 LADDER 成員,否則回 LADDER[0]), okStreak:Integer, lastRunAt:String, lastIssuesKey:String }
+     */
+    function loadPatrolState() {
+        const s = readJson(STATE_FILE, null) || {}
+        const intervalMin = LADDER.includes(s.intervalMin) ? s.intervalMin : LADDER[0]
+        return { intervalMin, okStreak: Number(s.okStreak) || 0, lastRunAt: String(s.lastRunAt || ''), lastIssuesKey: String(s.lastIssuesKey || '') }
+    }
+
+    /**
+     * 問題集合之指紋(數字正規化):同一組持續性問題每輪只追加一次,不逐輪洗版
+     *
+     * @param {Array} issues 輸入本輪問題訊息字串陣列
+     * @returns {String} 回傳指紋字串(issues 為空陣列時回傳空字串)
+     */
+    const issuesKeyOf = (issues) => (issues.length ? sha1(issues.map((s) => String(s).replace(/\d+/g, 'N')).join('\n')) : '')
+
+    /**
+     * 依本次結果決定下一次巡檢間隔:正常則累計、達門檻放寬一階;異常一律打回最密
+     *
+     * @param {Object} st 輸入目前狀態(loadPatrolState 之產出)，取 okStreak、intervalMin
+     * @param {Boolean} healthy 輸入本輪是否無異常(issues.length === 0)
+     * @returns {Object} 回傳 { intervalMin:Integer, okStreak:Integer, lastRunAt:String, reason:String }
+     */
+    function nextPatrolState(st, healthy) {
+        if (!healthy) return { intervalMin: LADDER[0], okStreak: 0, lastRunAt: clock.iso8(), reason: '發現異常，降回最密巡檢' }
+        const streak = st.okStreak + 1
+        const i = LADDER.indexOf(st.intervalMin)
+        if (streak >= STEP_UP_AFTER &amp;&amp; i >= 0 &amp;&amp; i &lt; LADDER.length - 1) {
+            return { intervalMin: LADDER[i + 1], okStreak: 0, lastRunAt: clock.iso8(), reason: `連續 ${streak} 次正常，放寬至 ${LADDER[i + 1]} 分鐘` }
+        }
+        return { intervalMin: st.intervalMin, okStreak: streak, lastRunAt: clock.iso8(), reason: `正常（${streak}/${STEP_UP_AFTER} 次，維持 ${st.intervalMin} 分鐘）` }
+    }
+
+    /**
+     * 以結構化摘要(run.json)覆寫逐輪數字(欄位語意與正則路徑相同;無對應段者留原值,就地修改 r)
+     *
+     * @param {Object} r 輸入(並就地修改)本輪解析結果物件(parseLog 之產出)
+     * @param {Object} j 輸入結構化摘要物件(readRunSummary 之產出)
+     * @returns {undefined} 無回傳值(就地修改 r)
+     */
+    function applySummary(r, j) {
+        const lf = subReportOf(j, '抓取', 'listFetch')
+        const df = subReportOf(j, '抓取', 'detailFetch')
+        const ex = subReportOf(j, '彙整', 'extract')
+        const rl = subReportOf(j, '關聯', 'relate')
+        const ds = subReportOf(j, '提煉', 'distill')
+        const idx = (j.stages || []).find((s) => s.name === '索引')
+        if (lf) r.newDocs = fin(lf.detail?.newDocs)
+        if (df) {
+            r.queued = fin(df.detail?.queued); r.queuedDays = fin(df.detail?.queuedOldestDays); r.fetchLeft = fin(df.detail?.left)
+        }
+        if (ex) {
+            r.processed = fin(ex.detail?.processed); r.notes = fin(ex.detail?.notes); r.skipped = fin(ex.detail?.skipped)
+            r.aiCalls = fin(ex.stats?.aiCalls); r.rawPool = fin(ex.detail?.pool); r.rawDays = fin(ex.detail?.poolOldestDays)
+            r.extractFail = fin(ex.stats?.fail); r.extractStopped = !!ex.detail?.stopped
+        }
+        // 預篩(2026-09-12):攔下數與判定數另計;⑭ 之判非知識比例以「預篩攔下＋萃取略過」對「預篩判定＋萃取處理」
+        const tr = subReportOf(j, '彙整', 'triage')
+        if (tr &amp;&amp; tr.detail?.processed != null) {
+            r.triaged = fin(tr.detail.processed); r.triageSkipped = fin(tr.detail.irrelevant)
+        }
+        if (rl) {
+            r.targets = fin(rl.detail?.targets); r.edges = fin(rl.detail?.edges); r.conflicts = fin(rl.detail?.conflicts); r.relatePending = fin(rl.detail?.pending)
+        }
+        if (ds) {
+            r.cores = fin(ds.detail?.updated); r.distillFail = fin(ds.stats?.fail)
+        }
+        if (idx?.sub) r.totalNotes = fin(idx.sub.notes)
+        // AI 欄:三段合計(此前只取彙整段,整日顯示 18 而實際 40,複審 A10)
+        const calls = [tr, ex, rl, ds].map((s) => fin(s?.stats?.aiCalls)).filter((v) => v != null)
+        r.aiCallsTotal = calls.length ? calls.reduce((a, b) => a + b, 0) : null
+        r.elapsed = fin(j.ms) != null ? j.ms / 1000 : r.elapsed
+        r.finished = true
+        r.health = j.ai?.health?.counts &amp;&amp; typeof j.ai.health.counts === 'object' ? j.ai.health.counts : null
+        r.deadlineMs = fin(j.deadlineMs)
+        r.fromJson = true
+    }
+
+    // ── 單一日誌解析(格式=ops/logger＋各階段摘要行之契約;同名 run.json 存在時數字以它為準)──
+    /**
+     * 解析單一日誌檔為一輪執行之統計物件;同名 run.json 存在時,結構化數字覆寫正則解析值(applySummary)
+     *
+     * @param {String} file 輸入日誌檔絕對路徑字串
+     * @returns {Object} 回傳本輪統計物件(kind/hhmm/finished/errors/elapsed/ageMin/spanSec/newDocs/notes/… 等,依 kind 而異);讀不到檔案時回傳 null
+     */
+    function parseLog(file) {
+        let text = ''
+        try {
+            text = fs.readFileSync(file, 'utf8')
+        }
+        catch {
+            return null
+        }
+        const base = path.basename(file)
+        // 2026-08-20 起為單一 run 日誌;fetch/organize 為舊制,保留解析覆蓋近 N 天視圖
+        const kind = base.includes('-run.') ? 'run' : base.includes('organize') ? 'organize' : base.includes('fetch') ? 'fetch' : 'other'
+        const hhmm = `${base.slice(8, 10)}:${base.slice(10, 12)}`
+        // 未取得執行鎖(上一輪仍在跑)＝本輪未執行:視為已結束並另標 lockSkipped——它不是早夭,也沒有 run.json
+        const lockSkipped = /管道\[[^\]]*\] 略過本輪/.test(text)
+        const finished = lockSkipped || /管線結束|管道\[[^\]]*\] 結束/.test(text)
+        const errors = (text.match(/^\[[^\]]*\] ERROR/gm) || []).length
+        const elapsed = num(text, /結束，耗時 ([\d.]+)s/)
+
+        // ageMin:檔名時間戳(clock 時區)距今幾分鐘,供「進行中 vs 被砍」判定
+        const ts = base.slice(0, 14)
+        const started = new Date(`${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)}T${ts.slice(8, 10)}:${ts.slice(10, 12)}:${ts.slice(12, 14)}${tzSuffix}`)
+        const ageMin = Math.max(0, Math.round((Date.now() - started.getTime()) / 60000))
+        // spanSec:最後一行日誌距啟動幾秒——未跑完者據此分辨「撞排程上限」與「早夭」(啟動後不久即無日誌:
+        // 行程崩潰／被外部中止)。此前只看 ageMin,93 秒與 700 秒後無聲的兩輪都被標成「查 ExecutionTimeLimit」(複審 A9)
+        const stamps = text.match(/^\[([^\]]+)\]/gm) || []
+        const lastAt = stamps.length ? Date.parse(stamps[stamps.length - 1].slice(1, -1)) : NaN
+        const spanSec = Number.isFinite(lastAt) ? Math.max(0, Math.round((lastAt - started.getTime()) / 1000)) : null
+
+        const r = { file: base, kind, hhmm, finished, lockSkipped, errors, elapsed, ageMin, spanSec, fromJson: false, health: null }
+        if (kind === 'run') {
+            // 認階段名不認步驟序號——pipeline 陣列可增減重排
+            r.newDocs = num(text, /步驟\d+ 抓取 完成：來源 \d+ 個、新文件 (\d+)/)
+            r.processed = num(text, /步驟\d+ 彙整 完成：處理 (\d+)/)
+            r.notes = num(text, /步驟\d+ 彙整 完成：.*?新知識 (\d+)/)
+            r.skipped = num(text, /步驟\d+ 彙整 完成：.*?略過 (\d+)/)
+            r.aiCalls = num(text, /步驟\d+ 彙整 完成：.*?（AI (\d+) 次）/)
+            r.targets = num(text, /步驟\d+ 關聯 完成：處理 (\d+)/)
+            r.edges = num(text, /步驟\d+ 關聯 完成：.*?關聯 (\d+) 條/)
+            r.conflicts = num(text, /步驟\d+ 關聯 完成：.*?衝突 (\d+) 組/)
+            r.cores = num(text, /步驟\d+ 提煉 完成：.*?更新 (\d+) 則核心/)
+            r.totalNotes = num(text, /步驟\d+ 索引 完成：筆記 (\d+)/)
+            // 積壓可見性行(2026-09-07 起各段自報;舊日誌無此行則為 null)
+            r.queued = num(text, /待抓內文 (\d+) 篇/)
+            r.queuedDays = num(text, /待抓內文 \d+ 篇（最舊 (\d+) 天）/)
+            r.rawPool = num(text, /raw 池 (\d+) 篇/)
+            r.rawDays = num(text, /raw 池 \d+ 篇（最舊 (\d+) 天）/)
+            // 結構化摘要優先(2026-09-12)
+            const j = readRunSummary(file.replace(/\.log$/, '.json'))
+            if (j) applySummary(r, j)
+        }
+        else if (kind === 'fetch') {
+            r.newDocs = num(text, /步驟1 collect 完成：來源 \d+ 個?、新文件 (\d+)/)
+            r.processed = num(text, /步驟2 extract 完成：處理 (\d+)/)
+            r.notes = num(text, /步驟2 extract 完成：.*?新知識 (\d+)/)
+            r.aiCalls = num(text, /步驟2 extract 完成：.*?（AI (\d+) 次）/)
+        }
+        else if (kind === 'organize') {
+            r.targets = num(text, /步驟1 relate 完成：處理 (\d+)/)
+            r.edges = num(text, /步驟1 relate 完成：.*?關聯 (\d+) 條/)
+            r.conflicts = num(text, /步驟1 relate 完成：.*?衝突 (\d+) 組/)
+            r.cores = num(text, /步驟2 distill 完成：.*?更新 (\d+) 則核心/)
+            r.totalNotes = num(text, /步驟3 index 完成：筆記 (\d+)/)
+        }
+        // 未預期錯誤:排除已知常態(每輪必然出現數筆,各有機制兜底或本就是正常訊息)
+        const KNOWN = new RegExp([
+            'platform wrapper', 'captcha', 'HTTP (401|403|404|410|429)', 'minimal visible text',
+            'curl-error', 'http-error', '（blocked：', '（redirect：',
+            '網格雙供應商皆失敗', 'curl 抓取失敗', '找不到 feed', '無法解析 feed', '抓取失敗（第 \\d+ 次）',
+            'OUTPUT_VALIDATION_FAILED', 'TIMEOUT after', 'ds4f 失敗', '工作流失敗',
+            // 批次 AI 之常態失敗與出隊:免費模型輸出截斷是常態,達 maxTries 出隊正是
+            // 隊頭防阻塞機制在運作(不出隊會讓同一篇永遠擋住整條萃取線)。單筆屬正常;
+            // 若真的大量發生,會由「知識產出停滯」與「待關聯積壓」等判定反映,不需在此重複告警。
+            '未被模型完整涵蓋', '萃取批次失敗', '標為 extract-failed', '逐項鏈異常', '批次 AI 失敗', '批次異常',
+            // 提煉工作流之逐次事件(遞補/中止/冷卻)自 2026-09-06 起寫入日誌,失敗類為遞補機制之常態;
+            // 審計鏈失敗→降級採 A 稿是設計機制(見 stages/distillStage 之 adoptResult),曾漏列而連續誤報(2026-09-12 複審 A6)
+            '提煉事件', '不合契約', '審計鏈失敗', '降級採用 A 整合稿',
+            // 來源自動停用之兩種變體須成套列全:sourcePolicy 有「已判定 N 篇、產出 0，自動停用」
+            // 與「連續失敗 N 次，停用」兩條路徑(後者見 sourcePolicy.mjs:89),原本只列了前者,
+            // 導致同一則停用訊息連續 8 個時段被判為「未列入已知常態」而洗版(2026-08-25 修)。
+            '略過非.{0,6}知識', '本批 \\d+ 篇採用', '未涵蓋者留待下輪', '自動停用', '連續失敗 \\d+ 次', '預篩',
+            '連續 \\d+ 次無資料', '改用 feed 內文', '探測\\[', '擴充：.*失敗', '略過本輪', '抓取失敗（timeout', '抓取失敗（fetch-error',
+            '內文\\[', '失敗（續跑後續子階段）', '逐來源異常', '逐篇異常', '逐線索異常', '不符格式而略過', '去重檢測：',
+            // 2026-09-12:時間預算守門、供應商健康降序、設定自洽與啟動期檢核警告皆由專屬判準(⑫⑬⑰)彙整判讀,不當未知警告
+            // (啟動期檢核之三席 antigravity 警告曾同時被 ⑰ 與「未知警告」各報一次——真實一輪 health-check 實測)
+            '逾時間預算', '供應商健康：', '大於萃取容量', '啟動期檢核：',
+            // 2026-09-12:線索上限淘汰(設計如此,記錄保留可復活)、預篩失敗放行(fail-open 機制在運作)
+            '超過上限', '放行交萃取',
+        ].join('|'))
+        r.oddities = (text.match(/^\[[^\]]*\] (WARN|ERROR) .*/gm) || [])
+            .filter((l) => !KNOWN.test(l))
+            .map((l) => l.replace(/^\[[^\]]*\] /, '').slice(0, 160))
+        return r
+    }
+
+    /**
+     * 列出近 N 日全部 run／fetch／organize 日誌之解析結果
+     *
+     * @param {Integer} days 輸入涵蓋天數(取最近 days 個日期分層目錄)
+     * @returns {Array} 回傳統計物件陣列(parseLog 之產出，各項另附 day 欄位)，目錄不存在時回傳空陣列
+     */
+    function listLogs(days) {
+        const out = []
+        let dayDirs = []
+        try {
+            dayDirs = fs.readdirSync(dirs.log).filter((d) => /^\d{8}$/.test(d)).sort().slice(-days)
+        }
+        catch {
+            return out
+        }
+        for (const d of dayDirs) {
+            let files = []
+            try {
+                files = fs.readdirSync(path.join(dirs.log, d)).filter((f) => /-(run|fetch|organize)\.log$/.test(f)).sort()
+            }
+            catch {
+                continue
+            }
+            for (const f of files) {
+                const r = parseLog(path.join(dirs.log, d, f))
+                if (r) out.push({ ...r, day: d })
+            }
+        }
+        return out
+    }
+
+    // ── 巡檢判定 ──
+    /**
+     * 依全部判準(①～⑰,逐條見內文註解)判定本輪是否有異常,產出問題與資訊訊息
+     *
+     * ①排程未觸發 ②未跑完(撞上限／早夭) ③程式錯誤 ④知識產出停滯 ⑤待關聯積壓 ⑥用量分布異常
+     * ⑦未預期錯誤字串 ⑧補全文佇列過長未消化 ⑨raw 池跨輪未清 ⑩raw 池連續殘餘遞增 ⑪未定義狀態
+     * ⑫整輪耗時逼近上限 ⑬供應商健康(降序/零成功/席位不相容/prompt 過長) ⑭萃取判非知識比例過高
+     * ⑮待探索線索積壓 ⑯raw 池絕對量過大 ⑰設定不自洽
+     *
+     * @param {Array} rows 輸入近況日誌解析結果陣列(listLogs 之產出)
+     * @param {Object} snap 輸入庫況快照物件(collect() 之 snap)
+     * @param {Object} usage 輸入 AI 今日用量摘要物件(cfg.aiUsageToday() 之產出)
+     * @returns {Object} 回傳 { issues:Array(問題訊息字串), info:Array(附加資訊字串) }
+     */
+    function judge(rows, snap, usage) {
+        const issues = []
+        const info = []
+        const nowHour = Number(clock.iso8().slice(11, 13))
+        const today = clock.day8()
+        const todayRows = rows.filter((r) => r.day === today)
+
+        // ①排程是否仍在觸發:最近一次管線啟動距今不得超過「一個排程週期＋排程上限」(60＋limitMin 分)。
+        //   此前判「本小時有無日誌」:跨整點的一輪(07:35 啟動、08:03 收尾)在收尾巡檢時必誤報「08 時無日誌」
+        //   (2026-09-12 真實一輪實測);改以最近一輪之啟動時距判定,收尾巡檢時當輪必在窗內。
+        //   最近一輪取自近 N 日全部日誌(ageMin 為絕對時距):曾只看今日,跨午夜之輪(23:35 啟動、00:25 收尾)日誌落在前一日,
+        //   午夜後之收尾巡檢必誤報「今日無日誌——排程可能未觸發」(2026-09-23 修)
+        const latest = rows.filter((r) => r.kind === 'run' || r.kind === 'fetch').sort((a, b) => a.ageMin - b.ageMin)[0]
+        const staleMin = 60 + limitMin
+        if (!latest || latest.ageMin > staleMin) {
+            issues.push(`最近 ${staleMin} 分鐘無管線啟動${latest ? `（最後一輪 ${latest.day === today ? '' : `${latest.day} `}${latest.hhmm}，${latest.ageMin} 分鐘前）` : `（近 ${RECENT_DAYS} 日至今 ${String(nowHour).padStart(2, '0')} 時無日誌）`}——排程可能未觸發`)
+        }
+
+        // ②未跑完:分「撞排程上限」(最後一行已接近上限)與「早夭」(啟動後不久即無日誌:行程崩潰／被外部中止),
+        //   兩者處置不同;此前一律標「查 ExecutionTimeLimit」而誤導(複審 A9)。進行中者以排程上限為界
+        const unfinished = todayRows.filter((r) => !r.finished &amp;&amp; r.ageMin > limitMin)
+        const running = todayRows.filter((r) => !r.finished &amp;&amp; r.ageMin &lt;= limitMin)
+        const killed = unfinished.filter((r) => r.spanSec == null || r.spanSec >= limitMin * 60 * 0.8)
+        const died = unfinished.filter((r) => r.spanSec != null &amp;&amp; r.spanSec &lt; limitMin * 60 * 0.8)
+        if (killed.length) issues.push(`今日有 ${killed.length} 輪撞排程上限未跑完：${killed.map((r) => `${r.hhmm}${r.kind}(${r.spanSec != null ? `${r.spanSec}s` : '?'})`).join('、')}——查整輪耗時（⑫）與 AI 呼叫是否卡住`)
+        if (died.length) issues.push(`今日有 ${died.length} 輪早夭（啟動後不久即無日誌）：${died.map((r) => `${r.hhmm}${r.kind}(${r.spanSec}s)`).join('、')}——查行程崩潰（uncaughtException）或被外部中止（taskkill／手動停止），非排程上限`)
+        if (running.length) info.push(`${running.map((r) => `${r.hhmm}${r.kind}`).join('、')} 進行中（啟動 ${running[0].ageMin} 分鐘）`)
+        // 略過輪(未取得執行鎖):本身不是故障,但代表上一輪跑過了排程週期——與⑫同源,列為異常供追
+        const overlapped = todayRows.filter((r) => r.lockSkipped)
+        if (overlapped.length) issues.push(`今日有 ${overlapped.length} 輪因上一輪仍在執行而略過：${overlapped.map((r) => r.hhmm).join('、')}——上一輪耗時超過排程週期，查其耗時（⑫）與鎖陳舊期限`)
+
+        // ③程式錯誤
+        const withErr = todayRows.filter((r) => r.errors > 0)
+        if (withErr.length) issues.push(`今日有 ${withErr.length} 輪出現 ERROR：${withErr.map((r) => `${r.hhmm}${r.kind}(${r.errors})`).join('、')}`)
+
+        // ④知識產出停滯:最近 3 輪(有萃取數字者)全數 0 篇;無數字者(早夭、舊格式)不算 0(複審 A11)
+        const lastRounds = todayRows.filter((r) => (r.kind === 'run' || r.kind === 'fetch') &amp;&amp; r.notes != null).slice(-3)
+        if (lastRounds.length === 3 &amp;&amp; lastRounds.every((r) => r.notes === 0)) {
+            issues.push('最近 3 輪皆未產出新知識——查素材是否耗盡或 AI 全鏈失敗')
+        }
+
+        // ⑤待關聯積壓:超過門檻且視窗內無淨消化才報(每輪產 108～130 條邊、積壓正在消化者不報)
+        const pendingRuns = todayRows.filter((r) => r.kind === 'run' &amp;&amp; r.relatePending != null).slice(-QUEUE_WINDOW)
+        const pendingNotDraining = pendingRuns.length &lt; 3 || pendingRuns.at(-1).relatePending >= pendingRuns[0].relatePending
+        if (snap.pending > BACKLOG_WARN &amp;&amp; pendingNotDraining) {
+            issues.push(`待關聯筆記積壓 ${snap.pending} 篇（>${BACKLOG_WARN}＝六輪容量）${pendingRuns.length >= 3 ? `且近 ${pendingRuns.length} 輪無淨消化（${pendingRuns.map((r) => r.relatePending).join('→')}）` : ''}——關聯容量追不上筆記產出或關聯段持續失敗`)
+        }
+
+        // ⑥用量分布異常:主力供應商幾乎沒用量,流量都落到遞補鏈後段(主力可能持續失敗而一直在遞補)。
+        //   主力＝各名額之 use 集合(cfg.primaryProviderIds);曾以 providerPick[0] 當主力,
+        //   主力換家後每小時誤報一次(2026-08-13 至 09-06 累計 257 筆,真問題被淹沒)
+        const primary = Array.isArray(cfg.primaryProviderIds) &amp;&amp; cfg.primaryProviderIds.length
+            ? cfg.primaryProviderIds
+            : (usage.providers?.[0]?.id ? [usage.providers[0].id] : [])
+        if (primary.length) {
+            const total = Object.values(usage.byKey).reduce((a, b) => a + b, 0)
+            const primaryUsed = Object.entries(usage.byKey)
+                .filter(([k]) => primary.some((id) => k === id || k.startsWith(`${id}#`)))
+                .reduce((a, [, v]) => a + v, 0)
+            if (total >= 20 &amp;&amp; primaryUsed / total &lt; 0.2) {
+                issues.push(`AI 流量僅 ${(primaryUsed / total * 100).toFixed(0)}% 落在各名額之主力供應商（${primary.join('、')}）——主力可能持續失敗而一直在遞補（正常應為多數）`)
+            }
+        }
+
+        // ⑦未預期錯誤字串(已濾已知常態;正規化去重再報,免同一死網址逐輪洗版)
+        const norm = (s) => s
+            .replace(/^(WARN|ERROR)\s+/, '')
+            .replace(/\[[^\]]{0,60}\]/g, '[…]')
+            .replace(/\d+/g, 'N')
+            .slice(0, 120)
+        const oddMap = new Map()
+        for (const r of todayRows) {
+            for (const o of r.oddities) {
+                const k = norm(o)
+                if (!oddMap.has(k)) oddMap.set(k, { sample: `${r.hhmm}${r.kind}: ${o}`, count: 0 })
+                oddMap.get(k).count++
+            }
+        }
+        if (oddMap.size) {
+            const list = [...oddMap.values()].sort((a, b) => b.count - a.count)
+            issues.push(`出現 ${oddMap.size} 種未列入已知常態的警告（共 ${list.reduce((a, x) => a + x.count, 0)} 筆）：\n    - ${list.slice(0, 5).map((x) => `[×${x.count}] ${x.sample}`).join('\n    - ')}`)
+        }
+
+        // ⑧補全文佇列過長且未在消化:最舊者逾門檻,且視窗內佇列長度無淨減(進料 ≥ 容量)。FIFO 下不丟;
+        //   單純過長而在消化中不告警(積壓尾端整天同齡件會讓「最舊天數」平台期,不能只看天數)。
+        //   判「末 vs 首」而非「逐輪遞增」:進料本就逐輪起伏,一輪回落就會讓逐輪判定失效——
+        //   2026-09-08 佇列整日 6376→6457(+81)明顯未消化,卻因 6460→6451→6457 中間回落而漏報。
+        const queueRuns = todayRows.filter((r) => r.kind === 'run' &amp;&amp; r.queued != null).slice(-QUEUE_WINDOW)
+        const notDraining = queueRuns.length >= 3 &amp;&amp; queueRuns.at(-1).queued >= queueRuns[0].queued
+        if (snap.newOldestDays > QUEUE_AGE_WARN &amp;&amp; notDraining) {
+            issues.push(`補全文佇列最舊者已等 ${snap.newOldestDays} 天（${snap.newCount} 篇）且近 ${queueRuns.length} 輪無淨消化（${queueRuns.map((r) => r.queued).join('→')}）——進料大於容量：調 articlesPerRun／萃取容量或收斂來源，不丟`)
+        }
+        // ⑨raw 池跨輪未清:容量不足。預篩啟用時 raw 分兩段(待預篩／已放行待萃取),塞在哪一關要分開說——
+        // 一律說「萃取容量不足」會在待預篩已歸零時指錯關卡(2026-09-14 11:38 巡檢實例:待預篩 0、已放行 606,
+        // 訊息卻叫人去調萃取上游的 articlesPerRun)
+        if (snap.rawOldestDays > RAW_AGE_WARN) {
+            const untriaged = snap.rawUntriaged
+            const ready = snap.rawReady
+            const where = !(CAP.triage > 0) || untriaged == null
+                ? `萃取容量不足：fetchExtractRounds×aiParallel×docsPerExtract 須 ≥ articlesPerRun＋feed 直入量`
+                : untriaged > ready
+                    ? `多數塞在預篩關（待預篩 ${untriaged}、已放行待萃取 ${ready}）——預篩容量不足：調高 triageRounds／docsPerTriage`
+                    : `多數塞在萃取關（已放行待萃取 ${ready}、待預篩 ${untriaged}）——萃取容量不足：調高 fetchExtractRounds，或收斂上游進料`
+            issues.push(`raw 池最舊者已等 ${snap.rawOldestDays} 天（${snap.raw} 篇）——${where}`)
+        }
+        // ⑩raw 池連續留有殘餘且遞增:比⑨早一步看見容量不足(2026-09-07 容量 27 時兩輪 0→10→29 即此型態)。
+        //   判準是「殘餘」＝池大小−本輪處理數,不是池大小本身:日誌的「raw 池 N」記於萃取開始前,
+        //   ＝本輪進料量;每輪清空時進料遞增(15→24→31)完全正常,誤以池大小判會誤報(2026-09-08 15:29 實例)
+        const rawRuns = todayRows.filter((r) => r.kind === 'run' &amp;&amp; r.rawPool != null &amp;&amp; r.processed != null).slice(-3)
+        const leftovers = rawRuns.map((r) => r.rawPool - r.processed)
+        if (rawRuns.length === 3 &amp;&amp; leftovers.every((v, i) => v > 0 &amp;&amp; (i === 0 || v > leftovers[i - 1]))) {
+            issues.push(`raw 池連續 3 輪留有殘餘且遞增（${rawRuns.map((r, i) => `${r.rawPool}-${r.processed}=${leftovers[i]}`).join('、')}）——萃取容量追不上進料`)
+        }
+        // ⑪未定義狀態:狀態機只有 new/raw 與終態;多出來的狀態幾乎必是「未判定即丟棄」類機制被重新引入
+        //   (2026-09-07 曾有 expired:14 天未輪到即丟,累計 3742 篇,89% 從未嘗試抓取)
+        const unknown = Object.entries(snap.unknownStatuses || {})
+        if (unknown.length) issues.push(`文件出現未定義狀態：${unknown.map(([k, v]) => `${k}=${v}`).join('、')}——查是否重新引入「未判定即丟棄」之機制`)
+
+        // ⑫整輪耗時逼近排程上限:近 3 輪任一輪 ≥ 上限×比例即報(2026-09-09 3197～3211s 對上限 3300s)。
+        //   時間預算守門(deadline)生效後仍逼近,表示單次 AI 呼叫過長或名額過多
+        const slow = todayRows.filter((r) => r.kind === 'run' &amp;&amp; r.finished &amp;&amp; r.elapsed != null).slice(-3).filter((r) => r.elapsed >= limitMin * 60 * ELAPSED_RATIO)
+        if (slow.length) issues.push(`整輪耗時逼近排程上限 ${limitMin} 分：${slow.map((r) => `${r.hhmm}=${Math.round(r.elapsed)}s`).join('、')}——查供應商遞補耗時（⑬）或降低名額；截止守門只切得到已接上預算的呼叫`)
+
+        // ⑬供應商健康(讀 run.json 之 ai.health):今日累計「連續失敗降序」與「席位不相容(params)」
+        const healthAgg = {}
+        for (const r of todayRows) {
+            for (const [id, c] of Object.entries(r.health || {})) {
+                const h = (healthAgg[id] ||= { cooled: 0, mismatch: 0, oversize: 0, ok: 0, fail: 0 })
+                h.cooled += c.cooled || 0
+                h.mismatch += c.mismatch || 0
+                h.oversize += c.oversize || 0
+                h.ok += c.ok || 0
+                h.fail += Object.values(c.fail || {}).reduce((a, b) => a + (Number(b) || 0), 0)
+            }
+        }
+        const cooledIds = Object.entries(healthAgg).filter(([, h]) => h.cooled > 0)
+        if (cooledIds.length) issues.push(`供應商連續失敗被降序：${cooledIds.map(([id, h]) => `${id}×${h.cooled}（成 ${h.ok}／敗 ${h.fail}）`).join('、')}——主力不穩，流量落到遞補；查該家端點或改派名額`)
+        // 零成功:末端連續數輪一次都沒成功而持續失敗。兩條判準皆為必要——
+        //   ①不能靠上一條(降序):冷卻只由 429／逾時觸發,exec／http 型失敗 cooled 恆 0;
+        //   ②不能用整日聚合:會被「早上正常、下午全敗」抹平。2026-09-18 實例(opencode 免費層斷供)兼具兩者:
+        //     muse 當日 ok 36／fail 162、cooled 0——聚合看 ok>0、降序看 cooled=0,兩種寫法都漏,
+        //     而實情是 04:00 起連 10 輪 ok=0／fail=18,三個席位靜默全數遞補。故以末端連續輪數判定。
+        const deadStreak = {}
+        for (const r of todayRows) {
+            for (const [id, c] of Object.entries(r.health || {})) {
+                const okN = c.ok || 0
+                const failN = Object.values(c.fail || {}).reduce((a, b) => a + (Number(b) || 0), 0)
+                const st = (deadStreak[id] ||= { rounds: 0, fail: 0 })
+                if (okN === 0 &amp;&amp; failN > 0) {
+                    st.rounds += 1; st.fail += failN
+                }
+                else {
+                    st.rounds = 0; st.fail = 0
+                }
+            }
+        }
+        const deadIds = Object.entries(deadStreak).filter(([, s]) => s.rounds >= DEAD_STREAK_MIN &amp;&amp; s.fail >= DEAD_FAIL_MIN)
+        if (deadIds.length) issues.push(`供應商零成功：${deadIds.map(([id, s]) => `${id}（連 ${s.rounds} 輪，敗 ${s.fail}）`).join('、')}——若為某席位主力則該席形同虛設、流量全在遞補；實打取其 stderr 確認是端點故障或上游政策變動，再改派名額`)
+        const mismatchIds = Object.entries(healthAgg).filter(([, h]) => h.mismatch > 0)
+        if (mismatchIds.length) issues.push(`席位設定與供應商能力不相容（params 失敗）：${mismatchIds.map(([id, h]) => `${id}×${h.mismatch}`).join('、')}——已 spawn 才被轉接器擋下；查 settings.ai 名額與 ai/capability 之長度上限表`)
+        // prompt 逾長而於呼叫前被剔除:機制在運作(省掉一次 spawn),但主力長期用不到＝該席位形同虛設,仍須揭露
+        const overIds = Object.entries(healthAgg).filter(([, h]) => h.oversize > 0)
+        if (overIds.length) issues.push(`主力因 prompt 逾長而被跳過（未 spawn，已自動改派遞補）：${overIds.map(([id, h]) => `${id}×${h.oversize}`).join('、')}——該席位主力形同虛設；縮短該段輸入（如 relateCandidates）或改派無長度上限之條目`)
+
+        // ⑭萃取判非知識比例:今日累計 skipped/processed 過高＝AI 容量被非知識內容耗掉,來源品質須收斂
+        const exRows = todayRows.filter((r) => r.kind === 'run' &amp;&amp; r.processed != null &amp;&amp; r.skipped != null)
+        const processed = exRows.reduce((a, r) => a + r.processed + (r.triaged || 0), 0)
+        const skipped = exRows.reduce((a, r) => a + r.skipped + (r.triageSkipped || 0), 0)
+        if (processed >= SKIP_MIN_PROCESSED &amp;&amp; skipped / processed >= SKIP_RATE_WARN) {
+            issues.push(`判非知識比例 ${(100 * skipped / processed).toFixed(0)}%（${skipped}/${processed}，含預篩攔下）——來源品質不佳；查來源產出率（自動擴充來源）與標題預篩`)
+        }
+
+        // ⑮待探索線索積壓:產生速度 ≫ 消化(每輪 frontierPerRun),迴路無回饋之訊號;只告警不丟
+        if (snap.frontier > FRONTIER_WARN) issues.push(`待探索線索積壓 ${snap.frontier} 筆（>${FRONTIER_WARN}）——線索產生遠大於消化，擴充迴路無回饋；調 frontierPerRun 或收斂線索來源`)
+
+        // ⑯raw 池絕對量:大而不老化的積壓靠天數(⑨)與殘餘遞增(⑩)都測不到——rawAt 可被回填腳本整批重設,
+        //   而逐輪殘餘遞減時 4376 篇(約 80 輪)的積壓零告警(2026-09-12 複審 A8)
+        if (CAP.extract > 0 &amp;&amp; snap.raw > CAP.extract * RAW_ROUNDS_WARN) {
+            issues.push(`raw 池 ${snap.raw} 篇＝約 ${Math.ceil(snap.raw / CAP.extract)} 輪萃取容量（>${RAW_ROUNDS_WARN} 輪）——進料長期大於容量；不丟，調容量或收斂來源`)
+        }
+
+        // ⑰設定自洽警告(resolveSettings.warnings):如 articlesPerRun 大於萃取容量
+        for (const w of cfg.settingsWarnings || []) issues.push(`設定不自洽：${w}`)
+
+        return { issues, info }
+    }
+
+    // ── 紀錄檔組裝 ──
+    const MARK_HEAD = '&lt;!-- 以下由巡檢每次重寫，勿手動編輯 -->'
+    const MARK_TAIL = '&lt;!-- 近況總覽結束；以下為異常事件，只追加不重寫 -->'
+
+    /**
+     * 組四類任務之待辦表(每輪重寫)。四類即管線四道關卡,單位不同不可相加:
+     *   fetch＝原始文件待補全文;extract＝已有素材待 AI 判讀;relate＝筆記待建關聯;distill＝概念待入核心。
+     * 任務名用套件內部之階段/設定鍵名(fetch/extract/relate/distill),與 settings.json 之
+     * `fetch`、`ai.extract`、`ai.relate`、`ai.distill` 同名,方便對照要調哪個鍵。
+     * 【fetch 不用 AI】其五個子階段(seedSync/listFetch/detailFetch/docMaintain/expand)零 AI 呼叫點,
+     *   純 HTTP 抓取,故 settings 亦無 `ai.fetch` 席位;它的容量受逐篇抓取時間限制,不吃 AI 額度。
+     * 「每輪容量」取自設定(cfg.capacity);「約需輪次」為待辦÷容量之靜態估算,未計新進料,只作量級參考。
+     *
+     * @param {Object} snap 輸入庫況快照物件(collect() 之 snap)
+     * @returns {Array} 回傳 md 行陣列(待辦表標題、表格與附註說明)
+     */
+    function buildTodoTable(snap) {
+        const cap = CAP
+        const est = (n, c) => (c > 0 &amp;&amp; n > 0 ? `約 ${Math.ceil(n / c)} 輪` : '—')
+        const rows = [
+            ['① `fetch` 抓（補全文）', `**${snap.newCount ?? '-'}** 篇`,
+                `未試 ${snap.newUntried ?? '-'}、重試中 ${(snap.newCount ?? 0) - (snap.newUntried ?? 0)}｜最舊 ${snap.newOldestDays ?? '-'} 天`,
+                cap.fetch ?? '-', '**不用 AI**（HTTP）', est(snap.newCount, cap.fetch)],
+            ...(cap.triage > 0
+                ? [['② `triage` 預篩（攔非知識）', `**${snap.rawUntriaged ?? '-'}** 篇`,
+                    `raw 池共 ${snap.raw ?? '-'}｜最舊 ${snap.rawOldestDays ?? '-'} 天`,
+                    cap.triage, '`ai.triage`（未設即同 extract）', est(snap.rawUntriaged, cap.triage)]]
+                : []),
+            [`${cap.triage > 0 ? '③' : '②'} \`extract\` 提取（萃取知識）`, `**${(cap.triage > 0 ? snap.rawReady : snap.raw) ?? '-'}** 篇`,
+                cap.triage > 0 ? `已預篩放行者；raw 池共 ${snap.raw ?? '-'}` : `最舊 ${snap.rawOldestDays ?? '-'} 天`,
+                cap.extract ?? '-', '`ai.extract`', est(cap.triage > 0 ? snap.rawReady : snap.raw, cap.extract)],
+            [`${cap.triage > 0 ? '④' : '③'} \`relate\` 關聯`, `**${snap.pending ?? '-'}** 篇`,
+                `全庫筆記 ${snap.notes ?? '-'}`,
+                cap.relate ?? '-', '`ai.relate`', est(snap.pending, cap.relate)],
+            [`${cap.triage > 0 ? '⑤' : '④'} \`distill\` 提煉`, `**${snap.conceptsPending ?? '-'}** 概念`,
+                `未提煉筆記 ${snap.undistilled ?? '-'}｜新建 ${snap.conceptsNew ?? '-'}、更新 ${snap.conceptsPending != null ? snap.conceptsPending - snap.conceptsNew : '-'}｜既有核心 ${snap.cores ?? '-'}`,
+                cap.distill ?? '-', '`ai.distill`', est(snap.conceptsPending, cap.distill)],
+        ]
+        return [
+            `## 尚未處理的任務（${rows.length} 類，單位不同不可相加）`,
+            '',
+            '| 任務 | 待處理 | 組成 | 每輪容量 | AI 席位 | 約需輪次 |',
+            '| --- | --- | --- | --- | --- | --- |',
+            ...rows.map((r) => `| ${r.join(' | ')} |`),
+            '',
+            `> 各類是管線的連續關卡，同一篇文章依序通過，故不可相加。**① fetch 純 HTTP 抓取、零 AI 呼叫**（無 \`ai.fetch\` 席位），其容量受逐篇抓取時間限制而非 AI 額度；其餘各關有 AI 席位，改配置見安裝端設定之對應鍵。①之「重試中」為抓取失敗退回佇列者（排隊末，試滿 ${cfg.maxFetchTries ?? 3} 次標 dead 移出）${cap.triage > 0 ? '；②預篩只看標題與開頭片段，攔下明確無關者（轉 skip，理由以「預篩：」開頭），③萃取只讀放行者' : ''}。「約需輪次」＝待處理÷每輪容量，未計新進料，僅供量級參考。`,
+            '',
+        ]
+    }
+
+    /**
+     * 組紀錄檔之近況總覽區塊(MARK_HEAD 前後,每次重寫):最新巡檢摘要、待辦表、近 N 日逐輪紀錄表
+     *
+     * @param {Array} rows 輸入近況日誌解析結果陣列(listLogs 之產出)
+     * @param {Object} snap 輸入庫況快照物件(collect() 之 snap)
+     * @param {Object} usage 輸入 AI 今日用量摘要物件
+     * @param {Array} issues 輸入本輪問題訊息字串陣列
+     * @param {Array} [info=[]] 輸入本輪附加資訊字串陣列
+     * @returns {String} 回傳近況總覽 md 全文(含 MARK_HEAD／MARK_TAIL 標記)
+     */
+    function buildOverview(rows, snap, usage, issues, info = []) {
+        const byDay = new Map()
+        for (const r of rows) {
+            if (!byDay.has(r.day)) byDay.set(r.day, [])
+            byDay.get(r.day).push(r)
+        }
+        const lines = [
+            '# 監控運維紀錄',
+            '',
+            '> 由套件內建巡檢於**每輪管線收尾時**自動更新（每小時一輪：抓取→彙整→關聯→提煉）。',
+            '> 「本檔的更新時間」即管線最後一次執行完成的時間——長時間未更新，就是管線沒在跑。',
+            '> 「近況總覽」每次重寫、由 log/ 重建（逐輪數字優先取自 run.json），與日誌永遠一致；「異常事件」只追加、永久保留。',
+            '',
+            `## 最新巡檢：${clock.iso8()}`,
+            '',
+            `- 知識庫：筆記 **${snap.notes}** 篇｜關聯 **${snap.edges}** 條｜核心 **${snap.cores}** 則｜待關聯 ${snap.pending} 篇`,
+            `- 素材：原始文件 ${snap.docs} 篇｜待抓內文 ${snap.newCount ?? '-'}（最舊 ${snap.newOldestDays ?? '-'} 天）｜待萃取 ${snap.raw}（最舊 ${snap.rawOldestDays ?? '-'} 天）｜來源 ${snap.sources} 個｜待探索 ${snap.frontier} 筆`,
+            `- AI 今日 ${usage.used} 次｜${Object.entries(usage.byKey).map(([k, v]) => `${k} ${v}`).join('、') || '（無）'}`,
+            `- 供應商鏈：${usage.chain}`,
+            `- 判定：${issues.length === 0 ? '✅ 一切正常' : `⚠️ 發現 ${issues.length} 項問題（詳見下方異常事件）`}${info.length ? `｜${info.join('；')}` : ''}`,
+            '',
+            MARK_HEAD,
+            '',
+            ...buildTodoTable(snap),
+            `## 近 ${RECENT_DAYS} 日逐輪紀錄`,
+            '',
+        ]
+        for (const day of [...byDay.keys()].sort().reverse()) {
+            const rs = byDay.get(day)
+            const f = rs.filter((r) => r.kind === 'run' || r.kind === 'fetch')
+            const o = rs.filter((r) => r.kind === 'run' || r.kind === 'organize')
+            const sum = (arr, k) => arr.reduce((a, x) => a + (x[k] || 0), 0)
+            lines.push(`### ${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`, '')
+            lines.push(`當日合計：新知識 **${sum(f, 'notes')}** 篇（${f.length} 輪）｜萃取略過 ${sum(f, 'skipped')} 篇｜新增關聯 **${sum(o, 'edges')}** 條、衝突 ${sum(o, 'conflicts')} 組、核心更新 ${sum(o, 'cores')} 則`, '')
+            lines.push('| 時間 | 管線 | 產出 | AI | 耗時 | 狀態 |', '| --- | --- | --- | --- | --- | --- |')
+            for (const r of rs.slice().reverse()) {
+                const out = r.kind === 'run'
+                    ? `新文件 ${r.newDocs ?? '-'}｜知識 ${r.notes ?? '-'}（略過 ${r.skipped ?? '-'}${r.triageSkipped != null ? `＋預篩攔 ${r.triageSkipped}` : ''}）｜關聯 ${r.edges ?? '-'} 條｜核心 +${r.cores ?? '-'}`
+                    : r.kind === 'fetch'
+                        ? `新文件 ${r.newDocs ?? '-'}｜萃取 ${r.processed ?? '-'} → 知識 ${r.notes ?? '-'}`
+                        : `關聯 ${r.targets ?? '-'} 篇/${r.edges ?? '-'} 條｜核心 +${r.cores ?? '-'}`
+                const state = r.lockSkipped
+                    ? '⏭ 略過（上一輪仍在執行）'
+                    : r.finished
+                        ? (r.errors > 0 ? `⚠️ ERROR ${r.errors}` : (r.extractStopped || r.fetchLeft > 0 ? '✅ 逾預算守門' : '✅'))
+                        : (r.ageMin &lt;= limitMin ? `⏳ 進行中（${r.ageMin} 分）` : (r.spanSec != null &amp;&amp; r.spanSec &lt; limitMin * 60 * 0.8 ? `❌ 早夭（${r.spanSec}s）` : '❌ 撞上限'))
+                lines.push(`| ${r.hhmm} | ${r.kind}${r.fromJson ? '' : '·正則'} | ${out} | ${r.aiCallsTotal ?? r.aiCalls ?? '-'} | ${r.elapsed ? `${Math.round(r.elapsed)}s` : '-'} | ${state} |`)
+            }
+            lines.push('')
+        }
+        lines.push(MARK_TAIL, '')
+        return lines.join('\n')
+    }
+
+    /**
+     * 寫入紀錄檔:近況總覽整段覆蓋(overview),異常事件區只追加不重寫(append=false 時只重寫近況總覽,
+     * 不追加異常事件——同一組問題已於上一輪追加過)
+     *
+     * @param {String} overview 輸入近況總覽 md 全文(buildOverview 之產出)
+     * @param {Array} issues 輸入本輪問題訊息字串陣列
+     * @param {Boolean} [append=true] 輸入是否將 issues 追加至異常事件區
+     * @returns {undefined} 無回傳值(寫入 RECORD_FILE)
+     */
+    function writeRecord(overview, issues, append = true) {
+        let tail = '\n## 異常事件\n\n（尚無）\n'
+        try {
+            const old = fs.readFileSync(RECORD_FILE, 'utf8')
+            const i = old.indexOf(MARK_TAIL)
+            if (i >= 0) tail = old.slice(i + MARK_TAIL.length)
+        }
+        catch { /* 首次執行 */ }
+        if (issues.length &amp;&amp; append) {
+            tail = tail.replace(/\n?（尚無）\n?/, '\n')
+            tail += `\n### ${clock.iso8()}\n\n${issues.map((s) => `- ${s}`).join('\n')}\n`
+        }
+        fs.writeFileSync(RECORD_FILE, overview + tail, 'utf8')
+    }
+
+    /**
+     * 推送:自訂 notify 優先;否則 envFile 有 TELEGRAM_* 才推,無則靜默略過。
+     * 送出走 ops/notify 之共用 notifier(此前此處自帶一份 fetch:未 HTML 轉義——摘要含 &lt; > &amp; 時 Telegram 回 400 整則不出;
+     * 2026-09-21 收斂)。推送是附加功能:不重試、20s 逾時、失敗回 false 不影響巡檢(紀錄檔已於推送前落地)。
+     *
+     * @param {String} text 輸入欲推送之文字內容
+     * @returns {Promise} 回傳 Promise，resolve 回傳 Boolean(是否已送出)或 cfg.notify 之回傳值
+     */
+    async function notify(text) {
+        if (typeof cfg.notify === 'function') return cfg.notify(text)
+        let token = ''
+        let chatId = ''
+        try {
+            for (const line of fs.readFileSync(cfg.envFile, 'utf8').split(/\r?\n/)) {
+                const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)$/)
+                if (!m) continue
+                if (m[1] === 'TELEGRAM_BOT_TOKEN') token = m[2].trim()
+                if (m[1] === 'TELEGRAM_CHAT_ID') chatId = m[2].trim()
+            }
+        }
+        catch { /* 無 .env */ }
+        if (!token || !chatId) return false
+        try {
+            await createTelegramNotifier({ token, chatId, maxRetries: 0, timeoutMs: 20000 }).send(escapeHtml(text))
+            return true
+        }
+        catch {
+            return false
+        }
+    }
+
+    /**
+     * 蒐集:逐輪紀錄＋用量＋庫況快照(唯讀;以 cfg.openStores／closeStores 開關集合)
+     *
+     * @returns {Promise} 回傳 Promise，resolve 回傳 { rows:Array, usage:Object, snap:Object }
+     */
+    async function collect() {
+        const rows = listLogs(RECENT_DAYS)
+        const usage = cfg.aiUsageToday ? cfg.aiUsageToday() : { used: 0, byKey: {}, chain: '', providers: [] }
+        const stores = cfg.openStores()
+        let snap
+        try {
+            const [docs, notes, edges, cores, sources, frontier] = await Promise.all([
+                stores.docs.select(), stores.notes.select(), stores.relations.select(), stores.cores.select(), stores.sources.select(), stores.frontier.select(),
+            ])
+            // new 以收錄時刻計等待;raw 以進入 raw 之時刻(rawAt)計——舊件補抓後 collectedAt 已數十天,用它會誤判久候
+            const newDocs = docs.filter((d) => d.status === 'new')
+            const newAge = queueAge(newDocs)
+            const rawDocs = docs.filter((d) => d.status === 'raw')
+            const rawAge = queueAge(rawDocs, 'rawAt')
+            // 預篩接縫:raw 分「待預篩(無 triage 欄)」與「已放行待萃取(triage==='relevant')」——兩關容量不同,合計會誤判
+            const rawReady = rawDocs.reduce((n, d) => n + (d.triage === 'relevant' ? 1 : 0), 0)
+            const rawUntriaged = rawDocs.reduce((n, d) => n + (d.triage ? 0 : 1), 0)
+            // 提煉待辦有兩種粒度:未提煉筆記(素材面)與可提煉概念(工作面,每輪取 distillPerRun 個)
+            let concepts = null
+            if (Number.isFinite(cfg.distillMinNotes)) {
+                try {
+                    concepts = pickConcepts(notes, cores, { minNotes: cfg.distillMinNotes })
+                }
+                catch {
+                    concepts = null
+                }
+            }
+            snap = {
+                docs: docs.length,
+                raw: rawAge.count,
+                rawOldestDays: rawAge.oldestDays,
+                rawReady,
+                rawUntriaged,
+                newCount: newAge.count,
+                newOldestDays: newAge.oldestDays,
+                newUntried: newDocs.reduce((n, d) => n + ((d.fetchTries || 0) === 0 ? 1 : 0), 0),
+                undistilled: notes.reduce((n, x) => n + (x.distilledAt ? 0 : 1), 0),
+                conceptsPending: concepts ? concepts.length : null,
+                conceptsNew: concepts ? concepts.filter((c) => !c.core).length : null,
+                unknownStatuses: docs.reduce((a, d) => {
+                    if (!KNOWN_STATUSES.has(d.status)) a[d.status] = (a[d.status] || 0) + 1; return a
+                }, {}),
+                notes: notes.length,
+                pending: notes.filter((n) => !n.relatedAt).length,
+                edges: edges.length,
+                cores: cores.length,
+                sources: sources.filter((x) => x.enabled !== false).length,
+                frontier: frontier.filter((x) => x.status === 'pending').length,
+            }
+        }
+        finally {
+            await cfg.closeStores(stores)
+        }
+        return { rows, usage, snap }
+    }
+
+    /**
+     * 只判定不落地、不推送(健康檢查等工具共用同一套判準)
+     *
+     * @returns {Promise} 回傳 Promise，resolve 回傳 { rows:Array, usage:Object, snap:Object, issues:Array, info:Array }
+     */
+    async function assess() {
+        const { rows, usage, snap } = await collect()
+        const { issues, info } = judge(rows, snap, usage)
+        return { rows, usage, snap, issues, info }
+    }
+
+    /**
+     * 執行一輪完整巡檢:蒐集＋判定＋更新節流狀態＋寫紀錄檔＋推送摘要
+     *
+     * @param {Object} pst 輸入目前節流狀態(loadPatrolState 之產出)
+     * @param {Boolean} force 輸入是否為強制執行(true 時不於 info 附加節流頻率調整說明；CLI 模式帶 --force 或管線收尾呼叫時為 true)
+     * @returns {Promise} 回傳 Promise，resolve 回傳 { issues:Array, info:Array, summary:String }
+     */
+    async function runPatrol(pst, force) {
+        const { rows, usage, snap } = await collect()
+        const { issues, info } = judge(rows, snap, usage)
+
+        // 異常事件去重:與上一輪同一組問題(數字正規化後相同)不再追加——持續性問題逐輪洗版
+        // 會把紀錄檔撐大並淹沒新問題;近況總覽仍每輪重寫,現況不因此隱藏
+        const issuesKey = issuesKeyOf(issues)
+        const repeated = issues.length > 0 &amp;&amp; issuesKey === pst.lastIssuesKey
+        if (repeated) info.push('問題與上一輪相同，未重複追加至異常事件')
+
+        const next = nextPatrolState(pst, issues.length === 0)
+        writeJson(STATE_FILE, { intervalMin: next.intervalMin, okStreak: next.okStreak, lastRunAt: next.lastRunAt, lastIssuesKey: issuesKey })
+        if (!force) info.push(`巡檢頻率 ${pst.intervalMin} → ${next.intervalMin} 分鐘（${next.reason}）`)
+
+        writeRecord(buildOverview(rows, snap, usage, issues, info), issues, !repeated)
+
+        const today = clock.day8()
+        const f = rows.filter((r) => r.day === today &amp;&amp; (r.kind === 'run' || r.kind === 'fetch'))
+        const o = rows.filter((r) => r.day === today &amp;&amp; (r.kind === 'run' || r.kind === 'organize'))
+        const sum = (arr, k) => arr.reduce((a, x) => a + (x[k] || 0), 0)
+        const summary = [
+            `${issues.length === 0 ? '✅' : '⚠️'} 知識庫巡檢 ${clock.date8()} ${clock.iso8().slice(11, 16)}`,
+            `今日：新知識 ${sum(f, 'notes')} 篇（${f.length} 輪）｜關聯 +${sum(o, 'edges')} 條（${o.length} 輪）`,
+            `總量：筆記 ${snap.notes}｜關聯 ${snap.edges}｜核心 ${snap.cores}｜待關聯 ${snap.pending}`,
+            `AI 今日 ${usage.used} 次`,
+            issues.length ? `\n問題：\n${issues.map((s) => `• ${s}`).join('\n')}` : '',
+        ].filter(Boolean).join('\n')
+
+        await notify(summary)
+        return { issues, info, summary }
+    }
+
+    return {
+        /**
+         * 管線收尾呼叫:每輪必巡檢(force);巡檢失敗不影響管線成敗,但回報 {ok:false,error} 供呼叫端留痕
+         * (此前裸吞:巡檢壞掉與管線停擺無法區分)
+         *
+         * @returns {Promise} 回傳 Promise，resolve 回傳 { ok:true } 或 { ok:false, error:String(訊息前 200 字) }
+         */
+        patrolFromPipeline: async () => {
+            try {
+                await runPatrol(loadPatrolState(), true)
+                return { ok: true }
+            }
+            catch (e) {
+                return { ok: false, error: String(e?.message || e).slice(0, 200) }
+            }
+        },
+        /**
+         * CLI 模式:自適應節流(--force 略過)、執行鎖防重疊、--print 印摘要
+         *
+         * @param {Array} [argv=[]] 輸入命令列參數陣列，可含 '--force'(略過節流)、'--print'(強制印摘要)
+         * @returns {Promise} 回傳 Promise，resolve 回傳 runPatrol 之結果 { issues, info, summary }；
+         *     未到節流間隔或未取得執行鎖時回傳 null
+         */
+        runCli: async (argv = []) => {
+            const force = argv.includes('--force')
+            const pst = loadPatrolState()
+            if (!force &amp;&amp; pst.lastRunAt) {
+                const sinceMin = (Date.now() - new Date(pst.lastRunAt).getTime()) / 60000
+                if (sinceMin &lt; pst.intervalMin - 0.08) return null
+            }
+            // 鎖檔落 dirs.tmp;未給 tmp 者退 dirs.state(建構期只要求 log/state,此前缺 tmp 即 path.join(undefined) 拋 TypeError)
+            const lock = acquireLock(path.join(dirs.tmp || dirs.state, 'patrol.lock'))
+            if (!lock.ok) return null
+            try {
+                const r = await runPatrol(pst, force)
+                if (argv.includes('--print') || r.issues.length) console.log(r.summary)
+                return r
+            }
+            finally {
+                lock.release()
+            }
+        },
+        assess,
+        /** 監控紀錄 md 之絕對路徑(String) */
+        recordFile: RECORD_FILE,
+    }
+}
+
+export default createPatrol
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Sep 23 2026 22:21:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
