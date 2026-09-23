@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>stages/relateStage.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="MwContractError.html">MwContractError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#AI_DEFAULT">AI_DEFAULT</a></li><li><a href="global.html#COOL_DETECT">COOL_DETECT</a></li><li><a href="global.html#CORE_SCHEMA">CORE_SCHEMA</a></li><li><a href="global.html#DEFAULT_SITE_ADAPTERS">DEFAULT_SITE_ADAPTERS</a></li><li><a href="global.html#DF_DIRS">DF_DIRS</a></li><li><a href="global.html#FETCH_DEFAULT">FETCH_DEFAULT</a></li><li><a href="global.html#KIND_MAX_PROMPT_CHARS">KIND_MAX_PROMPT_CHARS</a></li><li><a href="global.html#KNOWLEDGE_DEFAULT">KNOWLEDGE_DEFAULT</a></li><li><a href="global.html#OBJECT_STAGES">OBJECT_STAGES</a></li><li><a href="global.html#ORGANIZE_SHARED_KEYS">ORGANIZE_SHARED_KEYS</a></li><li><a href="global.html#OUTCOME_TEXT">OUTCOME_TEXT</a></li><li><a href="global.html#SKIP_TITLE_PATTERNS_DEFAULT">SKIP_TITLE_PATTERNS_DEFAULT</a></li><li><a href="global.html#SOURCE_POLICY_DEFAULT">SOURCE_POLICY_DEFAULT</a></li><li><a href="global.html#STREAK_TYPES">STREAK_TYPES</a></li><li><a href="global.html#TELEGRAM_TEXT_MAX">TELEGRAM_TEXT_MAX</a></li><li><a href="global.html#VOCAB_DEFAULT">VOCAB_DEFAULT</a></li><li><a href="global.html#WKnowledgeExtract">WKnowledgeExtract</a></li><li><a href="global.html#accountSourceOutcome">accountSourceOutcome</a></li><li><a href="global.html#acquireLock">acquireLock</a></li><li><a href="global.html#admitFeedItems">admitFeedItems</a></li><li><a href="global.html#aggStats">aggStats</a></li><li><a href="global.html#applyRelationsToNote">applyRelationsToNote</a></li><li><a href="global.html#applyTaps">applyTaps</a></li><li><a href="global.html#arxivSearchUrl">arxivSearchUrl</a></li><li><a href="global.html#asObj">asObj</a></li><li><a href="global.html#bingNewsSearchUrl">bingNewsSearchUrl</a></li><li><a href="global.html#budgetOf">budgetOf</a></li><li><a href="global.html#buildAuditPrompt">buildAuditPrompt</a></li><li><a href="global.html#buildDistillPrompt">buildDistillPrompt</a></li><li><a href="global.html#buildFinalPrompt">buildFinalPrompt</a></li><li><a href="global.html#buildRevisePrompt">buildRevisePrompt</a></li><li><a href="global.html#buildRunSummary">buildRunSummary</a></li><li><a href="global.html#buildWorkflowStages">buildWorkflowStages</a></li><li><a href="global.html#byRetryTierFifo">byRetryTierFifo</a></li><li><a href="global.html#checkChain">checkChain</a></li><li><a href="global.html#checkCore">checkCore</a></li><li><a href="global.html#checkCtxDeps">checkCtxDeps</a></li><li><a href="global.html#checkIssues">checkIssues</a></li><li><a href="global.html#cliFail">cliFail</a></li><li><a href="global.html#cliFailDetail">cliFailDetail</a></li><li><a href="global.html#clueKey">clueKey</a></li><li><a href="global.html#cluePriority">cluePriority</a></li><li><a href="global.html#composeChain">composeChain</a></li><li><a href="global.html#conceptVocabulary">conceptVocabulary</a></li><li><a href="global.html#count">count</a></li><li><a href="global.html#createAiAdapter">createAiAdapter</a></li><li><a href="global.html#createAiCaller">createAiCaller</a></li><li><a href="global.html#createAiEventLogger">createAiEventLogger</a></li><li><a href="global.html#createClock">createClock</a></li><li><a href="global.html#createDefaultFetchers">createDefaultFetchers</a></li><li><a href="global.html#createDistillDomain">createDistillDomain</a></li><li><a href="global.html#createDistillObject">createDistillObject</a></li><li><a href="global.html#createExtractDomain">createExtractDomain</a></li><li><a href="global.html#createFetchObject">createFetchObject</a></li><li><a href="global.html#createKnowledgeExtract">createKnowledgeExtract</a></li><li><a href="global.html#createLogger">createLogger</a></li><li><a href="global.html#createOrganizeObject">createOrganizeObject</a></li><li><a href="global.html#createPatrol">createPatrol</a></li><li><a href="global.html#createProviderHealth">createProviderHealth</a></li><li><a href="global.html#createRelateDomain">createRelateDomain</a></li><li><a href="global.html#createRelateObject">createRelateObject</a></li><li><a href="global.html#createRunLogger">createRunLogger</a></li><li><a href="global.html#createSettingsHolder">createSettingsHolder</a></li><li><a href="global.html#createTelegramNotifier">createTelegramNotifier</a></li><li><a href="global.html#createTime">createTime</a></li><li><a href="global.html#createTriageDomain">createTriageDomain</a></li><li><a href="global.html#cullZeroYieldSources">cullZeroYieldSources</a></li><li><a href="global.html#deadMatcher">deadMatcher</a></li><li><a href="global.html#decorateSettings">decorateSettings</a></li><li><a href="global.html#defaultToLinkedRecord">defaultToLinkedRecord</a></li><li><a href="global.html#defaultToRecord">defaultToRecord</a></li><li><a href="global.html#defineFirstMw">defineFirstMw</a></li><li><a href="global.html#defineMw">defineMw</a></li><li><a href="global.html#deinvertAbstract">deinvertAbstract</a></li><li><a href="global.html#discoverFeed">discoverFeed</a></li><li><a href="global.html#docRecord">docRecord</a></li><li><a href="global.html#dropSection">dropSection</a></li><li><a href="global.html#elapsed">elapsed</a></li><li><a href="global.html#enable">enable</a></li><li><a href="global.html#enforceFrontierCap">enforceFrontierCap</a></li><li><a href="global.html#ensureSeedSources">ensureSeedSources</a></li><li><a href="global.html#escapeHtml">escapeHtml</a></li><li><a href="global.html#expandDirs">expandDirs</a></li><li><a href="global.html#expandSeeds">expandSeeds</a></li><li><a href="global.html#extractLinks">extractLinks</a></li><li><a href="global.html#failedNames">failedNames</a></li><li><a href="global.html#fetchArticle">fetchArticle</a></li><li><a href="global.html#fetchArticleLinks">fetchArticleLinks</a></li><li><a href="global.html#file">file</a></li><li><a href="global.html#filterFeedItems">filterFeedItems</a></li><li><a href="global.html#fin">fin</a></li><li><a href="global.html#firstLineClamp">firstLineClamp</a></li><li><a href="global.html#fitChain">fitChain</a></li><li><a href="global.html#formatTime">formatTime</a></li><li><a href="global.html#genericSummary">genericSummary</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#getDate">getDate</a></li><li><a href="global.html#getDay">getDay</a></li><li><a href="global.html#getTimestamp">getTimestamp</a></li><li><a href="global.html#gridSourceUrl">gridSourceUrl</a></li><li><a href="global.html#info">info</a></li><li><a href="global.html#ingestFeedItems">ingestFeedItems</a></li><li><a href="global.html#ingestNotes">ingestNotes</a></li><li><a href="global.html#installProcessGuards">installProcessGuards</a></li><li><a href="global.html#isLowYield">isLowYield</a></li><li><a href="global.html#judgeFromDocs">judgeFromDocs</a></li><li><a href="global.html#kbLabelOf">kbLabelOf</a></li><li><a href="global.html#keyIdOf">keyIdOf</a></li><li><a href="global.html#legacyClueKey">legacyClueKey</a></li><li><a href="global.html#listCores">listCores</a></li><li><a href="global.html#listSeats">listSeats</a></li><li><a href="global.html#load">load</a></li><li><a href="global.html#loadSettings">loadSettings</a></li><li><a href="global.html#logAiOutcome">logAiOutcome</a></li><li><a href="global.html#looksLikeFeed">looksLikeFeed</a></li><li><a href="global.html#makeArrayCoverageValidator">makeArrayCoverageValidator</a></li><li><a href="global.html#makeLineEmitter">makeLineEmitter</a></li><li><a href="global.html#makeMsg">makeMsg</a></li><li><a href="global.html#makeSlugResolver">makeSlugResolver</a></li><li><a href="global.html#markConflict">markConflict</a></li><li><a href="global.html#maxPromptCharsOf">maxPromptCharsOf</a></li><li><a href="global.html#mergeCatalogue">mergeCatalogue</a></li><li><a href="global.html#mergeFetchers">mergeFetchers</a></li><li><a href="global.html#mergeSiteAdapters">mergeSiteAdapters</a></li><li><a href="global.html#mergeTaps">mergeTaps</a></li><li><a href="global.html#mwAccountSource">mwAccountSource</a></li><li><a href="global.html#mwAdmitPersist">mwAdmitPersist</a></li><li><a href="global.html#mwAdoptResult">mwAdoptResult</a></li><li><a href="global.html#mwApplyToNote">mwApplyToNote</a></li><li><a href="global.html#mwBuildBase">mwBuildBase</a></li><li><a href="global.html#mwBuildEdges">mwBuildEdges</a></li><li><a href="global.html#mwConflictDualWrite">mwConflictDualWrite</a></li><li><a href="global.html#mwCullSources">mwCullSources</a></li><li><a href="global.html#mwFeedFallback">mwFeedFallback</a></li><li><a href="global.html#mwFetchDetail">mwFetchDetail</a></li><li><a href="global.html#mwFetchList">mwFetchList</a></li><li><a href="global.html#mwFilterItems">mwFilterItems</a></li><li><a href="global.html#mwMarkDoc">mwMarkDoc</a></li><li><a href="global.html#mwMarkRelated">mwMarkRelated</a></li><li><a href="global.html#mwNormalizeItems">mwNormalizeItems</a></li><li><a href="global.html#mwPersistCore">mwPersistCore</a></li><li><a href="global.html#mwPersistEdges">mwPersistEdges</a></li><li><a href="global.html#mwPersistNote">mwPersistNote</a></li><li><a href="global.html#mwPersistOutcome">mwPersistOutcome</a></li><li><a href="global.html#mwProbe">mwProbe</a></li><li><a href="global.html#mwRebuildKnowledgeIndex">mwRebuildKnowledgeIndex</a></li><li><a href="global.html#mwRebuildRelationIndex">mwRebuildRelationIndex</a></li><li><a href="global.html#mwRenderCore">mwRenderCore</a></li><li><a href="global.html#mwRenderNote">mwRenderNote</a></li><li><a href="global.html#mwRouteFetcher">mwRouteFetcher</a></li><li><a href="global.html#mwRunWorkflow">mwRunWorkflow</a></li><li><a href="global.html#mwSaveClues">mwSaveClues</a></li><li><a href="global.html#mwSettleClue">mwSettleClue</a></li><li><a href="global.html#mwSettleTriage">mwSettleTriage</a></li><li><a href="global.html#mwSkipGate">mwSkipGate</a></li><li><a href="global.html#mwSlim">mwSlim</a></li><li><a href="global.html#mwSyncSeeds">mwSyncSeeds</a></li><li><a href="global.html#mwTitleSkip">mwTitleSkip</a></li><li><a href="global.html#mwTranscodeLinks">mwTranscodeLinks</a></li><li><a href="global.html#newSource">newSource</a></li><li><a href="global.html#normalizeConcept">normalizeConcept</a></li><li><a href="global.html#normalizeFeedItems">normalizeFeedItems</a></li><li><a href="global.html#normalizeUrl">normalizeUrl</a></li><li><a href="global.html#normalizeWorkDir">normalizeWorkDir</a></li><li><a href="global.html#noteDigest">noteDigest</a></li><li><a href="global.html#num">num</a></li><li><a href="global.html#objectReport">objectReport</a></li><li><a href="global.html#oneline">oneline</a></li><li><a href="global.html#open">open</a></li><li><a href="global.html#openStores">openStores</a></li><li><a href="global.html#parseFrontmatter">parseFrontmatter</a></li><li><a href="global.html#parseIndexList">parseIndexList</a></li><li><a href="global.html#parseJson">parseJson</a></li><li><a href="global.html#parseJsonArray">parseJsonArray</a></li><li><a href="global.html#patrolFromPipeline">patrolFromPipeline</a></li><li><a href="global.html#pickCandidates">pickCandidates</a></li><li><a href="global.html#pickCategories">pickCategories</a></li><li><a href="global.html#pickClues">pickClues</a></li><li><a href="global.html#pickConcepts">pickConcepts</a></li><li><a href="global.html#pickDueSources">pickDueSources</a></li><li><a href="global.html#pidAlive">pidAlive</a></li><li><a href="global.html#probeSearchEndpoints">probeSearchEndpoints</a></li><li><a href="global.html#probeSiteFeed">probeSiteFeed</a></li><li><a href="global.html#qualityTag">qualityTag</a></li><li><a href="global.html#queueAge">queueAge</a></li><li><a href="global.html#quote">quote</a></li><li><a href="global.html#reEscape">reEscape</a></li><li><a href="global.html#readGrid">readGrid</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#readMd">readMd</a></li><li><a href="global.html#readRunSummary">readRunSummary</a></li><li><a href="global.html#rebuildKnowledgeIndex">rebuildKnowledgeIndex</a></li><li><a href="global.html#rebuildRelationIndex">rebuildRelationIndex</a></li><li><a href="global.html#recordFile">recordFile</a></li><li><a href="global.html#recordSourceOutcome">recordSourceOutcome</a></li><li><a href="global.html#regenCore">regenCore</a></li><li><a href="global.html#renderCoreBody">renderCoreBody</a></li><li><a href="global.html#renderFrontmatter">renderFrontmatter</a></li><li><a href="global.html#reset">reset</a></li><li><a href="global.html#resolveCatalogue">resolveCatalogue</a></li><li><a href="global.html#resolvePlugins">resolvePlugins</a></li><li><a href="global.html#resolveSettings">resolveSettings</a></li><li><a href="global.html#resolveVocab">resolveVocab</a></li><li><a href="global.html#reviveDeadDocs">reviveDeadDocs</a></li><li><a href="global.html#run">run</a></li><li><a href="global.html#runAiBatchStage">runAiBatchStage</a></li><li><a href="global.html#runChainOverMsgs">runChainOverMsgs</a></li><li><a href="global.html#runCli">runCli</a></li><li><a href="global.html#runJsonCli">runJsonCli</a></li><li><a href="global.html#runSubStages">runSubStages</a></li><li><a href="global.html#runTask">runTask</a></li><li><a href="global.html#sanitize">sanitize</a></li><li><a href="global.html#saveClues">saveClues</a></li><li><a href="global.html#section">section</a></li><li><a href="global.html#sectionOf">sectionOf</a></li><li><a href="global.html#send">send</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setConceptFold">setConceptFold</a></li><li><a href="global.html#settleClue">settleClue</a></li><li><a href="global.html#sha1">sha1</a></li><li><a href="global.html#skipDerived">skipDerived</a></li><li><a href="global.html#slimTerminalDocs">slimTerminalDocs</a></li><li><a href="global.html#slugify">slugify</a></li><li><a href="global.html#sortByEnforce">sortByEnforce</a></li><li><a href="global.html#sourceId">sourceId</a></li><li><a href="global.html#stageDetailFetch">stageDetailFetch</a></li><li><a href="global.html#stageDistill">stageDistill</a></li><li><a href="global.html#stageDocMaintain">stageDocMaintain</a></li><li><a href="global.html#stageExpand">stageExpand</a></li><li><a href="global.html#stageExtract">stageExtract</a></li><li><a href="global.html#stageFields">stageFields</a></li><li><a href="global.html#stageKnowledgeIndex">stageKnowledgeIndex</a></li><li><a href="global.html#stageListFetch">stageListFetch</a></li><li><a href="global.html#stageRelate">stageRelate</a></li><li><a href="global.html#stageRelationIndex">stageRelationIndex</a></li><li><a href="global.html#stageSeedSync">stageSeedSync</a></li><li><a href="global.html#stageTriage">stageTriage</a></li><li><a href="global.html#stdReport">stdReport</a></li><li><a href="global.html#strArr">strArr</a></li><li><a href="global.html#subReportOf">subReportOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#taskRunner">taskRunner</a></li><li><a href="global.html#timeoutPatch">timeoutPatch</a></li><li><a href="global.html#unquote">unquote</a></li><li><a href="global.html#unwrapNewsUrl">unwrapNewsUrl</a></li><li><a href="global.html#withTag">withTag</a></li><li><a href="global.html#writeJson">writeJson</a></li><li><a href="global.html#writeMd">writeMd</a></li><li><a href="global.html#writeRunSummary">writeRunSummary</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">stages/relateStage.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// relateStage.mjs — 關聯階段的泛用機制：候選挑選、slug 容錯、邊持久化、衝突雙寫、總覽重建
+//
+// 【機制入套件、prompt 與關聯型別留執行端】候選怎麼挑（共享概念）、slug 怎麼容錯
+//   （8 碼雜湊尾碼）、衝突為何要寫回雙方（單讀任一篇都要看得到對立觀點，
+//   否則拿到的是假的定論）——這些是泛用機制；「有哪些關聯型別」「怎麼要求模型獵取衝突」
+//   是領域內容，由執行端注入。
+
+import fs from 'fs'
+import path from 'path'
+import { uniqBy } from 'lodash-es'
+import isobj from 'wsemi/src/isobj.mjs'
+import isarr from 'wsemi/src/isarr.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
+import isfun from 'wsemi/src/isfun.mjs'
+import isp0int from 'wsemi/src/isp0int.mjs'
+import cint from 'wsemi/src/cint.mjs'
+import { readMd, writeMd, sectionOf, dropSection, renderFrontmatter } from '../md/md.mjs'
+import { sha1, normalizeConcept } from '../util/text.mjs'
+import { oneline } from '../util/misc.mjs'
+import { runAiBatchStage } from './aiBatchStage.mjs'
+import { defineMw, applyTaps, makeMsg, count, runChainOverMsgs, stdReport } from '../core/kernel.mjs'
+import { budgetOf } from '../core/budget.mjs'
+
+/**
+ * 依共享概念挑候選（不花 AI 額度的機械篩選），不足補同類別／最近筆記
+ *
+ * @param {Object} target 輸入目標筆記，需含 concepts、category、id；非物件回 []
+ * @param {Array} allNotes 輸入全體筆記陣列；非陣列回 []
+ * @param {Integer} limit 輸入回傳上限；非非負整數則不限(回傳全部候選)
+ * @returns {Array} 回傳依分數降冪排序之候選筆記陣列(最多 limit 筆)
+ */
+export function pickCandidates(target, allNotes, limit) {
+
+    //check
+    if (!isobj(target)) {
+        return []
+    }
+    if (!isarr(allNotes)) {
+        return []
+    }
+    if (!isp0int(limit)) {
+        limit = allNotes.length
+    }
+    limit = cint(limit)
+
+    // 比對鍵走 normalizeConcept（含注入的字形折疊）：僅 toLowerCase 會讓
+    // 「注意力機制」與「注意力机制」互不命中，繁簡分裂的筆記彼此永遠選不到對方當候選
+    const concepts = new Set((target.concepts || []).map(normalizeConcept))
+    const scored = allNotes.filter((n) => n.id !== target.id).map((n) => {
+        const hit = (n.concepts || []).filter((c) => concepts.has(normalizeConcept(c))).length
+        return { n, score: hit * 10 + (n.category === target.category ? 1 : 0) }
+    })
+    scored.sort((a, b) => b.score - a.score || String(b.n.createdAt).localeCompare(String(a.n.createdAt)))
+    return scored.slice(0, limit).map((s) => s.n)
+}
+
+/**
+ * slug 解析器：完全相符優先，其次以 8 碼雜湊尾碼比對。
+ * 長中文 slug 抄寫誤差（多插連字號、漏字）實測常見；尾碼是 sha1 衍生，
+ * 候選集內撞碼機率可忽略。幻想 slug（尾碼也對不上）回 null，整篇拒收——
+ * 放行會在關聯圖裡種下永遠指向空檔案的邊。
+ *
+ * @param {Array} candidates 輸入候選筆記陣列(各項需含 id)；非陣列視為 []
+ * @returns {Function} 回傳解析函數 (raw:String) => String|null
+ */
+export function makeSlugResolver(candidates) {
+
+    //check
+    if (!isarr(candidates)) {
+        candidates = []
+    }
+
+    const ids = new Set(candidates.map((c) => c.id))
+    const bySuffix = new Map()
+    for (const c of candidates) {
+        const m = c.id.match(/-([0-9a-f]{8})$/)
+        if (m) bySuffix.set(m[1], c.id)
+    }
+    return (raw) => {
+        const s = String(raw || '').trim()
+        if (ids.has(s)) return s
+        const m = s.match(/-([0-9a-f]{8})$/)
+        return (m &amp;&amp; bySuffix.get(m[1])) || null
+    }
+}
+
+/**
+ * 把關聯寫回筆記 md：frontmatter related ＋「關聯」章節（整章重寫防重複疊加）。
+ * 只移除「關聯」這一章(dropSection 以下一個 H2 為界),其後的「⚠ 衝突與反例」章節保留；
+ * 重寫後的關聯章節一律接在正文末。
+ *
+ * @param {Object} note 輸入目標筆記，需含 file(md 檔路徑字串)；無有效 file 字串回 false
+ * @param {Array} relations 輸入本次關聯陣列 [{to, type, reason}]；非陣列視為 []
+ * @param {Function} titleOf 輸入 (slug) => 標題字串；非函數則視為 () => ''
+ * @param {Object} [cfg={}] 輸入設定物件，非物件則視為{}
+ * @param {String} [cfg.sectionTitle='關聯'] 輸入章節標題
+ * @param {String} [cfg.nowIso] 輸入現在時刻 ISO 字串，寫入 frontmatter 之 related_at
+ * @returns {Boolean} 回傳是否成功寫入(讀不到筆記 md 時為 false)
+ */
+export function applyRelationsToNote(note, relations, titleOf, cfg = {}) {
+
+    //check
+    if (!isestr(note?.file)) {
+        return false
+    }
+    if (!isarr(relations)) {
+        relations = []
+    }
+    if (!isfun(titleOf)) {
+        titleOf = () => ''
+    }
+    if (!isobj(cfg)) {
+        cfg = {}
+    }
+
+    const secTitle = cfg.sectionTitle || '關聯'
+    const md = readMd(note.file)
+    if (!md) return false
+    const related = uniqBy([...(Array.isArray(md.front.related) ? md.front.related : []), ...relations.map((r) => r.to)], (x) => x)
+    const body = dropSection(md.body, secTitle)
+    const relLines = relations.map((r) => `- [${r.type}] [[${r.to}]] ${titleOf(r.to)}：${r.reason}`).join('\n')
+    writeMd(note.file, { ...md.front, related, related_at: cfg.nowIso }, relLines ? `${body}\n\n## ${secTitle}\n\n${relLines}` : body)
+    return true
+}
+
+/**
+ * 衝突雙寫：frontmatter 加 conflicts、衝突章節加一行（冪等：該章已含對方 slug 不重複追加）。
+ *
+ * 【冪等判斷只看衝突章節本身】曾以「章節標題到檔尾」比對：衝突章在關聯章之前時，
+ *   關聯章裡的同一 slug（衝突邊本就寫進關聯章）會被誤判為「已寫過」而漏寫——
+ *   2026-09-06 生產實測 86 篇 frontmatter 有 conflicts 卻缺該行。現以 sectionOf 限定範圍，
+ *   新行插在該章末尾（非檔尾），章節順序不再影響正確性。
+ *
+ * @param {Object} note 輸入目標筆記，需含 file(md 檔路徑字串)；無有效 file 字串回 false
+ * @param {String} otherSlug 輸入對立筆記之 slug
+ * @param {String} otherTitle 輸入對立筆記之標題
+ * @param {String} reason 輸入衝突原因
+ * @param {Object} [cfg={}] 輸入設定物件，非物件則視為{}
+ * @param {String} [cfg.conflictSectionTitle='⚠ 衝突與反例'] 輸入章節標題
+ * @returns {Boolean} 回傳是否成功寫入(讀不到筆記 md 時為 false)
+ */
+export function markConflict(note, otherSlug, otherTitle, reason, cfg = {}) {
+
+    //check
+    if (!isestr(note?.file)) {
+        return false
+    }
+    if (!isobj(cfg)) {
+        cfg = {}
+    }
+
+    const secTitle = cfg.conflictSectionTitle || '⚠ 衝突與反例'
+    const md = readMd(note.file)
+    if (!md) return false
+    const conflicts = [...new Set([...(Array.isArray(md.front.conflicts) ? md.front.conflicts : []).map(String), otherSlug])]
+    let body = md.body.trimEnd()
+    const sec = sectionOf(body, secTitle)
+    if (sec &amp;&amp; sec.text.includes(`[[${otherSlug}]]`)) {
+        writeMd(note.file, { ...md.front, conflicts }, body)
+        return true
+    }
+    const line = `\n- 與 [[${otherSlug}]] ${otherTitle}：${reason}`
+    if (!sec) body += `\n\n## ${secTitle}\n${line}`
+    else body = `${body.slice(0, sec.end).trimEnd()}${line}\n${body.slice(sec.end)}`
+    writeMd(note.file, { ...md.front, conflicts }, body)
+    return true
+}
+
+/**
+ * 重建關聯總覽：index.md（限量導覽）＋ graph.json（機器可讀全量）
+ *
+ * @param {Object} stores 輸入集合物件，需含 relations、notes(皆須有 select 方法)
+ * @param {Object} cfg 輸入設定物件，需含 dir(輸出目錄字串)
+ * @param {String} cfg.dir 輸入輸出目錄路徑字串
+ * @param {String} [cfg.nowIso] 輸入現在時刻 ISO 字串，寫入 frontmatter 之 updated
+ * @param {Integer} [cfg.indexTopN=40] 輸入 index.md 顯示筆數上限(依連結數降冪)
+ * @param {String} [cfg.indexTitle='知識關聯總覽'] 輸入標題
+ * @returns {Promise} 回傳 Promise，resolve 無回傳值(副作用為寫入 index.md 與 graph.json)
+ * @throws {Error} cfg 非物件或 cfg.dir 非有效字串時拋出；stores.relations／stores.notes 缺 select 方法時拋出
+ */
+export async function rebuildRelationIndex(stores, cfg) {
+
+    //check
+    if (!isobj(cfg) || !isestr(cfg.dir)) {
+        throw new Error('rebuildRelationIndex 需要 cfg.dir（輸出目錄）')
+    }
+    if (!isobj(stores) || !isfun(stores.relations?.select) || !isfun(stores.notes?.select)) {
+        throw new Error('rebuildRelationIndex 需要 stores.relations 與 stores.notes（皆需 select 方法）')
+    }
+
+    const edges = await stores.relations.select()
+    const notes = await stores.notes.select()
+    const titleOf = new Map(notes.map((n) => [n.id, n.title]))
+    const byFrom = new Map()
+    const byTo = new Map()
+    for (const e of edges) {
+        if (!byFrom.has(e.from)) byFrom.set(e.from, [])
+        byFrom.get(e.from).push(e)
+        if (!byTo.has(e.to)) byTo.set(e.to, [])
+        byTo.get(e.to).push(e)
+    }
+    const allIds = [...new Set([...byFrom.keys(), ...byTo.keys()])]
+    // 索引限量：給人看的入口每輪全量重寫，不限量會在一個月內長到不可讀的 10MB 級
+    const topN = cfg.indexTopN ?? 40
+    const degree = (id) => (byFrom.get(id)?.length || 0) + (byTo.get(id)?.length || 0)
+    const shown = allIds.slice().sort((a, b) => degree(b) - degree(a) || String(a).localeCompare(String(b))).slice(0, topN)
+
+    const title = cfg.indexTitle || '知識關聯總覽'
+    // frontmatter 走 md/renderFrontmatter(與筆記同一序列化):此前手寫 `title: "${title}"`,標題含雙引號即產出解析不回去的檔頭
+    const lines = [renderFrontmatter({ title, type: 'relation-index', updated: cfg.nowIso, edges: edges.length, nodes: allIds.length, shown: shown.length }), '',
+        `# ${title}`, '',
+        `共 ${edges.length} 條關聯，涵蓋 ${allIds.length} 篇筆記。本檔為導覽摘要（連結數前 ${shown.length} 篇）；`,
+        '完整關聯圖見 `graph.json`，個別筆記的關聯見各 md 檔末章節。', '']
+    for (const id of shown) {
+        lines.push(`## ${titleOf.get(id) || id}`, '', `- 檔案：[[${id}]]`)
+        for (const e of byFrom.get(id) || []) lines.push(`- [${e.type}] → [[${e.to}]] ${titleOf.get(e.to) || ''}：${e.reason}`)
+        for (const e of byTo.get(id) || []) lines.push(`- [${e.type}] ← [[${e.from}]] ${titleOf.get(e.from) || ''}：${e.reason}`)
+        lines.push('')
+    }
+    fs.writeFileSync(path.join(cfg.dir, 'index.md'), lines.join('\n'), 'utf8')
+    fs.writeFileSync(path.join(cfg.dir, 'graph.json'), JSON.stringify({
+        updatedAt: cfg.nowIso,
+        nodes: notes.map((n) => ({ id: n.id, title: n.title, category: n.category, concepts: n.concepts || [] })),
+        edges: edges.map((e) => ({ from: e.from, to: e.to, type: e.type, reason: e.reason })),
+    }, null, 2), 'utf8')
+}
+
+// ─── 逐項動作鏈(hook 錨點:relate.relate.{buildEdges, persistEdges, applyToNote,
+//     conflictDualWrite, markRelated}) ───
+
+/**
+ * 錨點:buildEdges(邊組裝:slug 容錯解析＋型別白名單＋穩定 id,不落地)
+ *
+ * 讀 msg.data(note、_aiItem.relations、_resolver、_domain);寫 msg.data._edges(組裝後之邊陣列);不短路(恆呼叫 next)
+ *
+ * @param {Object} [opt={}] 輸入設定物件，非物件則視為{}
+ * @param {Integer} [opt.maxRelationsPerNote=4] 輸入單篇最多取用之關聯數
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwBuildEdges = (opt = {}) => {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    return defineMw({
+        name: 'buildEdges',
+        handle: async (msg, ctx, next) => {
+            const { clock } = ctx.deps
+            const { note: t, _aiItem: item, _resolver: resolve, _domain: domain } = msg.data
+            msg.data._edges = (item.relations || []).slice(0, opt.maxRelationsPerNote ?? 4).map((rel) => {
+                const to = resolve(rel.to)
+                if (to !== String(rel.to).trim()) ctx.log.info(`關聯：slug 尾碼救回 ${String(rel.to).slice(0, 60)} → ${to}`)
+                return {
+                    id: sha1(`${t.id}|${to}`),
+                    from: t.id,
+                    to,
+                    type: domain.relationTypes.includes(rel.type) ? rel.type : (domain.fallbackType || domain.relationTypes[0]),
+                    reason: String(rel.reason || '').replace(/\s+/g, ' ').slice(0, 200),
+                    createdAt: clock.iso8(),
+                }
+            })
+            return next(msg)
+        },
+    })
+}
+
+/**
+ * 錨點:persistEdges(邊落庫,insertNew 去重)
+ *
+ * 讀 msg.data._edges;不寫 msg.data(落庫寫入 stores.relations);when:_edges 為空時原樣放行(不進 handle);不短路(恆呼叫 next)
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwPersistEdges = () => defineMw({
+    name: 'persistEdges',
+    when: (m) => m.data._edges.length > 0,
+    handle: async (msg, ctx, next) => {
+        const ins = await ctx.deps.stores.relations.insertNew(msg.data._edges)
+        count(msg, 'edges', ins.addCount)
+        return next(msg)
+    },
+})
+
+/**
+ * 錨點:applyToNote(寫回筆記 md:frontmatter related＋「關聯」章節整段重寫)
+ *
+ * 讀 msg.data(note、_edges、_titleOf);不寫 msg.data(寫回 note.file);when:_edges 為空時原樣放行(不進 handle);不短路(恆呼叫 next)
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwApplyToNote = () => defineMw({
+    name: 'applyToNote',
+    when: (m) => m.data._edges.length > 0,
+    handle: async (msg, ctx, next) => {
+        const { note: t, _titleOf: titleOf } = msg.data
+        applyRelationsToNote(t, msg.data._edges, titleOf, { nowIso: ctx.deps.clock.iso8() })
+        return next(msg)
+    },
+})
+
+/**
+ * 錨點:conflictDualWrite(衝突雙寫:單讀任一篇都要看得到對立觀點,否則拿到的是假的定論)
+ *
+ * 讀 msg.data(note、_edges、_allNotes、_domain);不寫 msg.data(雙寫入本篇與對方 note.file);
+ * when:_edges 為空時原樣放行(不進 handle);不短路(恆呼叫 next)
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwConflictDualWrite = () => defineMw({
+    name: 'conflictDualWrite',
+    when: (m) => m.data._edges.length > 0,
+    handle: async (msg, ctx, next) => {
+        const { note: t, _allNotes: allNotes, _domain: domain } = msg.data
+        for (const rel of msg.data._edges.filter((x) => x.type === domain.conflictType)) {
+            const other = allNotes.find((n) => n.id === rel.to)
+            if (!other) continue
+            markConflict(t, other.id, other.title, rel.reason)
+            markConflict(other, t.id, t.title, rel.reason)
+            count(msg, 'conflicts')
+            ctx.log.info(`衝突標注：[[${t.id}]] ⇄ [[${other.id}]]（已寫回雙方筆記）`)
+        }
+        return next(msg)
+    },
+})
+
+/**
+ * 錨點:markRelated(已關聯落帳＋記憶體快照同步;不同步會讓下一輪挑到同一批、白燒一次 AI 額度)
+ *
+ * 讀 msg.data(note、_edges);寫 msg.data.note.relatedAt(記憶體快照同步)＋落帳 stores.notes；不短路(恆呼叫 next)
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwMarkRelated = () => defineMw({
+    name: 'markRelated',
+    handle: async (msg, ctx, next) => {
+        const { note: t, _edges: rels } = msg.data
+        const at = ctx.deps.clock.iso8()
+        await ctx.deps.stores.notes.patch(t.id, { relatedAt: at, relatedCount: rels.length })
+        t.relatedAt = at
+        count(msg, 'targets')
+        ctx.log.info(`關聯：${t.id} → ${rels.length} 條`)
+        return next(msg)
+    },
+})
+
+/**
+ * 關聯子階段(批次 AI 由 aiBatchStage 調度;逐項結果進動作鏈)。hook 錨點:relate.relate.{buildEdges, persistEdges, applyToNote, conflictDualWrite, markRelated}
+ *
+ * @param {Object} [opt={}] 輸入設定物件，非物件則視為{}
+ * @param {Array} [opt.chain] 輸入自組動作鏈(defineMw 產物陣列)，未給則以 tap 組裝預設鏈
+ * @param {Object} [opt.tap] 輸入認名掛載規格(applyTaps 之 taps)
+ * @param {Object} [opt.domain] 輸入整組置換之關聯領域物件，未給則用 ctx.deps.domains.relate
+ * @param {Function} [opt.callAI] 輸入覆寫之 AI 呼叫函數，未給則用 ai.callJson
+ * @param {Integer} [opt.candidatesPerTarget] 輸入每一目標之候選數，未給則用 settings.knowledge.relateCandidates
+ * @param {Integer} [opt.batchSize] 輸入每批目標數，未給則用 settings.knowledge.relateBatch
+ * @param {Integer} [opt.parallel] 輸入每輪並行批數，未給則用 settings.ai.aiParallel
+ * @param {Integer} [opt.rounds] 輸入輪數，未給則用 settings.ai.organizeRounds
+ * @param {Integer} [opt.maxRelationsPerNote=4] 輸入單篇最多取用之關聯數
+ * @returns {Object} 回傳 stage 物件 { name, run }
+ */
+export function stageRelate(opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const chain = opt.chain || applyTaps(
+        [mwBuildEdges(opt), mwPersistEdges(opt), mwApplyToNote(opt), mwConflictDualWrite(opt), mwMarkRelated(opt)],
+        opt.tap, { chainName: 'relate.relate' },
+    )
+
+    return {
+        name: 'relate',
+        run: async (ctx) => {
+            const { stores, settings, ai } = ctx.deps
+            const log = ctx.log
+            const domain = opt.domain || ctx.deps.domains.relate
+            // 時間預算(core/budget 單一擁有者):每次呼叫以剩餘時間封頂、嘗試之間可中止;每輪開工前由 harness 守門。
+            // 覆寫 callAI 者亦收到第三參數(shouldStop/budgetMs),不因覆寫而失去時間預算
+            const budget = budgetOf(ctx)
+            const shouldStop = budget.shouldStop
+            const baseCall = (p, c, o) => ai.callJson(p, c, { spec: settings.ai.relate.executor, ...o })
+            const callAI = (p, c) => (opt.callAI || baseCall)(p, c, { shouldStop, budgetMs: budget.remainingMs() })
+            const allNotes = await stores.notes.select()
+            if (allNotes.length &lt; 2) {
+                log.info('關聯：筆記不足 2 篇，略過')
+                ctx.set('relateEdges', 0)
+                return { ok: true, stats: { in: 0, out: 0, skip: 0, fail: 0, aiCalls: 0 }, detail: { targets: 0, edges: 0, conflicts: 0 } }
+            }
+
+            const titleOf = (slug) => allNotes.find((n) => n.id === slug)?.title || ''
+            // 每批的候選集與解析器在 buildPrompt 時建立、applyItem 時沿用——兩處必須同一份,
+            // 否則驗證放行的 slug 與落地解析的 slug 可能不一致
+            const perBatch = new Map()
+
+            /**
+             * 單項結構完整性驗證(aiBatchStage 之 isValidItem/checkResult 共用):index 對應之目標存在、
+             * relations 為陣列且每筆之 to 可被該批解析器解析、type／reason 皆非空
+             * @param {Object} it 輸入 AI 回傳之單一項目
+             * @param {Array} batch 輸入本批目標筆記陣列(用於取得對應之 slug 解析器)
+             * @returns {Boolean} 回傳是否結構完整
+             */
+            const isValidRelItem = (it, batch) => {
+                if (!it || typeof it.index !== 'number') return false
+                const t = batch[it.index - 1]
+                if (!t || !Array.isArray(it.relations)) return false
+                const resolve = perBatch.get(batch)?.resolvers.get(t.id)
+                if (!resolve) return false
+                return it.relations.every((rel) => rel &amp;&amp; typeof rel === 'object' &amp;&amp;
+          resolve(rel.to) &amp;&amp; String(rel.type || '').trim() &amp;&amp; String(rel.reason || '').trim())
+            }
+
+            /**
+             * 落帳:relateTries＋1(記憶體快照同步,同輪後續各輪 pickPool 據此排序);不設上限、不改狀態
+             * @param {Object} t 輸入目標筆記記錄(記憶體快照,relateTries 直接於此物件遞增)
+             * @param {String} why 輸入本次未完成關聯之原因(寫入 relateLastError)
+             */
+            const bumpRelateTries = async (t, why) => {
+                t.relateTries = (t.relateTries || 0) + 1
+                await stores.notes.patch(t.id, { relateTries: t.relateTries, relateLastError: String(why || '').slice(0, 150) })
+            }
+
+            const r = await runAiBatchStage({
+                log,
+                batchSize: opt.batchSize ?? settings.knowledge.relateBatch,
+                parallel: opt.parallel ?? settings.ai.aiParallel,
+                rounds: opt.rounds ?? settings.ai.organizeRounds,
+                shouldStop,
+                // relateTries 升冪(隊頭防阻塞:slug 永遠解析不過、屢次未涵蓋或批次屢敗者排隊尾——不佔名額也不丟)
+                // → createdAt 升冪。此前無任何落帳:一篇永遠驗證不過的筆記每輪佔一個 batch 名額且永不出隊(2026-09-12 複審 A5)
+                pickPool: async (limit) => allNotes
+                    .filter((n) => !n.relatedAt)
+                    .sort((a, b) => (a.relateTries || 0) - (b.relateTries || 0) || String(a.createdAt).localeCompare(String(b.createdAt)))
+                    .slice(0, limit),
+                buildPrompt: async (batch) => {
+                    const candidateMap = new Map(batch.map((t) => [t.id, pickCandidates(t, allNotes, opt.candidatesPerTarget ?? settings.knowledge.relateCandidates)]))
+                    const resolvers = new Map(batch.map((t) => [t.id, makeSlugResolver(candidateMap.get(t.id))]))
+                    perBatch.set(batch, { candidateMap, resolvers })
+                    return domain.buildPrompt(batch, candidateMap)
+                },
+                checkResult: (data, batch) => Array.isArray(data) &amp;&amp; data.some((it) => isValidRelItem(it, batch)),
+                isValidItem: isValidRelItem,
+                indexOf: (it) => it.index,
+                callAI,
+                // 逐項鏈走 runChainOverMsgs(與抓取側同一執行器):mw 可 ctx.emit 衍生訊息,
+                // 單項拋錯亦被隔離記 fail、不中斷同批其餘項目(直呼 composeChain 會把整批剩餘項目一起丟掉)
+                applyItem: async (item, t) => {
+                    const batchInfo = [...perBatch.values()].find((x) => x.resolvers.has(t.id))
+                    const msg = makeMsg('note', {
+                        note: t,
+                        _aiItem: item,
+                        _resolver: batchInfo.resolvers.get(t.id),
+                        _domain: domain,
+                        _allNotes: allNotes,
+                        _titleOf: titleOf,
+                        _edges: [],
+                    }, { stage: 'relate' })
+                    const r = await runChainOverMsgs({ chain, ctx, msgs: [msg], chainName: 'relate.relate' })
+                    if (r.fails) {
+                        log.warn(`關聯：逐項鏈異常[${oneline(t.id, 60)}]：${r.errors.join('；')}`)
+                        // 例外仍落帳(與萃取/預篩之 applyItem 對稱):此前只記日誌,拋錯之筆記 relateTries 不增、relatedAt 未寫,
+                        // 同輪後續各輪與下一輪皆排回隊頭白佔名額(2026-09-23 修)
+                        await bumpRelateTries(t, `逐項鏈異常：${oneline(r.errors.join('；'), 120)}`)
+                    }
+                    return r.stats
+                },
+                // 未涵蓋／整批失敗皆記 relateTries(記憶體快照同步更新,同輪後續各輪之 pickPool 才排得對);
+                // 不設上限:排隊尾即不佔名額,記錄永不丟(與補全文／萃取之隊頭防阻塞同一慣例)
+                onMissed: (t) => bumpRelateTries(t, '未被模型完整涵蓋（輸出截斷）'),
+                onBatchFailed: async (batch, r) => {
+                    for (const t of batch) await bumpRelateTries(t, `關聯批次失敗（${oneline(r?.error, 80)}）`)
+                },
+            })
+
+            const edges = r.applied.edges || 0
+            ctx.set('relateEdges', edges)
+            // fail＝失敗批次＋未涵蓋項(此前手組 report 恆 fail:0,批次失敗被吸收成「一切正常」)
+            return stdReport({
+                stats: { in: r.applied.targets || 0, out: edges, skip: 0, fail: r.failedBatches + r.missed, aiCalls: r.aiCalls },
+                detail: { targets: r.applied.targets || 0, edges, conflicts: r.applied.conflicts || 0, aborted: r.aborted, stopped: r.stopped, failedBatches: r.failedBatches, missed: r.missed, aiAttempts: r.aiAttempts, pending: allNotes.filter((n) => !n.relatedAt).length },
+            })
+        },
+    }
+}
+
+/**
+ * 錨點:rebuild(關聯總覽重建:hook 錨點 relate.relationIndex.rebuild)
+ *
+ * 不讀 msg.data(以 maintenance 空訊息觸發);不寫 msg.data(重建 dirs.relations 下之 index.md／graph.json);不短路(恆呼叫 next)
+ *
+ * @param {Object} [opt={}] 輸入設定物件，非物件則視為{}
+ * @param {Integer} [opt.indexTopN] 輸入 index.md 顯示筆數上限，傳給 rebuildRelationIndex
+ * @param {String} [opt.indexTitle] 輸入標題，未給則用 settings.relationIndexTitle
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwRebuildRelationIndex = (opt = {}) => {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    return defineMw({
+        name: 'rebuild',
+        handle: async (msg, ctx, next) => {
+            const { stores, clock, dirs } = ctx.deps
+            await rebuildRelationIndex(stores, { dir: dirs.relations, nowIso: clock.iso8(), indexTopN: opt.indexTopN, indexTitle: opt.indexTitle || ctx.deps.settings.relationIndexTitle })
+            return next(msg)
+        },
+    })
+}
+
+/**
+ * 關聯總覽重建子階段(hook 錨點:relate.relationIndex.rebuild)。
+ * 僅本輪有新增邊時重寫(0 邊不動檔案——避免每輪空寫;由 when 讀 ctx.get('relateEdges') 判斷)。
+ *
+ * @param {Object} [opt={}] 輸入設定物件，非物件則視為{}
+ * @param {Array} [opt.chain] 輸入自組動作鏈(defineMw 產物陣列)，未給則以 tap 組裝預設鏈
+ * @param {Object} [opt.tap] 輸入認名掛載規格(applyTaps 之 taps)
+ * @param {Integer} [opt.indexTopN] 輸入 index.md 顯示筆數上限
+ * @param {String} [opt.indexTitle] 輸入標題
+ * @returns {Object} 回傳 stage 物件 { name, when, run }
+ */
+export function stageRelationIndex(opt = {}) {
+
+    //check
+    if (!isobj(opt)) {
+        opt = {}
+    }
+
+    const chain = opt.chain || applyTaps([mwRebuildRelationIndex(opt)], opt.tap, { chainName: 'relate.relationIndex' })
+    return {
+        name: 'relationIndex',
+        when: (ctx) => ctx.get('relateEdges', 0) > 0,
+        run: async (ctx) => {
+            const r = await runChainOverMsgs({ chain, ctx, msgs: [makeMsg('maintenance', {})], chainName: 'relate.relationIndex' })
+            return stdReport({ ok: r.fails === 0, stats: { in: 1, out: 1, fail: r.fails } })
+        },
+    }
+}
+
+export default stageRelate
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Sep 23 2026 22:21:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>

@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>stores/conceptGroups.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="MwContractError.html">MwContractError</a></li></ul><h3>Global</h3><ul><li><a href="global.html#AI_DEFAULT">AI_DEFAULT</a></li><li><a href="global.html#COOL_DETECT">COOL_DETECT</a></li><li><a href="global.html#CORE_SCHEMA">CORE_SCHEMA</a></li><li><a href="global.html#DEFAULT_SITE_ADAPTERS">DEFAULT_SITE_ADAPTERS</a></li><li><a href="global.html#DF_DIRS">DF_DIRS</a></li><li><a href="global.html#FETCH_DEFAULT">FETCH_DEFAULT</a></li><li><a href="global.html#KIND_MAX_PROMPT_CHARS">KIND_MAX_PROMPT_CHARS</a></li><li><a href="global.html#KNOWLEDGE_DEFAULT">KNOWLEDGE_DEFAULT</a></li><li><a href="global.html#OBJECT_STAGES">OBJECT_STAGES</a></li><li><a href="global.html#ORGANIZE_SHARED_KEYS">ORGANIZE_SHARED_KEYS</a></li><li><a href="global.html#OUTCOME_TEXT">OUTCOME_TEXT</a></li><li><a href="global.html#SKIP_TITLE_PATTERNS_DEFAULT">SKIP_TITLE_PATTERNS_DEFAULT</a></li><li><a href="global.html#SOURCE_POLICY_DEFAULT">SOURCE_POLICY_DEFAULT</a></li><li><a href="global.html#STREAK_TYPES">STREAK_TYPES</a></li><li><a href="global.html#TELEGRAM_TEXT_MAX">TELEGRAM_TEXT_MAX</a></li><li><a href="global.html#VOCAB_DEFAULT">VOCAB_DEFAULT</a></li><li><a href="global.html#WKnowledgeExtract">WKnowledgeExtract</a></li><li><a href="global.html#accountSourceOutcome">accountSourceOutcome</a></li><li><a href="global.html#acquireLock">acquireLock</a></li><li><a href="global.html#admitFeedItems">admitFeedItems</a></li><li><a href="global.html#aggStats">aggStats</a></li><li><a href="global.html#applyRelationsToNote">applyRelationsToNote</a></li><li><a href="global.html#applyTaps">applyTaps</a></li><li><a href="global.html#arxivSearchUrl">arxivSearchUrl</a></li><li><a href="global.html#asObj">asObj</a></li><li><a href="global.html#bingNewsSearchUrl">bingNewsSearchUrl</a></li><li><a href="global.html#budgetOf">budgetOf</a></li><li><a href="global.html#buildAuditPrompt">buildAuditPrompt</a></li><li><a href="global.html#buildDistillPrompt">buildDistillPrompt</a></li><li><a href="global.html#buildFinalPrompt">buildFinalPrompt</a></li><li><a href="global.html#buildRevisePrompt">buildRevisePrompt</a></li><li><a href="global.html#buildRunSummary">buildRunSummary</a></li><li><a href="global.html#buildWorkflowStages">buildWorkflowStages</a></li><li><a href="global.html#byRetryTierFifo">byRetryTierFifo</a></li><li><a href="global.html#checkChain">checkChain</a></li><li><a href="global.html#checkCore">checkCore</a></li><li><a href="global.html#checkCtxDeps">checkCtxDeps</a></li><li><a href="global.html#checkIssues">checkIssues</a></li><li><a href="global.html#cliFail">cliFail</a></li><li><a href="global.html#cliFailDetail">cliFailDetail</a></li><li><a href="global.html#clueKey">clueKey</a></li><li><a href="global.html#cluePriority">cluePriority</a></li><li><a href="global.html#composeChain">composeChain</a></li><li><a href="global.html#conceptVocabulary">conceptVocabulary</a></li><li><a href="global.html#count">count</a></li><li><a href="global.html#createAiAdapter">createAiAdapter</a></li><li><a href="global.html#createAiCaller">createAiCaller</a></li><li><a href="global.html#createAiEventLogger">createAiEventLogger</a></li><li><a href="global.html#createClock">createClock</a></li><li><a href="global.html#createDefaultFetchers">createDefaultFetchers</a></li><li><a href="global.html#createDistillDomain">createDistillDomain</a></li><li><a href="global.html#createDistillObject">createDistillObject</a></li><li><a href="global.html#createExtractDomain">createExtractDomain</a></li><li><a href="global.html#createFetchObject">createFetchObject</a></li><li><a href="global.html#createKnowledgeExtract">createKnowledgeExtract</a></li><li><a href="global.html#createLogger">createLogger</a></li><li><a href="global.html#createOrganizeObject">createOrganizeObject</a></li><li><a href="global.html#createPatrol">createPatrol</a></li><li><a href="global.html#createProviderHealth">createProviderHealth</a></li><li><a href="global.html#createRelateDomain">createRelateDomain</a></li><li><a href="global.html#createRelateObject">createRelateObject</a></li><li><a href="global.html#createRunLogger">createRunLogger</a></li><li><a href="global.html#createSettingsHolder">createSettingsHolder</a></li><li><a href="global.html#createTelegramNotifier">createTelegramNotifier</a></li><li><a href="global.html#createTime">createTime</a></li><li><a href="global.html#createTriageDomain">createTriageDomain</a></li><li><a href="global.html#cullZeroYieldSources">cullZeroYieldSources</a></li><li><a href="global.html#deadMatcher">deadMatcher</a></li><li><a href="global.html#decorateSettings">decorateSettings</a></li><li><a href="global.html#defaultToLinkedRecord">defaultToLinkedRecord</a></li><li><a href="global.html#defaultToRecord">defaultToRecord</a></li><li><a href="global.html#defineFirstMw">defineFirstMw</a></li><li><a href="global.html#defineMw">defineMw</a></li><li><a href="global.html#deinvertAbstract">deinvertAbstract</a></li><li><a href="global.html#discoverFeed">discoverFeed</a></li><li><a href="global.html#docRecord">docRecord</a></li><li><a href="global.html#dropSection">dropSection</a></li><li><a href="global.html#elapsed">elapsed</a></li><li><a href="global.html#enable">enable</a></li><li><a href="global.html#enforceFrontierCap">enforceFrontierCap</a></li><li><a href="global.html#ensureSeedSources">ensureSeedSources</a></li><li><a href="global.html#escapeHtml">escapeHtml</a></li><li><a href="global.html#expandDirs">expandDirs</a></li><li><a href="global.html#expandSeeds">expandSeeds</a></li><li><a href="global.html#extractLinks">extractLinks</a></li><li><a href="global.html#failedNames">failedNames</a></li><li><a href="global.html#fetchArticle">fetchArticle</a></li><li><a href="global.html#fetchArticleLinks">fetchArticleLinks</a></li><li><a href="global.html#file">file</a></li><li><a href="global.html#filterFeedItems">filterFeedItems</a></li><li><a href="global.html#fin">fin</a></li><li><a href="global.html#firstLineClamp">firstLineClamp</a></li><li><a href="global.html#fitChain">fitChain</a></li><li><a href="global.html#formatTime">formatTime</a></li><li><a href="global.html#genericSummary">genericSummary</a></li><li><a href="global.html#get">get</a></li><li><a href="global.html#getDate">getDate</a></li><li><a href="global.html#getDay">getDay</a></li><li><a href="global.html#getTimestamp">getTimestamp</a></li><li><a href="global.html#gridSourceUrl">gridSourceUrl</a></li><li><a href="global.html#info">info</a></li><li><a href="global.html#ingestFeedItems">ingestFeedItems</a></li><li><a href="global.html#ingestNotes">ingestNotes</a></li><li><a href="global.html#installProcessGuards">installProcessGuards</a></li><li><a href="global.html#isLowYield">isLowYield</a></li><li><a href="global.html#judgeFromDocs">judgeFromDocs</a></li><li><a href="global.html#kbLabelOf">kbLabelOf</a></li><li><a href="global.html#keyIdOf">keyIdOf</a></li><li><a href="global.html#legacyClueKey">legacyClueKey</a></li><li><a href="global.html#listCores">listCores</a></li><li><a href="global.html#listSeats">listSeats</a></li><li><a href="global.html#load">load</a></li><li><a href="global.html#loadSettings">loadSettings</a></li><li><a href="global.html#logAiOutcome">logAiOutcome</a></li><li><a href="global.html#looksLikeFeed">looksLikeFeed</a></li><li><a href="global.html#makeArrayCoverageValidator">makeArrayCoverageValidator</a></li><li><a href="global.html#makeLineEmitter">makeLineEmitter</a></li><li><a href="global.html#makeMsg">makeMsg</a></li><li><a href="global.html#makeSlugResolver">makeSlugResolver</a></li><li><a href="global.html#markConflict">markConflict</a></li><li><a href="global.html#maxPromptCharsOf">maxPromptCharsOf</a></li><li><a href="global.html#mergeCatalogue">mergeCatalogue</a></li><li><a href="global.html#mergeFetchers">mergeFetchers</a></li><li><a href="global.html#mergeSiteAdapters">mergeSiteAdapters</a></li><li><a href="global.html#mergeTaps">mergeTaps</a></li><li><a href="global.html#mwAccountSource">mwAccountSource</a></li><li><a href="global.html#mwAdmitPersist">mwAdmitPersist</a></li><li><a href="global.html#mwAdoptResult">mwAdoptResult</a></li><li><a href="global.html#mwApplyToNote">mwApplyToNote</a></li><li><a href="global.html#mwBuildBase">mwBuildBase</a></li><li><a href="global.html#mwBuildEdges">mwBuildEdges</a></li><li><a href="global.html#mwConflictDualWrite">mwConflictDualWrite</a></li><li><a href="global.html#mwCullSources">mwCullSources</a></li><li><a href="global.html#mwFeedFallback">mwFeedFallback</a></li><li><a href="global.html#mwFetchDetail">mwFetchDetail</a></li><li><a href="global.html#mwFetchList">mwFetchList</a></li><li><a href="global.html#mwFilterItems">mwFilterItems</a></li><li><a href="global.html#mwMarkDoc">mwMarkDoc</a></li><li><a href="global.html#mwMarkRelated">mwMarkRelated</a></li><li><a href="global.html#mwNormalizeItems">mwNormalizeItems</a></li><li><a href="global.html#mwPersistCore">mwPersistCore</a></li><li><a href="global.html#mwPersistEdges">mwPersistEdges</a></li><li><a href="global.html#mwPersistNote">mwPersistNote</a></li><li><a href="global.html#mwPersistOutcome">mwPersistOutcome</a></li><li><a href="global.html#mwProbe">mwProbe</a></li><li><a href="global.html#mwRebuildKnowledgeIndex">mwRebuildKnowledgeIndex</a></li><li><a href="global.html#mwRebuildRelationIndex">mwRebuildRelationIndex</a></li><li><a href="global.html#mwRenderCore">mwRenderCore</a></li><li><a href="global.html#mwRenderNote">mwRenderNote</a></li><li><a href="global.html#mwRouteFetcher">mwRouteFetcher</a></li><li><a href="global.html#mwRunWorkflow">mwRunWorkflow</a></li><li><a href="global.html#mwSaveClues">mwSaveClues</a></li><li><a href="global.html#mwSettleClue">mwSettleClue</a></li><li><a href="global.html#mwSettleTriage">mwSettleTriage</a></li><li><a href="global.html#mwSkipGate">mwSkipGate</a></li><li><a href="global.html#mwSlim">mwSlim</a></li><li><a href="global.html#mwSyncSeeds">mwSyncSeeds</a></li><li><a href="global.html#mwTitleSkip">mwTitleSkip</a></li><li><a href="global.html#mwTranscodeLinks">mwTranscodeLinks</a></li><li><a href="global.html#newSource">newSource</a></li><li><a href="global.html#normalizeConcept">normalizeConcept</a></li><li><a href="global.html#normalizeFeedItems">normalizeFeedItems</a></li><li><a href="global.html#normalizeUrl">normalizeUrl</a></li><li><a href="global.html#normalizeWorkDir">normalizeWorkDir</a></li><li><a href="global.html#noteDigest">noteDigest</a></li><li><a href="global.html#num">num</a></li><li><a href="global.html#objectReport">objectReport</a></li><li><a href="global.html#oneline">oneline</a></li><li><a href="global.html#open">open</a></li><li><a href="global.html#openStores">openStores</a></li><li><a href="global.html#parseFrontmatter">parseFrontmatter</a></li><li><a href="global.html#parseIndexList">parseIndexList</a></li><li><a href="global.html#parseJson">parseJson</a></li><li><a href="global.html#parseJsonArray">parseJsonArray</a></li><li><a href="global.html#patrolFromPipeline">patrolFromPipeline</a></li><li><a href="global.html#pickCandidates">pickCandidates</a></li><li><a href="global.html#pickCategories">pickCategories</a></li><li><a href="global.html#pickClues">pickClues</a></li><li><a href="global.html#pickConcepts">pickConcepts</a></li><li><a href="global.html#pickDueSources">pickDueSources</a></li><li><a href="global.html#pidAlive">pidAlive</a></li><li><a href="global.html#probeSearchEndpoints">probeSearchEndpoints</a></li><li><a href="global.html#probeSiteFeed">probeSiteFeed</a></li><li><a href="global.html#qualityTag">qualityTag</a></li><li><a href="global.html#queueAge">queueAge</a></li><li><a href="global.html#quote">quote</a></li><li><a href="global.html#reEscape">reEscape</a></li><li><a href="global.html#readGrid">readGrid</a></li><li><a href="global.html#readJson">readJson</a></li><li><a href="global.html#readMd">readMd</a></li><li><a href="global.html#readRunSummary">readRunSummary</a></li><li><a href="global.html#rebuildKnowledgeIndex">rebuildKnowledgeIndex</a></li><li><a href="global.html#rebuildRelationIndex">rebuildRelationIndex</a></li><li><a href="global.html#recordFile">recordFile</a></li><li><a href="global.html#recordSourceOutcome">recordSourceOutcome</a></li><li><a href="global.html#regenCore">regenCore</a></li><li><a href="global.html#renderCoreBody">renderCoreBody</a></li><li><a href="global.html#renderFrontmatter">renderFrontmatter</a></li><li><a href="global.html#reset">reset</a></li><li><a href="global.html#resolveCatalogue">resolveCatalogue</a></li><li><a href="global.html#resolvePlugins">resolvePlugins</a></li><li><a href="global.html#resolveSettings">resolveSettings</a></li><li><a href="global.html#resolveVocab">resolveVocab</a></li><li><a href="global.html#reviveDeadDocs">reviveDeadDocs</a></li><li><a href="global.html#run">run</a></li><li><a href="global.html#runAiBatchStage">runAiBatchStage</a></li><li><a href="global.html#runChainOverMsgs">runChainOverMsgs</a></li><li><a href="global.html#runCli">runCli</a></li><li><a href="global.html#runJsonCli">runJsonCli</a></li><li><a href="global.html#runSubStages">runSubStages</a></li><li><a href="global.html#runTask">runTask</a></li><li><a href="global.html#sanitize">sanitize</a></li><li><a href="global.html#saveClues">saveClues</a></li><li><a href="global.html#section">section</a></li><li><a href="global.html#sectionOf">sectionOf</a></li><li><a href="global.html#send">send</a></li><li><a href="global.html#set">set</a></li><li><a href="global.html#setConceptFold">setConceptFold</a></li><li><a href="global.html#settleClue">settleClue</a></li><li><a href="global.html#sha1">sha1</a></li><li><a href="global.html#skipDerived">skipDerived</a></li><li><a href="global.html#slimTerminalDocs">slimTerminalDocs</a></li><li><a href="global.html#slugify">slugify</a></li><li><a href="global.html#sortByEnforce">sortByEnforce</a></li><li><a href="global.html#sourceId">sourceId</a></li><li><a href="global.html#stageDetailFetch">stageDetailFetch</a></li><li><a href="global.html#stageDistill">stageDistill</a></li><li><a href="global.html#stageDocMaintain">stageDocMaintain</a></li><li><a href="global.html#stageExpand">stageExpand</a></li><li><a href="global.html#stageExtract">stageExtract</a></li><li><a href="global.html#stageFields">stageFields</a></li><li><a href="global.html#stageKnowledgeIndex">stageKnowledgeIndex</a></li><li><a href="global.html#stageListFetch">stageListFetch</a></li><li><a href="global.html#stageRelate">stageRelate</a></li><li><a href="global.html#stageRelationIndex">stageRelationIndex</a></li><li><a href="global.html#stageSeedSync">stageSeedSync</a></li><li><a href="global.html#stageTriage">stageTriage</a></li><li><a href="global.html#stdReport">stdReport</a></li><li><a href="global.html#strArr">strArr</a></li><li><a href="global.html#subReportOf">subReportOf</a></li><li><a href="global.html#summaryOf">summaryOf</a></li><li><a href="global.html#taskRunner">taskRunner</a></li><li><a href="global.html#timeoutPatch">timeoutPatch</a></li><li><a href="global.html#unquote">unquote</a></li><li><a href="global.html#unwrapNewsUrl">unwrapNewsUrl</a></li><li><a href="global.html#withTag">withTag</a></li><li><a href="global.html#writeJson">writeJson</a></li><li><a href="global.html#writeMd">writeMd</a></li><li><a href="global.html#writeRunSummary">writeRunSummary</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">stores/conceptGroups.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// conceptGroups.mjs — 概念分群與提煉選題的泛用機制
+//
+// 【以概念而非類別分群】類別太粗、提煉出來只會是泛論；概念是萃取時標好的細粒度標籤，
+//   同概念的筆記彼此可對照可互補。分群鍵一律走 normalizeConcept——
+//   標籤只要對不起來，提煉就永遠選不出東西。
+//
+// 【gain 選題】某概念的筆記數比上次提煉時多才重跑：沒有新資訊卻重跑，
+//   只會消耗 AI 額度並讓核心檔在同一內容上反覆抖動。
+// 【gain × 等待天數排序（aging）】只以絕對增量排序時，大概念每小時都有新筆記、增量永遠最大，
+//   會壟斷每輪名額：2026-09-06 生產實測 275 個合格概念中 194 個從未提煉（含多個核心主題），
+//   29 則核心逾 7 天有新料排不到，而最大的概念已 v103。乘上等待天數後，
+//   久候者分數自然升高、剛提煉者歸零，大概念仍會定期輪到（不是被排除），無門檻常數可調。
+
+import isarr from 'wsemi/src/isarr.mjs'
+import isobj from 'wsemi/src/isobj.mjs'
+import isfun from 'wsemi/src/isfun.mjs'
+import isnum from 'wsemi/src/isnum.mjs'
+import cdbl from 'wsemi/src/cdbl.mjs'
+import ispint from 'wsemi/src/ispint.mjs'
+import cint from 'wsemi/src/cint.mjs'
+import { normalizeConcept } from '../util/text.mjs'
+
+/**
+ * 既有概念詞彙表（依使用篇數降冪），餵回萃取 prompt 令標籤收斂成共用詞彙
+ *
+ * @param {Object} notes 輸入筆記集合，需具 select 方法
+ * @param {Integer} [limit=60] 輸入回傳最多幾條，非正整數則用預設 60
+ * @returns {Promise} 回傳 Promise，resolve 回傳字串陣列，格式為 '&lt;顯示寫法>(&lt;使用篇數>)'
+ * @throws {Error} notes 缺 select 方法時拋出
+ */
+export async function conceptVocabulary(notes, limit = 60) {
+
+    //check
+    if (!isfun(notes?.select)) {
+        throw new Error('conceptVocabulary 需要 notes 集合（具 select 方法）')
+    }
+    if (!ispint(limit)) {
+        limit = 60
+    }
+    limit = cint(limit)
+
+    const all = await notes.select()
+    const count = new Map()
+    const forms = new Map() // key → Map(原始寫法 → 次數)
+    for (const n of all) {
+        const seenKeys = new Set() // 同一篇筆記之多個標籤折疊成同一鍵時只計一次(計的是「使用篇數」)
+        for (const c of n.concepts || []) {
+            const key = normalizeConcept(c)
+            if (!key || seenKeys.has(key)) continue
+            seenKeys.add(key)
+            count.set(key, (count.get(key) || 0) + 1)
+            if (!forms.has(key)) forms.set(key, new Map())
+            const f = String(c).trim()
+            forms.get(key).set(f, (forms.get(key).get(f) || 0) + 1)
+        }
+    }
+    // display 取「最常見的原始寫法」而非首見：字形折疊後同鍵可能混著繁簡兩種寫法，
+    // 首見若是簡體，詞彙表回饋 prompt 反而會鼓勵模型續用簡體——取多數寫法才會收斂
+    const displayOf = (key) => [...forms.get(key).entries()].sort((a, b) => b[1] - a[1])[0][0]
+    return [...count.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit)
+        .map(([k, v]) => `${displayOf(k)}(${v})`)
+}
+
+/**
+ * 概念層選題：筆記數達門檻且比上次提煉多者，依 score＝gain × 等待天數 降冪（同分依 gain、再依筆記數）。
+ * 等待天數：有核心者自上次提煉（core.updatedAt）起算；尚無核心者自該群最早筆記起算（素材等了多久）。
+ *
+ * @param {Array} notes 輸入已由呼叫端取出之筆記陣列，非陣列則視為空陣列
+ * @param {Array} cores 輸入已由呼叫端取出之核心檔陣列，非陣列則視為空陣列
+ * @param {Object} [opt={}] 輸入設定物件，非物件則回退為 {}
+ * @param {Number} [opt.minNotes] 輸入群組最少筆記數門檻，非數值則視為 0（維持現行「不過濾」語意）
+ * @param {Number} [opt.now] 輸入現在時刻毫秒數(測試注入用)，非有限數則用 Date.now()
+ * @returns {Array} 回傳選題陣列，依 score 降冪排序，每項 { concept, notes, core, gain, ageDays, score, scope:'concept' }
+ * @example
+ * let notes = [{ concepts: ['甲'], createdAt: '2026-09-01T00:00:00Z' }, { concepts: ['甲'], createdAt: '2026-09-02T00:00:00Z' }]
+ * let out = pickConcepts(notes, [], { minNotes: 2, now: Date.parse('2026-09-10T00:00:00Z') })
+ * console.log(out.map((o) => [o.concept, o.notes.length]))
+ * // => [ [ '甲', 2 ] ]
+ */
+export function pickConcepts(notes, cores, opt = {}) {
+
+    //check
+    if (!isarr(notes)) {
+        notes = []
+    }
+    if (!isarr(cores)) {
+        cores = []
+    }
+    if (!isobj(opt)) {
+        opt = {}
+    }
+    let minNotes = opt.minNotes
+    if (!isnum(minNotes)) {
+        minNotes = 0
+    }
+    minNotes = cdbl(minNotes)
+    const now = opt.now
+
+    const nowMs = Number.isFinite(now) ? now : Date.now()
+    const byConcept = new Map()
+    for (const n of notes) {
+        // 同一篇筆記之多個標籤折疊成同一鍵(如 ['過擬合','过拟合'] 或重複標籤)時只入群一次:
+        // 此前逐標籤入群,同篇重複計入群組——增量(gain)與 noteCount 虛增、同篇重複送進提煉 prompt(2026-09-23 修)
+        const seenKeys = new Set()
+        for (const c of n.concepts || []) {
+            const key = normalizeConcept(c)
+            if (!key || seenKeys.has(key)) continue
+            seenKeys.add(key)
+            if (!byConcept.has(key)) byConcept.set(key, { forms: new Map(), list: [] })
+            const g = byConcept.get(key)
+            const f = String(c).trim()
+            g.forms.set(f, (g.forms.get(f) || 0) + 1)
+            g.list.push(n)
+        }
+    }
+    const coreMap = new Map(cores.map((c) => [normalizeConcept(c.concept), c]))
+    const out = []
+    for (const [key, group] of byConcept) {
+    // display 取最常見寫法（理由同 conceptVocabulary）：它會成為核心檔的概念名
+        group.display = [...group.forms.entries()].sort((a, b) => b[1] - a[1])[0][0]
+        if (group.list.length &lt; minNotes) continue
+        const core = coreMap.get(key)
+        const lastCount = core?.noteCount || 0
+        if (group.list.length &lt;= lastCount) continue
+        const gain = group.list.length - lastCount
+        const sinceRaw = core?.updatedAt
+            ? Date.parse(core.updatedAt)
+            : Math.min(...group.list.map((n) => Date.parse(n.createdAt || '')).filter(Number.isFinite), nowMs)
+        const ageDays = Math.max(0, (nowMs - (Number.isFinite(sinceRaw) ? sinceRaw : nowMs)) / 86400_000)
+        out.push({ concept: group.display, notes: group.list, core, gain, ageDays, score: gain * ageDays, scope: 'concept' })
+    }
+    out.sort((a, b) => b.score - a.score || b.gain - a.gain || b.notes.length - a.notes.length)
+    return out
+}
+
+/**
+ * 後備：類別層選題（概念詞彙尚未收斂、概念層挑不出群組時啟用）。
+ * 門檻較高、增量要求較大——類別層較粗，寧可少做也不要產出泛論。
+ *
+ * @param {Array} notes 輸入已由呼叫端取出之筆記陣列，非陣列則視為空陣列
+ * @param {Array} cores 輸入已由呼叫端取出之核心檔陣列，非陣列則視為空陣列
+ * @param {Object} [opt={}] 輸入設定物件，非物件則回退為 {}
+ * @param {Integer} [opt.minNotes=6] 輸入群組最少筆記數門檻
+ * @param {Integer} [opt.minGain=4] 輸入最少增量門檻
+ * @returns {Array} 回傳選題陣列，依 gain 降冪排序，每項 { concept, notes, core, gain, scope:'category' }
+ * @example
+ * let notes = Array.from({ length: 6 }, () => ({ category: '其他' }))
+ * console.log(pickCategories(notes, [], { minNotes: 6, minGain: 4 }).map((o) => [o.concept, o.gain]))
+ * // => [ [ '其他', 6 ] ]
+ */
+export function pickCategories(notes, cores, opt = {}) {
+
+    //check
+    if (!isarr(notes)) {
+        notes = []
+    }
+    if (!isarr(cores)) {
+        cores = []
+    }
+    if (!isobj(opt)) {
+        opt = {}
+    }
+    const { minNotes = 6, minGain = 4 } = opt
+
+    const byCat = new Map()
+    for (const n of notes) {
+        const cat = n.category || '其他'
+        if (!byCat.has(cat)) byCat.set(cat, [])
+        byCat.get(cat).push(n)
+    }
+    const coreMap = new Map(cores.map((c) => [normalizeConcept(c.concept), c]))
+    const out = []
+    for (const [cat, list] of byCat) {
+        if (list.length &lt; minNotes) continue
+        const core = coreMap.get(normalizeConcept(cat))
+        const lastCount = core?.noteCount || 0
+        if (list.length - lastCount &lt; minGain) continue
+        out.push({ concept: cat, notes: list, core, gain: list.length - lastCount, scope: 'category' })
+    }
+    out.sort((a, b) => b.gain - a.gain)
+    return out
+}
+
+export default { conceptVocabulary, pickConcepts, pickCategories }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Sep 23 2026 22:21:53 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
