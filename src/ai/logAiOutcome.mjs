@@ -1,5 +1,6 @@
 // logAiOutcome.mjs — 把一次 AI 呼叫的結果寫進日誌:用了哪家、遞補歷程、未納入者、無效 id;以及冷卻事件記錄器
-//   (泛用件,自 tai-news 之執行殼移入;消費 ai/caller 之原始結果。本套件批次管線走 adapter.drainStats 之輪末彙總,兩者並存)
+//   (泛用件,自 tai-news 之執行殼移入;消費 ai/caller 之原始結果。本套件批次管線之供應商實績另走 adapter:
+//   健康層計數進執行摘要 run.json,drainStats 供呼叫端輪末彙總——本套件 run() 本身不呼叫它)
 //
 // 【為何「換了一家才成功」非記不可】成功結果不會提示剛才有供應商失效。若不記錄,日誌上只看得到最終成功,
 //   事後完全無從察覺某家已經開始不穩,直到它連同備援一起失效、整條管線失敗才被發現。故 tried 內非成功項一律以 WARN 突顯。
@@ -62,7 +63,9 @@ export function logAiOutcome(opt = {}) {
             const rt = u.completion_tokens_details?.reasoning_tokens
             tk = `，tokens ${u.prompt_tokens ?? '?'}+${u.completion_tokens ?? '?'}` + (rt ? `（含思考 ${rt}）` : '')
         }
-        info(`使用 AI ${r.providerId}${k}（${r.kind}／${r.model}${tk}）`)
+        // 截斷放行(呼叫端給 acceptTruncated 時):成功但內容為截斷前段,不標示就與完整成功無從區分
+        const tr = r.ok && r.truncated === true ? `；截斷內容放行（finish_reason=${r.finishReason || 'length'}）` : ''
+        info(`使用 AI ${r.providerId}${k}（${r.kind}／${r.model}${tk}${tr}）`)
     }
 
     // 遞補歷程:tried 於成功時亦回傳,故需濾掉最後成功的那筆

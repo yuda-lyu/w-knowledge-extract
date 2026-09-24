@@ -494,7 +494,9 @@ export function createPatrol(cfg) {
         const cooledIds = Object.entries(healthAgg).filter(([, h]) => h.cooled > 0)
         if (cooledIds.length) issues.push(`供應商連續失敗被降序：${cooledIds.map(([id, h]) => `${id}×${h.cooled}（成 ${h.ok}／敗 ${h.fail}）`).join('、')}——主力不穩，流量落到遞補；查該家端點或改派名額`)
         // 零成功:末端連續數輪一次都沒成功而持續失敗。兩條判準皆為必要——
-        //   ①不能靠上一條(降序):冷卻只由 429／逾時觸發,exec／http 型失敗 cooled 恆 0;
+        //   ①不能靠上一條(降序):降序須「單一行程內連續」失敗達門檻(健康狀態不跨輪持久,多金鑰條目另須整組金鑰皆敗才計),
+        //     每輪失敗次數少於門檻、或失敗與零星成功交錯時永不降序(此前註解稱「exec／http 型失敗 cooled 恆 0」,不確:
+        //     無金鑰輪替者之 exec／http 本即計入;2026-09-24 更正);
         //   ②不能用整日聚合:會被「早上正常、下午全敗」抹平。2026-09-18 實例(opencode 免費層斷供)兼具兩者:
         //     muse 當日 ok 36／fail 162、cooled 0——聚合看 ok>0、降序看 cooled=0,兩種寫法都漏,
         //     而實情是 04:00 起連 10 輪 ok=0／fail=18,三個席位靜默全數遞補。故以末端連續輪數判定。

@@ -11,7 +11,9 @@
 //   createFileStore      游標＋冷卻持久化(排除式 passthrough,套件加欄位不必跟版)
 //   createUsageCounter   逐日用量計帳(於 onEvent 之 try 事件計)
 //   noSideEffectPrefix   防寫檔前綴(修正版:豁免唯讀查閱)
-//   salvageTruncatedArray extractJsonLoose 救不回時的截斷搶救(部分接受策略)
+//   salvageTruncatedArray extractJsonLoose 救不回時的截斷搶救(部分接受策略);1.0.37 起 REST 截斷於 validate 之前即判失敗,
+//                        callJson 須帶 acceptTruncated:true 才交搶救裁決
+//   buildValidator／safeValidate 條目自帶 validate 與本層驗證取交集(同工作流層 1.0.37 起之作法)
 //   budgetFor            遞補鏈預算＝timeout 總和(手寫數字會在改 fallback 時失準)
 //
 // 【事件單一入口】本層之 onEvent 同時做計帳(usage)與健康(providerHealth),單次呼叫與工作流
@@ -32,6 +34,8 @@ import isobj from 'wsemi/src/isobj.mjs'
 import isstr from 'wsemi/src/isstr.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import budgetFor from 'w-dispatch-ai/src/budgetFor.mjs'
+import buildValidator from 'w-dispatch-ai/src/buildValidator.mjs'
+import { safeValidate } from 'w-dispatch-ai/src/checkTruncation.mjs'
 import dispatchAiFallback from 'w-dispatch-ai/src/dispatchAiFallback.mjs'
 import dispatchAiWkf from 'w-dispatch-ai/src/dispatchAiWkf.mjs'
 import createFileStore from 'w-dispatch-ai/src/wkf/createFileStore.mjs'
@@ -44,14 +48,26 @@ import { fitChain, maxPromptCharsOf } from './capability.mjs'
 import { resolveCatalogue } from './resolve.mjs'
 
 /**
+ * 內容型失敗之 errorType:此類失敗之 stdout／stderr 為模型產出(被拒之回覆或 REST 原始本體),不含執行層之限流訊息
+ *
+ * @type {Set}
+ */
+const CONTENT_FAIL_TYPES = new Set(['validation', 'incomplete', 'tool-unsupported', 'invalid-response'])
+
+/**
  * 預設冷卻偵測:由結果之 stderr／stdout 判斷是否命中限流字樣
  *
- * 錯誤字樣由觀察維護(套件哲學:不維護簽章表);可由 opt.coolDetect 覆寫
+ * 錯誤字樣由觀察維護(套件哲學:不維護簽章表);可由 opt.coolDetect 覆寫。
+ * 內容型失敗(見 CONTENT_FAIL_TYPES)與截斷不掃:其輸出是模型對文章的回覆,文章談到 rate limit／quota exceeded
+ * 就會誤觸冷卻(2026-09-24 雙審實測);限流訊息只出現在執行層失敗(CLI 之 stderr、REST 之非 2xx 本體)。
  *
- * @param {Object} r 輸入呼叫結果物件，取 stderr、stdout
+ * @param {Object} r 輸入呼叫結果物件，取 errorType、truncated、stderr、stdout
  * @returns {Boolean} 回傳是否命中冷卻字樣
  */
-const COOL_DETECT = (r) => /FreeUsageLimitError|rate.?limit|quota exceeded|too many requests/i.test(`${r?.stderr || ''} ${r?.stdout || ''}`)
+const COOL_DETECT = (r) => {
+    if (CONTENT_FAIL_TYPES.has(r?.errorType) || r?.truncated === true) return false
+    return /FreeUsageLimitError|rate.?limit|quota exceeded|too many requests/i.test(`${r?.stderr || ''} ${r?.stdout || ''}`)
+}
 
 /**
  * 解析 AI 回覆之 JSON:extractJsonLoose 優先,救不回時對陣列輸出做截斷搶救(部分接受策略)
@@ -84,6 +100,54 @@ function keyIdOf(r) {
 }
 
 /**
+ * 由遞補歷程(tried)數實際嘗試次數:ok／next-key／skip-group 各為一次真的送出之嘗試(budget-out／aborted 未送出)
+ *
+ * 【為何不用 r.attempts】遞補層之結果展開自最後一次轉接器結果,其 attempts 是該次轉接器之內部重試數
+ *   (maxRetries 0 時恆為 1),不是遞補總嘗試數——試了 3 次仍回 1,與 aiBatchStage 之 aiAttempts
+ *   (「含遞補,與用量計帳同義」)不符(2026-09-24 雙審實測)
+ *
+ * @param {Array} tried 輸入 dispatchAiFallback 結果之 tried 陣列，非陣列視為空
+ * @returns {Integer} 回傳實際嘗試次數
+ */
+function attemptsOf(tried) {
+    return (Array.isArray(tried) ? tried : []).filter((t) => t && (t.outcome === 'ok' || t.outcome === 'next-key' || t.outcome === 'skip-group')).length
+}
+
+/**
+ * 由遞補歷程(tried)取失敗摘要:依序列出非成功項之「金鑰:錯誤型別(耗時)」
+ *
+ * 【為何需要】全數失敗時頂層 error 只反映最後一次嘗試(例:第一把空正文、第二把以剩餘預算重打而逾時),
+ *   只看它會把傳輸問題誤讀成模型太慢;耗時一併列出才分得出「快速失敗」與「空耗一輪逾時」。
+ *   無 errorType 者(budget-out／aborted)以 outcome 代之,無耗時者不附。
+ *
+ * @param {Array} tried 輸入 dispatchAiFallback 結果之 tried 陣列，非陣列視為空
+ * @returns {Array} 回傳字串陣列，如 ['p#0:http(1.2s)', 'p:budget-out']
+ */
+function errorsOf(tried) {
+    return (Array.isArray(tried) ? tried : []).filter((t) => t && t.outcome !== 'ok').map((t) => {
+        const sec = Number.isFinite(t.durationMs) ? `(${(t.durationMs / 1000).toFixed(1)}s)` : ''
+        return `${t.keyId || t.providerId}:${t.errorType || t.outcome}${sec}`
+    })
+}
+
+/**
+ * 條目自帶 validate 時與本層 validate 取交集(兩者皆過才算過)
+ *
+ * 【為何需要】遞補層以條目覆寫共用選項(attemptOpt＝{ ...共用, ...條目 }),條目自帶之 validate 會整個蓋掉本層之
+ *   JSON 驗證,放行非 JSON 回覆而得 ok:true、data:null,批次層隨即因 data 不可迭代而整批異常(2026-09-24 雙審實測)。
+ *   做法同 w-dispatch-ai 工作流層(callAiWithFallback 之條目 validate 交集,1.0.37 起)。
+ *
+ * @param {Object} entry 輸入供應商條目
+ * @param {Function} validate 輸入本層驗證函數 (stdout) => Boolean
+ * @returns {Object} 回傳條目；條目無有效 validate 時原樣回傳，否則回傳 validate 已取交集之淺拷貝
+ */
+function intersectEntryValidate(entry, validate) {
+    const ev = buildValidator(entry?.validate)
+    if (ev === null) return entry
+    return { ...entry, validate: (s) => safeValidate(ev, s).pass && validate(s) }
+}
+
+/**
  * 建立內建 AI 調度層(鏈組裝、冷卻、健康、計帳、工作流),工廠化:所有狀態收在閉包內,同進程可開多個互不相踩的 adapter
  *
  * @param {Object} opt 輸入設定物件，非物件視為 {} 後由必填檢查拋錯
@@ -94,8 +158,8 @@ function keyIdOf(r) {
  * @param {String} [opt.stateDir] 輸入狀態目錄字串(游標／用量檔落點)
  * @param {String} [opt.workspace] 輸入 AI 子進程工作目錄字串(與知識庫隔離，防模型順手寫檔)
  * @param {Object} [opt.clock] 輸入 createClock 產物(用量計帳之「今日」判定)
- * @param {Function} [opt.coolDetect] 輸入冷卻偵測函數覆寫，預設 COOL_DETECT
- * @param {Function} [opt.onHealth] 輸入健康層觸發冷卻時之回呼，格式 ({ providerId, streak, errorType, error }) => void
+ * @param {Function} [opt.coolDetect] 輸入冷卻偵測函數覆寫，預設 COOL_DETECT(內容型失敗與截斷不掃)
+ * @param {Function} [opt.onHealth] 輸入健康層觸發冷卻時之回呼，格式 ({ providerId, streak, errorType, error, keys? }) => void，keys 僅於觸發之組為多金鑰條目且每把皆試過而敗時附上(見 providerHealth)
  * @param {Function} [opt.onOversize] 輸入 prompt 逾長剔除時之回呼，格式 ({ providerId, promptLen, limit }) => void
  * @returns {Object} 回傳 { callJson, getWkf, withBudget, recordCall, drainStats, aiUsageToday, usage, store, chainFor, validateSeats, onEvent, health }
  * @throws {Error} opt 缺 ai／(envFile 或 env)／stateDir／workspace／clock 任一者時拋出;ai.providerPick 含未知 id 時拋出
@@ -237,7 +301,9 @@ export function createAiAdapter(opt) {
      */
     function recordCall(r) {
         if (!r) return
-        tally.push({ keyId: keyIdOf(r), ok: !!r.ok, skipped: (r.tried || []).filter((t) => t.outcome !== 'ok').map((t) => `${t.keyId || t.providerId}(${t.errorType || '?'})`) })
+        // 截斷內容經 acceptTruncated 放行之成功:另計於健康層(進執行摘要 run.json 與巡檢),不當失敗
+        if (r.ok && r.truncated === true && r.providerId) health.noteTruncated(String(r.providerId))
+        tally.push({ keyId: keyIdOf(r), ok: !!r.ok, skipped: (r.tried || []).filter((t) => t.outcome !== 'ok').map((t) => `${t.keyId || t.providerId}(${t.errorType || t.outcome || '?'})`) })
     }
     /**
      * 彙整並清空實績暫存(供輪末日誌顯示「成交/遞補略過」與健康摘要),呼叫後 tally 歸零
@@ -260,7 +326,9 @@ export function createAiAdapter(opt) {
 
     /**
    * 單次 JSON 任務(含遞補)。回傳形狀＝aiBatchStage 之 callAI 契約,不拋錯——呼叫端只需處理單一失敗形狀:
-   * { ok, data, error, skipped, attempts, preview };skipped=true 代表額度/預算(含時間預算)耗盡。
+   * { ok, data, error, skipped, attempts, preview, errors };skipped=true 代表額度/預算(含時間預算)耗盡。
+   * REST 截斷(finish_reason=length)經搶救放行者為成功並帶 truncated:true(部分接受,未涵蓋項由批次層記 tries);
+   * 條目自帶 validate 者與本層 JSON 驗證取交集(不被覆寫)。
    *
    * @param {String} prompt 輸入提示詞字串，非字串時回傳失敗形狀不呼叫 AI
    * @param {Function} check 輸入驗證函數 (data) => Boolean，判斷解析後之 JSON 是否合格；非函數時回傳失敗形狀不呼叫 AI
@@ -268,13 +336,14 @@ export function createAiAdapter(opt) {
    * @param {Object} [callOpt.spec] 輸入名額規格 { use, fallback }，省略則用建構時之預設鏈(resolved.providers)
    * @param {Number} [callOpt.budgetMs] 輸入本次時間預算毫秒數，與鏈預算(budgetFor)取較小者
    * @param {Function} [callOpt.shouldStop] 輸入中止判斷函數，嘗試之間呼叫以決定是否停止遞補
-   * @returns {Promise} 回傳 Promise，resolve 回傳 { ok, data, error, skipped, attempts, preview }
+   * @returns {Promise} 回傳 Promise，resolve 回傳 { ok, data, error, skipped, attempts, preview }；attempts 為實際嘗試次數(含遞補)；
+   *   失敗時另帶 errors(各次失敗嘗試之「金鑰:錯誤型別(耗時)」依序陣列，未送出即失敗者為空陣列)；截斷放行之成功另帶 truncated:true
    */
     async function callJson(prompt, check, callOpt = {}) {
 
         //check
         if (!isstr(prompt) || !isfun(check)) {
-            return { ok: false, data: null, error: 'callJson 需要 prompt（字串）與 check（函數）', skipped: false, attempts: 0, preview: '' }
+            return { ok: false, data: null, error: 'callJson 需要 prompt（字串）與 check（函數）', skipped: false, attempts: 0, preview: '', errors: [] }
         }
         if (!isobj(callOpt)) {
             callOpt = {}
@@ -287,17 +356,28 @@ export function createAiAdapter(opt) {
         const fit = fitChain(chain, text.length, providerLimits)
         for (const d of fit.dropped) noteOversize(d.id, text.length, d.limit)
         if (!fit.kept.length) {
-            return { ok: false, data: null, skipped: false, attempts: 0, preview: '', error: `prompt ${text.length} 字元超過本名額全部條目之上限（${fit.dropped.map((d) => `${d.id}≤${d.limit}`).join('、')}）：縮短輸入或於遞補鏈加入無上限之條目` }
+            return { ok: false, data: null, skipped: false, attempts: 0, preview: '', errors: [], error: `prompt ${text.length} 字元超過本名額全部條目之上限（${fit.dropped.map((d) => `${d.id}≤${d.limit}`).join('、')}）：縮短輸入或於遞補鏈加入無上限之條目` }
         }
-        const providers = fit.kept
+        // validate:parseJson(含截斷搶救)＋check;拋錯視同不合格(該家失敗、交遞補),不中斷整條鏈
+        const validate = (s) => {
+            try {
+                const d = parseJson(s)
+                return d !== null && d !== undefined && !!check(d)
+            }
+            catch {
+                return false
+            }
+        }
+        const providers = fit.kept.map((e) => intersectEntryValidate(e, validate))
         const cap = Number.isFinite(callOpt.budgetMs) && callOpt.budgetMs > 0 ? callOpt.budgetMs : Infinity
         const r = await dispatchAiFallback(text, {
             providers,
             cwd: workspace,
-            validate: (s) => {
-                const d = parseJson(s)
-                return d !== null && d !== undefined && !!check(d)
-            },
+            validate,
+            // 截斷放行:w-dispatch-ai 1.0.37 起 REST 截斷於 validate 之前即判失敗,須明示同意才交 validate 裁決;
+            // 本層 validate 內之 parseJson(salvageTruncatedArray)即搶救策略——收前段完整項目,未涵蓋者由批次層記 tries(部分接受)。
+            // content_filter 與可見輸出為空者上游仍一律判失敗(checkTruncation.judgeTruncated)
+            acceptTruncated: true,
             budgetMs: Math.min(budgetFor(providers), cap),
             maxRetries: ai.maxRetries ?? 0,
             cooldownMs,
@@ -309,9 +389,9 @@ export function createAiAdapter(opt) {
         recordCall(r)
         if (!r.ok) {
             const skipped = r.errorType === 'budget' || r.errorType === 'aborted'
-            return { ok: false, data: null, error: r.error, skipped, attempts: r.attempts, preview: String(r.stdout || '').slice(0, 120) }
+            return { ok: false, data: null, error: r.error, skipped, attempts: attemptsOf(r.tried), preview: String(r.stdout || '').slice(0, 120), errors: errorsOf(r.tried) }
         }
-        return { ok: true, data: parseJson(r.stdout), error: '', skipped: false, attempts: r.attempts, preview: '' }
+        return { ok: true, data: parseJson(r.stdout), error: '', skipped: false, attempts: attemptsOf(r.tried), preview: '', ...(r.truncated === true ? { truncated: true } : {}) }
     }
 
     /**

@@ -273,7 +273,8 @@ export function createKnowledgeExtract(cfg = {}) {
         stateDir: dirs.state,
         workspace: aiWorkspace,
         clock,
-        onHealth: (ev) => runLog?.warn(`供應商健康：${ev.providerId} 連續 ${ev.streak} 次 ${ev.errorType} 失敗（${ev.error}），降序冷卻`),
+        // ev.keys:整組金鑰皆敗觸發者(每次連續失敗＝該條目全部金鑰各試一次皆敗),否則「連續 3 次」會被讀成 3 次嘗試
+        onHealth: (ev) => runLog?.warn(`供應商健康：${ev.providerId} 連續 ${ev.streak} 次 ${ev.errorType} 失敗${ev.keys ? `（每次 ${ev.keys} 把金鑰皆敗）` : ''}（${ev.error}），降序冷卻`),
         // prompt 逾該條目長度上限而於呼叫前被剔除(省掉一次 spawn);同一條目每輪只記一行,次數由執行摘要彙報
         onOversize: (ev) => runLog?.warn(`供應商能力：${ev.providerId} 之 prompt 上限 ${ev.limit} 字元，本輪有呼叫達 ${ev.promptLen} 字元而改由遞補承接（未 spawn）`),
     })

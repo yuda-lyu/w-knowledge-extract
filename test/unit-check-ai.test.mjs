@@ -71,10 +71,10 @@ describe('unit-check-ai', function() {
             clock: createClock('Asia/Taipei'),
         })
 
-        it('prompt 非字串 → 回傳失敗形狀(不拋錯),attempts:0', async () => {
+        it('prompt 非字串 → 回傳失敗形狀(不拋錯),attempts:0、errors 為空陣列(失敗形狀一律帶 errors,2026-09-24 起)', async () => {
             const ai = mkAi()
             const r = await ai.callJson(123, () => true)
-            assert.deepEqual(r, { ok: false, data: null, error: 'callJson 需要 prompt（字串）與 check（函數）', skipped: false, attempts: 0, preview: '' })
+            assert.deepEqual(r, { ok: false, data: null, error: 'callJson 需要 prompt（字串）與 check（函數）', skipped: false, attempts: 0, preview: '', errors: [] })
         })
 
         it('check 非函數 → 回傳失敗形狀(不拋錯)', async () => {
@@ -94,6 +94,7 @@ describe('unit-check-ai', function() {
                 // 通過型別檢查後,命中既有(非本次新增)之 oversize 短路邏輯,而非型別錯誤訊息——證明有效輸入未被本次檢查攔下
                 assert.match(r.error, /claude:sonnet≤1/)
                 assert.doesNotMatch(r.error, /callJson 需要 prompt/)
+                assert.deepEqual([r.attempts, r.errors], [0, []], '全數逾長未送出:無嘗試、無失敗歷程(失敗形狀一律帶 errors)')
             }
             assert.deepEqual(rOmitted, rNull, 'callOpt 省略與 null 須產生相同結果,證明 null 已正確回退為 {}')
         })

@@ -210,6 +210,9 @@ describe('unit-patrol', function() {
             `[${clock.iso8()}] WARN  補全文：逾時間預算，12 篇未取件留下輪`,
             `[${clock.iso8()}] WARN  管道[知識管線] 階段[提煉] 略過：逾時間預算`,
             `[${clock.iso8()}] WARN  供應商健康：agy:gemini-3.8-flash-high 連續 3 次 validation 失敗（x），降序冷卻`,
+            // 2026-09-24:整組金鑰皆敗之加註、批次失敗之歷程(前綴不變,白名單照舊涵蓋)
+            `[${clock.iso8()}] WARN  供應商健康：agnes:agnes-3.0-flash 連續 3 次 http 失敗（每次 2 把金鑰皆敗）（HTTP 401），降序冷卻`,
+            `[${clock.iso8()}] WARN  批次 AI 失敗（HTTP 401，試 2 次；歷程 agnes:agnes-3.0-flash#0:http(0.4s)、agnes:agnes-3.0-flash#1:http(0.3s)）→ `,
             `[${clock.iso8()}] WARN  fetch.articlesPerRun(60) 大於萃取容量 54（fetchExtractRounds×aiParallel×docsPerExtract）：抓進來萃不完`,
             `[${clock.iso8()}] WARN  來源[S] 有 2 項不符格式而略過：x`,
             `[${clock.iso8()}] WARN  這是一則真的未知警告 XYZ`,

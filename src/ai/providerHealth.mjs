@@ -1,12 +1,12 @@
 // providerHealth.mjs — 供應商健康層:連續失敗即降序(冷卻)、成功即復原;本檔為此決定之唯一擁有者
 //
-// 【為何需要】w-dispatch-ai 的冷卻只認 HTTP 429 與逾時(dispatchAiFallback.mjs:458),
-//   輸出驗證失敗(OUTPUT_VALIDATION_FAILED)與 CLI 執行失敗屬「整組跳過但不冷卻」——
+// 【為何需要】w-dispatch-ai 的內建冷卻只認 HTTP 429 與逾時(dispatchAiFallback 之「冷卻觸發」段),
+//   輸出驗證失敗(OUTPUT_VALIDATION_FAILED,整組跳過)與 CLI 執行失敗(非零離開碼,換金鑰或單一登入態)皆不冷卻——
 //   主力供應商進入失敗風暴時,每一批仍先在它身上耗掉一次完整回應時間才遞補。
 //   2026-09-09 08:00～11:00 生產實測:gemini 每輪驗證失敗 10～22 次(exec 風暴 16 次),
 //   成交全落 claude:sonnet,彙整段由 350s 暴增至 1650～1745s,整輪 3200s 逼近排程上限被砍。
 //
-// 【判準:連續 N 次(預設 3)與金鑰無關之失敗 → 冷卻】單次驗證失敗是常態(各家 1.8～30%),
+// 【判準:連續 N 次(預設 3)失敗 → 冷卻】單次驗證失敗是常態(各家 1.8～30%),
 //   立即冷卻會讓主力被正常波動反覆踢下;連續 3 敗在 <30% 失敗率下機率 <3%,
 //   而風暴期(>90%)幾乎必達。成功一次即歸零(與套件「任一次成功即解除冷卻」同語意)。
 //
@@ -18,16 +18,35 @@
 //   本層於該供應商每次再失敗時重新斷言(streak 未歸零即再寫),失效窗口至多一次呼叫;
 //   與套件自述之「假定單行程序列調用、並行請自加鎖」同一假定,本套件既有 aiParallel 3 已承擔此假定。
 //
-// 【哪些失敗計入】只計「與金鑰無關」者:skip-group(驗證失敗/逾時/執行檔不存在)一律計;
-//   next-key 只在該條目無金鑰輪替(keyIndex 為 null,即 CLI 登入態)時計——多把金鑰之單把失敗
-//   由套件換鑰處理,計入會把「一把額度用盡」誤判成整家故障。
-//   params(進入執行前即被擋,如 agy 之 prompt 長度上限)不計 streak:那是席位設定與供應商能力
-//   不相容,不會因冷卻而改善,故另計 mismatch 供執行摘要與巡檢揭露(2026-09-06～09-09 每輪固定 6 次)。
+// 【哪些失敗計入(2026-09-24 改)】
+//   ①型別:除 params 外一律計入(排除清單 IGNORE_TYPES)。此前為白名單,上游 1.0.37／1.0.38 兩度新增或改型錯誤型別
+//     (截斷 incomplete、工具不支援 tool-unsupported、本體非 JSON 之 invalid-response)而白名單未同步,這些失敗靜默不計;
+//     排除式使上游日後新增之型別預設計入,誤計之代價僅為降序一個冷卻窗(不移除)。
+//     params(進入執行前即被擋,如 agy 之 prompt 長度上限)不計 streak:那是席位設定與供應商能力不相容,
+//     不會因冷卻而改善,故另計 mismatch 供執行摘要與巡檢揭露(2026-09-06～09-09 每輪固定 6 次)。
+//   ②事件:以 w-dispatch-ai 1.0.39 起之 group-exhausted(一組試完仍無成交)計——上游每次呼叫每組恰發一次,位於該組最後
+//     一個 next-key／skip-group 之後;成交、組內預算用盡、中止之組不發。故無金鑰輪替(CLI 登入態、無金鑰之 REST)、單把、
+//     多把金鑰一律同一規則:每收到一次計一次。一把失敗而他把成交之呼叫不會有此事件,「單把額度用盡」自然不當整家故障;
+//     組內預算用盡者後段金鑰從未被試,亦不會有此事件。next-key／skip-group 只記失敗型別次數(執行摘要與巡檢讀),不動 streak。
+//     本組各次嘗試之型別(ev.errorTypes)皆在排除清單者(如全為 params)不計;混合者以最後一個計入型別為本次之型別。
+//   ③為何不自行由逐次事件重建「一次呼叫整組皆敗」:逐次事件不帶呼叫識別,而同一 onEvent 由並行呼叫共用(批次 aiParallel、
+//     提煉多席位)。以失敗事件數計,一把死、一把活的條目在並行下會把同一把死金鑰的多次失敗誤算成整組皆敗(2026-09-24 雙審
+//     實測:6 個呼叫全數成功仍被冷卻);改以「各把失敗次數之最小值」計圈數,在並行呼叫跨越一次成交時(游標只在成交時推進,
+//     在途呼叫與新呼叫起點不同)仍多計或少計 1 次(同日以真實 dispatchAiFallback 重現),且須照抄上游之游標推進時機、
+//     每把至多一次、金鑰濾法。組邊界只有上游知道,故由上游提供事件(1.0.39),本層按事件計數即精確。
+//     消費之事件須來自 w-dispatch-ai ≥1.0.39(本套件 package.json 已要求);更舊之版本不發 group-exhausted,本層將永不降序。
+//
+// 【截斷放行(truncated)另計】經 acceptTruncated 放行之截斷內容屬成功(部分進度)、歸零 streak;由 adapter 呼叫
+//   noteTruncated 另計次數,性質同 oversize(機制在運作而非失敗),供執行摘要與巡檢揭露放行頻率。
 
 import isobj from 'wsemi/src/isobj.mjs'
 
-/** 計入 streak 之 errorType(取自 w-dispatch-ai getErrorType 值域) */
-const STREAK_TYPES = new Set(['validation', 'timeout', 'exec', 'spawn', 'http'])
+/**
+ * 不計入 streak 之 errorType(排除清單;取自 w-dispatch-ai getErrorType 值域,其餘型別一律計入,理由見檔頭)
+ *
+ * @type {Set}
+ */
+const IGNORE_TYPES = new Set(['params'])
 
 /**
  * 建立供應商健康層:連續失敗即降序(冷卻)、成功即復原;本模組為此決定之唯一擁有者
@@ -36,9 +55,9 @@ const STREAK_TYPES = new Set(['validation', 'timeout', 'exec', 'spawn', 'http'])
  * @param {Object} [opt.store] 輸入 w-dispatch-ai store 物件 { get, set }，缺則只統計不冷卻
  * @param {Integer} [opt.threshold=3] 輸入連續失敗幾次即冷卻之正整數，預設3
  * @param {Integer} [opt.windowMs=900000] 輸入冷卻視窗毫秒數正整數(＝ai.cooldownMs)，預設900000；已冷卻且未逾窗者不重寫
- * @param {Function} [opt.onCool] 輸入觸發冷卻時之回呼，格式 (ev)=>void，ev 為 { providerId, streak, errorType, error }
+ * @param {Function} [opt.onCool] 輸入觸發冷卻時之回呼，格式 (ev)=>void，ev 為 { providerId, streak, errorType, error, keys? }，keys 僅於觸發之組為多金鑰條目且每把皆試過而敗(attempted＝keys≥2)時附上，為該條目之金鑰數
  * @param {Function} [opt.now=Date.now] 輸入時間函數(測試注入用)，預設Date.now
- * @returns {Object} 回傳 { onEvent, noteOversize, snapshot, summary, threshold, windowMs }
+ * @returns {Object} 回傳 { onEvent, noteOversize, noteTruncated, snapshot, summary, threshold, windowMs }
  */
 export function createProviderHealth(opt = {}) {
 
@@ -53,8 +72,8 @@ export function createProviderHealth(opt = {}) {
     const store = opt.store && typeof opt.store.get === 'function' && typeof opt.store.set === 'function' ? opt.store : null
     const streak = {} // providerId → { n, lastType, lastError }
     const cooledAt = {} // providerId → 本層最近一次「新」冷卻之時刻(視窗內的重寫是修復,不是新事件)
-    let counts = {} // providerId → { ok, fail:{type:n}, cooled, mismatch }
-    const ensure = (id) => (counts[id] ||= { ok: 0, fail: {}, cooled: 0, mismatch: 0, oversize: 0 })
+    let counts = {} // providerId → { ok, fail:{type:n}, cooled, mismatch, oversize, truncated }
+    const ensure = (id) => (counts[id] ||= { ok: 0, fail: {}, cooled: 0, mismatch: 0, oversize: 0, truncated: 0 })
 
     /**
    * 記一次「prompt 逾該條目長度上限而未送出」(由 adapter 於呼叫前剔除時呼叫)。
@@ -66,6 +85,16 @@ export function createProviderHealth(opt = {}) {
    */
     function noteOversize(id) {
         ensure(id).oversize++
+    }
+
+    /**
+     * 記一次「截斷內容經 acceptTruncated 放行」(由 adapter 見成功結果帶 truncated 時呼叫);性質同 oversize,非失敗
+     *
+     * @param {String} id 輸入供應商條目 id
+     * @returns {undefined} 無回傳值
+     */
+    function noteTruncated(id) {
+        ensure(id).truncated++
     }
 
     /**
@@ -96,9 +125,10 @@ export function createProviderHealth(opt = {}) {
     }
 
     /**
-     * 事件入口:依 ev.type 更新成功／失敗計數,累計連續失敗達門檻即呼叫 cool() 並觸發 onCool
+     * 事件入口:ok 歸零 streak;next-key／skip-group 只記失敗型別次數;group-exhausted(一組試完仍無成交,上游每次呼叫每組
+     * 恰發一次)計一次連續失敗,達門檻即呼叫 cool() 並觸發 onCool(見檔頭②③)
      *
-     * @param {Object} ev 輸入事件物件，需含 providerId；type 為 'ok' 時歸零 streak,'skip-group'／'next-key' 時依 errorType 判斷是否計入 streak
+     * @param {Object} ev 輸入事件物件(w-dispatch-ai ≥1.0.39 之 dispatchAiFallback 事件)，需含 providerId
      * @returns {undefined} 無回傳值
      */
     function onEvent(ev) {
@@ -109,16 +139,23 @@ export function createProviderHealth(opt = {}) {
             delete streak[id]
             return
         }
-        if (ev.type !== 'skip-group' && ev.type !== 'next-key') return
-        const type = String(ev.errorType || 'exec')
-        const c = ensure(id)
-        c.fail[type] = (c.fail[type] || 0) + 1
-        if (type === 'params') {
-            c.mismatch++; return
+        // 逐次失敗:只記型別次數(params 另計 mismatch:席位與能力不相容,供摘要與巡檢揭露);連續失敗由組盡事件計
+        if (ev.type === 'skip-group' || ev.type === 'next-key') {
+            const type = String(ev.errorType || 'exec')
+            const c = ensure(id)
+            c.fail[type] = (c.fail[type] || 0) + 1
+            if (type === 'params') c.mismatch++
+            return
         }
-        if (!STREAK_TYPES.has(type)) return
-        // next-key 僅無金鑰輪替者計入(見檔頭)
-        if (ev.type === 'next-key' && ev.keyIndex !== null && ev.keyIndex !== undefined) return
+        if (ev.type !== 'group-exhausted') return
+        // 本組各次嘗試之型別皆在排除清單者不計;否則以最後一個計入型別為本次之型別(缺 errorTypes 者視為 exec)
+        const types = (Array.isArray(ev.errorTypes) ? ev.errorTypes : []).map((t) => String(t || 'exec'))
+        const counted = types.filter((t) => !IGNORE_TYPES.has(t))
+        if (types.length && !counted.length) return
+        const type = counted.length ? counted[counted.length - 1] : 'exec'
+        // keys:多金鑰條目每把皆試過而敗(attempted＝keys≥2)時附上,供訊息註明「每次 N 把金鑰皆敗」;首把即整組跳過者不附
+        const keys = Number.isInteger(ev.keys) && ev.keys >= 2 && ev.attempted === ev.keys ? ev.keys : 0
+        const c = ensure(id)
         const s = (streak[id] ||= { n: 0, lastType: '', lastError: '' })
         s.n++
         s.lastType = type
@@ -133,7 +170,7 @@ export function createProviderHealth(opt = {}) {
         cooledAt[id] = now()
         c.cooled++
         try {
-            opt.onCool?.({ providerId: id, streak: s.n, errorType: type, error: s.lastError })
+            opt.onCool?.({ providerId: id, streak: s.n, errorType: type, error: s.lastError, ...(keys ? { keys } : {}) })
         }
         catch { /* 回呼不影響主流程 */ }
     }
@@ -151,7 +188,7 @@ export function createProviderHealth(opt = {}) {
     }
 
     /**
-     * 一行摘要:健康降序與席位不相容(無則空字串)
+     * 一行摘要:健康降序、席位不相容、prompt 逾長跳過與截斷放行(無則空字串)
      *
      * @param {Object} [snap=snapshot()] 輸入快照物件(snapshot 之產出)，預設取當前快照
      * @returns {String} 回傳彙整後之摘要字串，各項皆無時回傳空字串
@@ -160,14 +197,16 @@ export function createProviderHealth(opt = {}) {
         const cooled = Object.entries(snap.counts).filter(([, c]) => c.cooled > 0).map(([id, c]) => `${id}×${c.cooled}`)
         const mism = Object.entries(snap.counts).filter(([, c]) => c.mismatch > 0).map(([id, c]) => `${id}(params)×${c.mismatch}`)
         const over = Object.entries(snap.counts).filter(([, c]) => (c.oversize || 0) > 0).map(([id, c]) => `${id}×${c.oversize}`)
+        const trunc = Object.entries(snap.counts).filter(([, c]) => (c.truncated || 0) > 0).map(([id, c]) => `${id}×${c.truncated}`)
         return [
             cooled.length && `健康降序 ${cooled.join(' ')}`,
             mism.length && `席位不相容 ${mism.join(' ')}`,
             over.length && `prompt 逾長跳過 ${over.join(' ')}`,
+            trunc.length && `截斷放行 ${trunc.join(' ')}`,
         ].filter(Boolean).join('；')
     }
 
-    return { onEvent, noteOversize, snapshot, summary, threshold, windowMs }
+    return { onEvent, noteOversize, noteTruncated, snapshot, summary, threshold, windowMs }
 }
 
 export default createProviderHealth

@@ -74,7 +74,10 @@ export function createAiCaller(opt = {}) {
    * 呼叫 AI,依 pick 順序自動遞補
    *
    * @param {String} prompt 輸入提示詞字串
-   * @param {Object} [o={}] 輸入逐次設定物件，非物件視為 {}；可覆寫 timeoutMs、validate,並可加掛 onEvent
+   * @param {Object} [o={}] 輸入逐次設定物件，非物件視為 {}；可覆寫 timeoutMs、validate,並可加掛 onEvent；
+   *   另可給 acceptTruncated(布林值,透傳 dispatchAiFallback):true 時 REST 截斷(finish_reason=length)之內容交 validate 裁決、
+   *   無 validate 則直接放行(結果帶 truncated:true)，僅在 validate 內含搶救策略時才給；content_filter 與可見輸出為空者仍失敗；
+   *   未給依 w-dispatch-ai 預設(1.0.37 起截斷即失敗)
    * @returns {Promise} 回傳 Promise，resolve 回傳套件結果物件(另補 providersSkipped 與 providersMissing)
    */
     const callAI = async (prompt, o = {}) => {
@@ -104,6 +107,8 @@ export function createAiCaller(opt = {}) {
             providers,
             timeoutMs: o.timeoutMs ?? timeoutMs,
             validate: o.validate,
+            // 截斷放行之策略屬呼叫端(本層只做接線):逐次透傳,未給依套件預設
+            ...(typeof o.acceptTruncated === 'boolean' ? { acceptTruncated: o.acceptTruncated } : {}),
             maxRetries,
             budgetMs,
             minAttemptMs,

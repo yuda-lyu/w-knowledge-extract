@@ -20,6 +20,7 @@ import isfun from 'wsemi/src/isfun.mjs'
 import ispint from 'wsemi/src/ispint.mjs'
 import isp0int from 'wsemi/src/isp0int.mjs'
 import cint from 'wsemi/src/cint.mjs'
+import { oneline } from '../util/misc.mjs'
 
 /**
  * 執行一個「批次 AI 處理」階段。
@@ -112,7 +113,9 @@ export async function runAiBatchStage(cfg) {
                 if (!r.ok) {
                     // 額度／時間預算用盡(skipped)不是這批的失敗:另有 aborted/stopped 欄位,fail 不再吸收它(複審 B10)
                     if (!r.skipped) stat.failedBatches++
-                    log.warn(`批次 AI 失敗（${r.error}，試 ${r.attempts ?? '?'} 次）→ ${r.preview || ''}`)
+                    // 附各次嘗試之歷程(callAI 回 errors 時):頂層 error 只是最後一次嘗試,單看它會誤判歸因;前綴不變(巡檢已知常態)
+                    const hist = Array.isArray(r.errors) && r.errors.length ? `；歷程 ${oneline(r.errors.join('、'), 200)}` : ''
+                    log.warn(`批次 AI 失敗（${r.error}，試 ${r.attempts ?? '?'} 次${hist}）→ ${r.preview || ''}`)
                     // 額度用盡（skipped）不記 tries：這不是這批的錯，重排只會冤枉無辜批次
                     if (!r.skipped && onBatchFailed) await onBatchFailed(batch, r, {})
                     r0.aborted = !!r.skipped
