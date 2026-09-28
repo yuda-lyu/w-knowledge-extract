@@ -3,7 +3,7 @@
 <head>
     
     <meta charset="utf-8">
-    <title>WKnowledgeExtract.mjs - Documentation</title>
+    <title>core/runtime.mjs - Documentation</title>
     
     
     <script src="scripts/prettify/prettify.js"></script>
@@ -35,7 +35,7 @@
 
 <div id="main">
     
-    <h1 class="page-title">WKnowledgeExtract.mjs</h1>
+    <h1 class="page-title">core/runtime.mjs</h1>
     
 
     
@@ -45,301 +45,173 @@
     
     <section>
         <article>
-            <pre class="prettyprint source linenums"><code>// WKnowledgeExtract.mjs — 主入口:通用知識之抓取、萃取、關聯與提煉套件
+            <pre class="prettyprint source linenums"><code>// runtime.mjs — 執行期生效值之單一來源:排程上限、整輪時間預算、執行鎖陳舊期限、鎖檔／金鑰檔／AI 工作區路徑
 //
-// 安裝即用(僅 workDir 必填),六層擴充入口(cfg 覆寫/pipeline 重排/stages 重組/tap 掛載/mw opts/plugins),
-// 全部積木具名匯出——安裝方依自己的管線自由組裝,不需改套件。領域(主題範圍、分類詞彙、prompt、抓取器)皆可注入。
-// 排程任務執行殼(設定載入/時鐘/每次一檔日誌/runTask/行程安全網/Telegram/AI 接線/子進程隔離)另有輕量入口
-// ./taskRunner.mjs(不載入本管線;本入口亦含其全部成員,同名即同一實作)。
+// 【為何獨立成純函數】此前這些值散在 createKnowledgeExtract 各處推導,巡檢設定又以 {...推導值, ...cfg.monitor} 展開,
+//   舊名 monitor.scheduleLimitMin 於展開時蓋掉頂層值——管線以頂層 480 分跑、巡檢卻以 60 分判界(安裝方回報、本機重現)。
+//   收斂為一份結果,同時餵給管線(deadlineMs／鎖)、巡檢(判界)與 info()(揭露),三者不再各算各的(2026-09-28)。
+// 【值有效性】數值鍵一律「有限且大於 0」,數字字串轉數;給了卻無效者視同未給並指名警告——此前 monitor 給字串 '60'
+//   使判界門檻成 '6060'、頂層給 0 蓋掉有效之 monitor 值並誤報「未給」(雙審實測)。
+// 【鎖之陳舊期限須涵蓋整輪】陳舊期限由持鎖者宣告(core/lock),他實例以它判定是否可接管,故須 ≥ 本輪最長可能耗時:
+//   排程上限＋5 分,或時間預算＋安全邊際＋5 分,兩者取大;此前只給 deadlineMs 時仍為 60 分,長時執行 60 分後即被接管。
 
-import { createKnowledgeExtract } from './core/createKnowledgeExtract.mjs'
-import { createFetchObject, createOrganizeObject, createRelateObject, createDistillObject } from './core/objects.mjs'
-import { defineMw, defineFirstMw, applyTaps, makeMsg, count, composeChain, runChainOverMsgs, stdReport, MwContractError } from './core/kernel.mjs'
-import { resolvePlugins, mergeTaps } from './core/plugins.mjs'
-import { acquireLock, inspectLock } from './core/lock.mjs'
-import { resolveSettings, FETCH_DEFAULT, KNOWLEDGE_DEFAULT, SOURCE_POLICY_DEFAULT, AI_DEFAULT, SKIP_TITLE_PATTERNS_DEFAULT } from './core/settingsDefault.mjs'
-// ── 子階段工廠與 mw 積木 ──
-import { stageSeedSync, mwSyncSeeds, mwCullSources } from './stages/seedSyncStage.mjs'
-import { stageListFetch, mwFetchList, mwNormalizeItems, mwFilterItems, mwAdmitPersist, mwAccountSource } from './stages/listFetchStage.mjs'
-import { stageDetailFetch, mwTitleSkip, mwRouteFetcher, mwFetchDetail, mwTranscodeLinks, mwFeedFallback, mwPersistOutcome } from './stages/detailFetchStage.mjs'
-import { stageDocMaintain, mwSlim } from './stages/docMaintainStage.mjs'
-import { stageExpand, mwProbe, mwSettleClue, probeSiteFeed, probeSearchEndpoints } from './stages/expandStage.mjs'
-import { stageTriage, mwSettleTriage } from './stages/triageStage.mjs'
-import { stageExtract, mwSaveClues, mwSkipGate, mwRenderNote, mwPersistNote, mwMarkDoc } from './stages/extractStage.mjs'
-import { stageRelate, stageRelationIndex, mwBuildEdges, mwPersistEdges, mwApplyToNote, mwConflictDualWrite, mwMarkRelated, mwRebuildRelationIndex, pickCandidates, makeSlugResolver, applyRelationsToNote, markConflict, rebuildRelationIndex } from './stages/relateStage.mjs'
-import { stageDistill, mwBuildBase, mwRunWorkflow, mwAdoptResult, mwRenderCore, mwPersistCore, buildWorkflowStages } from './stages/distillStage.mjs'
-import { stageKnowledgeIndex, mwRebuildKnowledgeIndex, rebuildKnowledgeIndex } from './stages/indexStage.mjs'
-import { runAiBatchStage } from './stages/aiBatchStage.mjs'
-import { judgeFromDocs } from './stages/collectHelpers.mjs'
-// ── 生命週期政策 ──
-import { ensureSeedSources, isLowYield, pickDueSources, recordSourceOutcome, cullZeroYieldSources } from './stores/sourcePolicy.mjs'
-import { slimTerminalDocs, byRetryTierFifo } from './stores/docPolicy.mjs'
-import { clueKey, legacyClueKey, cluePriority, saveClues, pickClues, enforceFrontierCap, settleClue } from './stores/frontierPolicy.mjs'
-import { normalizeFeedItems, filterFeedItems, admitFeedItems, ingestFeedItems } from './stores/ingestGate.mjs'
-import { conceptVocabulary, pickConcepts, pickCategories } from './stores/conceptGroups.mjs'
-// ── 內建領域預設 ──
-import { createExtractDomain } from './domain/extractDomain.mjs'
-import { createTriageDomain } from './domain/triageDomain.mjs'
-import { createRelateDomain } from './domain/relateDomain.mjs'
-import { createDistillDomain, buildDistillPrompt, buildAuditPrompt, buildRevisePrompt, buildFinalPrompt, renderCoreBody, checkCore, checkIssues, CORE_SCHEMA } from './domain/distillDomain.mjs'
-import { VOCAB_DEFAULT, GUIDE_FIELDS, guideDefaultOf, resolveVocab, kbLabelOf } from './domain/vocabDefault.mjs'
-// ── 內建抓取器與端點 ──
-import { createDefaultFetchers, mergeFetchers } from './fetchers/defaultFetchers.mjs'
-import { DEFAULT_SITE_ADAPTERS, mergeSiteAdapters } from './fetchers/siteAdapters.mjs'
-import { fetchArticle, fetchArticleLinks, discoverFeed } from './fetchers/articleParse.mjs'
-import { gridSourceUrl, bingNewsSearchUrl, arxivSearchUrl, expandSeeds } from './fetchers/endpoints.mjs'
-// ── AI 調度與營運配套 ──
-import { createAiAdapter } from './ai/adapter.mjs'
-import { createProviderHealth } from './ai/providerHealth.mjs'
-import { KIND_MAX_PROMPT_CHARS, maxPromptCharsOf, fitChain } from './ai/capability.mjs'
-import { createLogger } from './ops/logger.mjs'
-import { createPatrol, PATROL_MARK_HEAD, PATROL_MARK_TAIL } from './ops/patrol.mjs'
-import { buildRunSummary, writeRunSummary, readRunSummary, writeRunStart, readRunStart, subReportOf, RUN_SUMMARY_VERSION } from './ops/runSummary.mjs'
-import { regenCore, listCores } from './ops/regenCore.mjs'
-import { ingestNotes } from './ops/ingestNotes.mjs'
-import { reviveDeadDocs, deadMatcher } from './ops/reviveDocs.mjs'
-// ── 工具 ──
-import { renderFrontmatter, parseFrontmatter, writeMd, readMd, section, sectionOf, dropSection } from './md/md.mjs'
-import { createClock } from './util/clock.mjs'
-import { sha1, normalizeConcept, slugify, setConceptFold } from './util/text.mjs'
-import { normalizeUrl, unwrapNewsUrl } from './util/web.mjs'
-import { oneline, readJson, writeJson, queueAge } from './util/misc.mjs'
-import { sourceId, docRecord, defaultToRecord, defaultToLinkedRecord } from './util/records.mjs'
-import { normalizeWorkDir, expandDirs } from './core/dirs.mjs'
-import { budgetOf } from './core/budget.mjs'
-import taskRunner from './taskRunner.mjs'
+import path from 'path'
+import isobj from 'wsemi/src/isobj.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
+
+const MIN = 60_000
+// 安全邊際:截止只切得到已接上剩餘預算的呼叫;席位預算於開工當下封頂(core/budget),但已開始的那一次
+// 嘗試最多再跑到其自身 timeout(現行最大 claude:sonnet 360s),邊際取 6 分鐘涵蓋之;下限 10 分
+const DEADLINE_MARGIN_MS = 360_000
+const DEADLINE_FLOOR_MS = 600_000
+const DEADLINE_DEFAULT_MS = 3000_000
+// 執行鎖陳舊期限須大於排程上限:正常但偏慢的執行不可在跑到一半被下一實例判為殘留而搶鎖
+const LOCK_STALE_EXTRA_MS = 300_000
+const LOCK_STALE_DEFAULT_MS = 3600_000
 
 
 /**
- * 通用知識之抓取、萃取、關聯與提煉套件
+ * 數值設定之有效性(執行期數值鍵之單一判準,巡檢之 cfg 正規化亦用此):有限且大於 0 者取值,數字字串轉數
  *
- * 提供四段式知識管線(抓取 → 彙整(預篩→萃取) → 關聯 → 提煉,結束後自動重建索引):
- * ① 安裝即用:createKnowledgeExtract({ workDir }) 零注入即完整管線,內建萃取 prompt、筆記/核心版型、
- *    rss/grid/article/links 抓取器、feed/Bing/arXiv 線索探測、AI 調度層(w-dispatch-ai)與巡檢
- * ② 逐層可覆寫:cfg 設定覆寫、pipeline 物件重排、物件內 stages 重組、動作鏈 tap/chain 掛載、mw opts 注入、跨階段 plugins
- * ③ 領域可注入:主題範圍與分類詞彙(cfg.data.vocab)、prompt 與版型(各物件之 domain)、抓取器(cfg.fetchers)皆由安裝方決定
- * ④ 全部積木具名匯出,並含第二入口 taskRunner 之全部成員(同名即同一實作)
- *
- * @returns {Object} 回傳套件物件,含 createKnowledgeExtract、四物件工廠(createFetchObject 等)、子階段工廠(stage*)、
- *     mw 積木(mw*)、middleware 核心(defineMw、applyTaps、runChainOverMsgs 等)、內建領域預設(create*Domain、VOCAB_DEFAULT 等)、
- *     內建設定(resolveSettings、*_DEFAULT)、抓取器與端點、AI 調度(createAiAdapter 等)、營運配套(createPatrol、regenCore 等)、
- *     生命週期政策(pickDueSources、saveClues 等)與工具(md、clock、text、web、misc、records)等函數
+ * @param {*} v 輸入設定值
+ * @returns {Number} 回傳數值；無效(非數字、非有限、≤0、空字串、其他型別)時回傳 null
  * @example
- * import WKnowledgeExtract from 'w-knowledge-extract'
- *
- * //零注入:僅 workDir 必填(金鑰放 workDir/.env)
- * let flow = WKnowledgeExtract.createKnowledgeExtract({
- *     workDir: './my-kb',
- *     data: {
- *         seedSources: [{ kind: 'rss', tier: 1, name: '範例來源', url: 'https://example.com/feed', lang: 'en' }],
- *         vocab: { domain: '機器學習' }, //主題範圍(選填), 未給即不限主題
- *     },
- * })
- * let report = await flow.run() //抓取→彙整→關聯→提煉→索引, 結束後寫 log/&lt;day>/&lt;stamp>-run.json 再巡檢
- * console.log(report.ok)
+ * console.log(positiveNumber('60'), positiveNumber(0), positiveNumber('abc'))
+ * // => 60 null null
  */
-let WKnowledgeExtract = {
-
-    //執行殼(第二入口 ./taskRunner.mjs 之全部成員;泛用秩序,他專案之排程任務只 import 該入口即可)
-    ...taskRunner,
-
-    //總組裝(僅 workDir 必填;零注入即完整管線)
-    createKnowledgeExtract,
-
-    //預設四物件(可增減/重排/混入自寫物件)
-    createFetchObject,
-    createOrganizeObject,
-    createRelateObject,
-    createDistillObject,
-
-    //子階段工廠(物件內 stages 重組用)
-    stageSeedSync,
-    stageListFetch,
-    stageDetailFetch,
-    stageDocMaintain,
-    stageExpand,
-    stageTriage,
-    stageExtract,
-    stageRelate,
-    stageRelationIndex,
-    stageDistill,
-    stageKnowledgeIndex,
-
-    //mw 積木(動作鏈 chain 重排/tap 置換用;具名=hook 錨點)
-    mwSyncSeeds,
-    mwCullSources,
-    mwFetchList,
-    mwNormalizeItems,
-    mwFilterItems,
-    mwAdmitPersist,
-    mwAccountSource,
-    mwTitleSkip,
-    mwRouteFetcher,
-    mwFetchDetail,
-    mwTranscodeLinks,
-    mwFeedFallback,
-    mwPersistOutcome,
-    mwSlim,
-    mwProbe,
-    mwSettleClue,
-    probeSiteFeed,
-    probeSearchEndpoints,
-    mwSettleTriage,
-    mwSaveClues,
-    mwSkipGate,
-    mwRenderNote,
-    mwPersistNote,
-    mwMarkDoc,
-    mwBuildEdges,
-    mwPersistEdges,
-    mwApplyToNote,
-    mwConflictDualWrite,
-    mwMarkRelated,
-    mwRebuildRelationIndex,
-    mwBuildBase,
-    mwRunWorkflow,
-    mwAdoptResult,
-    mwRenderCore,
-    mwPersistCore,
-    mwRebuildKnowledgeIndex,
-
-    //middleware 核心(自寫單元/插件用)
-    defineMw,
-    defineFirstMw,
-    applyTaps,
-    makeMsg,
-    count,
-    composeChain,
-    runChainOverMsgs,
-    stdReport,
-    MwContractError,
-    resolvePlugins,
-    mergeTaps,
-
-    //內建預設(領域/設定/抓取器;安裝方組自訂管線時可原件取用)
-    createTriageDomain,
-    createExtractDomain,
-    createRelateDomain,
-    createDistillDomain,
-    buildDistillPrompt,
-    buildAuditPrompt,
-    buildRevisePrompt,
-    buildFinalPrompt,
-    renderCoreBody,
-    checkCore,
-    checkIssues,
-    CORE_SCHEMA,
-    VOCAB_DEFAULT,
-    GUIDE_FIELDS,
-    guideDefaultOf,
-    resolveVocab,
-    kbLabelOf,
-    resolveSettings,
-    FETCH_DEFAULT,
-    KNOWLEDGE_DEFAULT,
-    SOURCE_POLICY_DEFAULT,
-    AI_DEFAULT,
-    SKIP_TITLE_PATTERNS_DEFAULT,
-    createDefaultFetchers,
-    mergeFetchers,
-    defaultToRecord,
-    defaultToLinkedRecord,
-    DEFAULT_SITE_ADAPTERS,
-    mergeSiteAdapters,
-    fetchArticle,
-    fetchArticleLinks,
-    discoverFeed,
-    gridSourceUrl,
-    bingNewsSearchUrl,
-    arxivSearchUrl,
-    expandSeeds,
-    createAiAdapter,
-    createProviderHealth,
-    KIND_MAX_PROMPT_CHARS,
-    maxPromptCharsOf,
-    fitChain,
-    createLogger,
-
-    //營運配套(巡檢/維運/執行摘要;CLI 殼由執行端提供)
-    createPatrol,
-    PATROL_MARK_HEAD,
-    PATROL_MARK_TAIL,
-    regenCore,
-    listCores,
-    ingestNotes,
-    reviveDeadDocs,
-    deadMatcher,
-    buildRunSummary,
-    writeRunSummary,
-    readRunSummary,
-    writeRunStart,
-    readRunStart,
-    subReportOf,
-    RUN_SUMMARY_VERSION,
-
-    //機制(生命週期政策/批次 AI harness/關聯與提煉機制/入庫閘門/時間預算)
-    runAiBatchStage,
-    buildWorkflowStages,
-    judgeFromDocs,
-    budgetOf,
-    ensureSeedSources,
-    isLowYield,
-    pickDueSources,
-    recordSourceOutcome,
-    cullZeroYieldSources,
-    slimTerminalDocs,
-    byRetryTierFifo,
-    clueKey,
-    legacyClueKey,
-    cluePriority,
-    saveClues,
-    pickClues,
-    enforceFrontierCap,
-    settleClue,
-    normalizeFeedItems,
-    filterFeedItems,
-    admitFeedItems,
-    ingestFeedItems,
-    conceptVocabulary,
-    pickConcepts,
-    pickCategories,
-    pickCandidates,
-    makeSlugResolver,
-    applyRelationsToNote,
-    markConflict,
-    rebuildRelationIndex,
-    rebuildKnowledgeIndex,
-
-    //工具
-    acquireLock,
-    inspectLock,
-    renderFrontmatter,
-    parseFrontmatter,
-    writeMd,
-    readMd,
-    section,
-    sectionOf,
-    dropSection,
-    createClock,
-    sha1,
-    normalizeConcept,
-    slugify,
-    setConceptFold,
-    normalizeUrl,
-    unwrapNewsUrl,
-    oneline,
-    readJson,
-    writeJson,
-    queueAge,
-    sourceId,
-    docRecord,
-    normalizeWorkDir,
-    expandDirs,
-
+export function positiveNumber(v) {
+    const n = typeof v === 'number' ? v : (typeof v === 'string' &amp;&amp; v.trim() !== '' ? Number(v) : NaN)
+    return Number.isFinite(n) &amp;&amp; n > 0 ? n : null
 }
 
 
-export default WKnowledgeExtract
+/**
+ * 數值設定之正規化:未給(undefined／null)與給了卻無效者分開回報
+ *
+ * @param {*} v 輸入設定值
+ * @returns {Object} 回傳 { given:Boolean, value:Number(無效或未給時為 null) }
+ */
+function posNum(v) {
+    if (v === undefined || v === null) return { given: false, value: null }
+    return { given: true, value: positiveNumber(v) }
+}
+
+
+/**
+ * 設定值之顯示字串(警告訊息用)
+ *
+ * @param {*} v 輸入設定值
+ * @returns {String} 回傳顯示字串:字串加引號、數字與布林原樣、其餘為型別名
+ */
+function show(v) {
+    if (typeof v === 'string') return JSON.stringify(v)
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+    return Array.isArray(v) ? 'array' : typeof v
+}
+
+
+/**
+ * 由整輪時間預算推回該輪之最長可能耗時(分):預算＋安全邊際(已開始之呼叫最多再跑到其自身 timeout)
+ *
+ * 巡檢判「進行中 vs 被砍」與「耗時逼近上限」時,對只宣告了時間預算之輪次以此為界
+ *
+ * @param {Number} deadlineMs 輸入整輪時間預算毫秒數
+ * @returns {Integer} 回傳分鐘數(無條件進位)；deadlineMs 非有限正數時回傳 null
+ * @example
+ * console.log(limitMinOfDeadline(3540000))
+ * // => 65
+ */
+export function limitMinOfDeadline(deadlineMs) {
+    if (!(Number.isFinite(deadlineMs) &amp;&amp; deadlineMs > 0)) return null
+    return Math.ceil((deadlineMs + DEADLINE_MARGIN_MS) / MIN)
+}
+
+
+/**
+ * 解析執行期生效值(純函數;createKnowledgeExtract 之管線、巡檢與 info() 一律取用其結果)
+ *
+ * 排程上限:頂層 cfg.scheduleLimitMin 優先,舊名 cfg.monitor.scheduleLimitMin 只在頂層未給(或無效)時作用,兩者皆有效且不同即警告。
+ * 時間預算:cfg.deadlineMs 明給者優先,否則由排程上限推導(上限−6 分,下限 10 分),再無則套件預設 50 分。
+ * 鎖陳舊期限:cfg.lockStaleMs 明給者優先(小於時間預算＋安全邊際即警告),否則取「上限＋5 分」與「明給之預算＋6 分＋5 分」之大者,皆無則 60 分。
+ * 巡檢判界(patrolLimitMin):排程上限,否則由明給之預算推回(預算＋6 分),皆無為 null(巡檢用其預設)
+ *
+ * @param {Object} cfg 輸入 createKnowledgeExtract 之設定物件，非物件時視為{}
+ * @param {Object} ctx 輸入路徑脈絡 { workDir:String, dirs:Object(core/dirs 之 expandDirs 產物) }
+ * @returns {Object} 回傳 { envFile:String, aiWorkspace:String(注入 cfg.aiAdapter 時為 null), lockFile:String(cfg.lock 為 false 時為 null),
+ *   scheduleLimitMin:Number(未給為 null), patrolLimitMin:Number(未給為 null), deadlineMs:Number, lockStaleMs:Integer, warnings:Array(字串) }
+ * @throws {Error} ctx 缺 workDir／dirs、cfg.lock 非 false／true／字串，或 cfg.envFile／cfg.aiWorkspace 給了非字串時拋出
+ * @example
+ * let r = resolveRuntime({ scheduleLimitMin: 65 }, { workDir: 'c:/kb', dirs: { tmp: 'c:/kb/tmp' } })
+ * console.log(r.deadlineMs, r.lockStaleMs, r.lockFile)
+ * // => 3540000 4200000 c:/kb/tmp/run.lock
+ */
+export function resolveRuntime(cfg, ctx) {
+
+    //check
+    if (!isobj(cfg)) {
+        cfg = {}
+    }
+    if (!isobj(ctx) || !isestr(ctx.workDir) || !isobj(ctx.dirs)) {
+        throw new Error('resolveRuntime 需要 { workDir, dirs }')
+    }
+
+    const { workDir, dirs } = ctx
+    const warnings = []
+    const invalid = (key, v, unit) => warnings.push(`${key} 無效（收到 ${show(v)}；須為大於 0 之${unit}），視同未給`)
+
+    // ── 路徑 ──
+    let lockFile
+    if (cfg.lock === false) lockFile = null
+    else if (cfg.lock === undefined || cfg.lock === null || cfg.lock === true || cfg.lock === '') lockFile = `${dirs.tmp}/run.lock`
+    else if (isestr(cfg.lock)) lockFile = cfg.lock
+    // 此前 true 原樣傳給取鎖而每輪拋錯(仍照寫摘要與收尾);其餘型別同樣每輪才爆——改為建構期拋錯
+    else throw new Error(`cfg.lock 須為 false（不上鎖）、true 或未給（預設 ${dirs.tmp}/run.lock）或鎖檔路徑字串，收到 ${show(cfg.lock)}`)
+    if (cfg.envFile &amp;&amp; !isestr(cfg.envFile)) throw new Error(`cfg.envFile 須為路徑字串（相對者以 workDir 為基準），收到 ${show(cfg.envFile)}`)
+    if (cfg.aiWorkspace &amp;&amp; !isestr(cfg.aiWorkspace)) throw new Error(`cfg.aiWorkspace 須為路徑字串，收到 ${show(cfg.aiWorkspace)}`)
+    const envFile = cfg.envFile
+        ? (path.isAbsolute(cfg.envFile) ? cfg.envFile : `${workDir}/${cfg.envFile}`)
+        : `${workDir}/.env`
+    // AI 工作區只供內建調度層使用;注入 cfg.aiAdapter 時無此目錄
+    const aiWorkspace = cfg.aiAdapter ? null : (cfg.aiWorkspace || `${workDir}/tmp/ai-workspace`)
+
+    // ── 排程上限(頂層優先;舊名只在頂層未給或無效時作用)──
+    const top = posNum(cfg.scheduleLimitMin)
+    const mon = posNum(isobj(cfg.monitor) ? cfg.monitor.scheduleLimitMin : undefined)
+    if (top.given &amp;&amp; top.value === null) invalid('cfg.scheduleLimitMin', cfg.scheduleLimitMin, '分鐘數')
+    if (mon.given &amp;&amp; mon.value === null) invalid('cfg.monitor.scheduleLimitMin', cfg.monitor.scheduleLimitMin, '分鐘數')
+    if (top.value !== null &amp;&amp; mon.value !== null &amp;&amp; top.value !== mon.value) {
+        warnings.push(`cfg.scheduleLimitMin（${top.value}）與舊名 cfg.monitor.scheduleLimitMin（${mon.value}）不同，以頂層為準（管線與巡檢皆用 ${top.value} 分）`)
+    }
+    const scheduleLimitMin = top.value ?? mon.value
+
+    // ── 整輪時間預算 ──
+    const dl = posNum(cfg.deadlineMs)
+    if (dl.given &amp;&amp; dl.value === null) invalid('cfg.deadlineMs', cfg.deadlineMs, '毫秒數')
+    const deadlineMs = dl.value ?? (scheduleLimitMin !== null ? Math.max(DEADLINE_FLOOR_MS, Math.round(scheduleLimitMin * MIN) - DEADLINE_MARGIN_MS) : DEADLINE_DEFAULT_MS)
+    if (scheduleLimitMin === null &amp;&amp; dl.value === null) {
+        warnings.push(`未給 scheduleLimitMin 亦未給 deadlineMs，整輪時間預算採套件預設 ${DEADLINE_DEFAULT_MS / MIN} 分（與本安裝端之排程上限無關）`)
+    }
+
+    // ── 執行鎖陳舊期限(持鎖者宣告值,須涵蓋本輪最長可能耗時)──
+    const ls = posNum(cfg.lockStaleMs)
+    if (ls.given &amp;&amp; ls.value === null) invalid('cfg.lockStaleMs', cfg.lockStaleMs, '毫秒數')
+    const need = Math.max(
+        scheduleLimitMin !== null ? Math.ceil(scheduleLimitMin * MIN) + LOCK_STALE_EXTRA_MS : 0,
+        dl.value !== null ? Math.ceil(dl.value) + DEADLINE_MARGIN_MS + LOCK_STALE_EXTRA_MS : 0,
+    )
+    const lockStaleMs = ls.value !== null ? Math.ceil(ls.value) : (need || LOCK_STALE_DEFAULT_MS)
+    if (ls.value !== null &amp;&amp; lockFile &amp;&amp; ls.value &lt; deadlineMs + DEADLINE_MARGIN_MS) {
+        warnings.push(`cfg.lockStaleMs（${(ls.value / MIN).toFixed(1)} 分）小於整輪時間預算加安全邊際（${((deadlineMs + DEADLINE_MARGIN_MS) / MIN).toFixed(1)} 分）——偏慢但正常之一輪可能被下一個實例判為陳舊而接管，兩條管線同時寫同一個資料庫`)
+    }
+
+    // ── 巡檢判界:排程上限;只給預算者由預算推回;皆無為 null(巡檢用其預設)──
+    const patrolLimitMin = scheduleLimitMin ?? (dl.value !== null ? limitMinOfDeadline(dl.value) : null)
+
+    return { envFile, aiWorkspace, lockFile, scheduleLimitMin, patrolLimitMin, deadlineMs, lockStaleMs, warnings }
+}
+
+
+export default resolveRuntime
 </code></pre>
         </article>
     </section>

@@ -12,7 +12,7 @@
 // 【env 與 envFile 二擇一】排程走 envFile(金鑰不進 process.env、不進 cfg);已解析成物件者(loadSettings 之 st.env、
 //   測試替身)直接給 env。兩者皆無時交 resolveProviders 之預設(process.env)。
 // 【exes】逐 kind 注入 CLI 執行檔絕對路徑:Windows 排程於 session 0 執行時 PATH 可能不含 npm 全域目錄,靠指令名會 ENOENT
-//   (tai-news 實踩;本專案排程環境 PATH 完整,未曾需要)。鍵名為 kind 而非 id 前綴(agy 之鍵為 antigravity)。
+//   (曾實踩)。鍵名為 kind 而非 id 前綴(agy 之鍵為 antigravity)。
 
 import isobj from 'wsemi/src/isobj.mjs'
 import isarr from 'wsemi/src/isarr.mjs'

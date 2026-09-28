@@ -9,8 +9,8 @@ import WKnowledgeExtract from '../src/WKnowledgeExtract.mjs'
 import taskRunner from '../src/taskRunner.mjs'
 
 const SRC = path.resolve('src')
-// 刻意不經主入口匯出之模組內部常數/工具(巡檢自適應階梯參數、run.json 內部之 sanitize)
-const NOT_EXPORTED = new Set(['LADDER', 'STEP_UP_AFTER', 'sanitize'])
+// 刻意不經主入口匯出之模組內部常數/工具(巡檢自適應階梯參數、run.json 內部之 sanitize、總組裝之執行期生效值解析)
+const NOT_EXPORTED = new Set(['LADDER', 'STEP_UP_AFTER', 'sanitize', 'resolveRuntime', 'limitMinOfDeadline', 'positiveNumber'])
 
 describe('unit-entry', function() {
 

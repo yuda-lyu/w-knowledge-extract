@@ -22,7 +22,8 @@ const make = (extra) => createPatrol({
     aiUsageToday: () => usage,
     ...extra,
 })
-const resetState = () => fs.rmSync(`${TMP}/state/patrol-state.json`, { force: true })
+// 巡檢之持久狀態:節流狀態＋事件庫(異常事件之真理,同一 state 目錄下之紀錄 md 皆由它渲染)＋遷移之舊事件
+const resetState = () => ['patrol-state.json', 'patrol-events.jsonl', 'patrol-events-legacy.md'].forEach((f) => fs.rmSync(`${TMP}/state/${f}`, { force: true }))
 const entries = (file) => (fs.readFileSync(file, 'utf8').match(/^### 20/gm) || []).length
 
 
@@ -40,7 +41,10 @@ describe('unit-ops', function() {
     it('用量占比判定以各名額主力（primaryProviderIds）為準，不再以 providerPick[0] 誤報', async () => {
         resetState()
         const p1 = make({ recordFile: `${TMP}/r1.md`, primaryProviderIds: ['agy:gemini-3.8-flash-high'] })
-        assert.deepEqual(await p1.patrolFromPipeline(), { ok: true }, '收尾呼叫回 {ok}——失敗時附 error 供管線留 warn,不再裸吞')
+        const r1 = await p1.patrolFromPipeline()
+        assert.equal(r1.ok, true, '收尾呼叫回 {ok}——失敗時附 error 供管線留 warn,不再裸吞')
+        assert.equal(r1.recordWritten, true)
+        assert.ok(Array.isArray(r1.result.issues), '回傳結構化結果(此前只回 {ok},安裝方只能解析 md)')
         assert.doesNotMatch(fs.readFileSync(`${TMP}/r1.md`, 'utf8'), /AI 流量僅/, '主力 gemini 佔 90%，不得報警（曾因取 providerPick[0] 連續誤報 257 次）')
         resetState()
         const p0 = make({ recordFile: `${TMP}/r0.md` }) // 未給 primaryProviderIds → 退回 providers[0]（agnes 10%）

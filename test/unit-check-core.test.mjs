@@ -11,18 +11,9 @@ import { createKnowledgeExtract } from '../src/core/createKnowledgeExtract.mjs'
 import { resolveSettings, FETCH_DEFAULT, AI_DEFAULT } from '../src/core/settingsDefault.mjs'
 import { decorateSettings, loadSettings, createSettingsHolder } from '../src/core/loadSettings.mjs'
 import { normalizeWorkDir, expandDirs } from '../src/core/dirs.mjs'
+import { stubAi } from './tools/stubAi.mjs'
 
 const TMP = path.resolve(`test/_tmp/check-core-${process.pid}`).replace(/\\/g, '/')
-
-// 總組裝測試用之 AI 調度層替身(不讀 .env;同 unit-objects.test.mjs 之寫法)
-const stubAi = {
-    callJson: async () => ({ ok: false, data: null, error: 'stub', skipped: false, attempts: 0, preview: '' }),
-    getWkf: () => ({}),
-    withBudget: (s) => s,
-    recordCall: () => {},
-    drainStats: () => '無呼叫',
-    aiUsageToday: () => ({ today: '', used: 0, byKey: {}, chain: '', providers: [], skipped: [] }),
-}
 
 describe('unit-check-core', function() {
 

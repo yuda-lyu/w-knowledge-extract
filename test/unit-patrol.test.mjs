@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createPatrol } from '../src/ops/patrol.mjs'
-import { buildRunSummary, writeRunSummary, readRunSummary, sanitize, subReportOf } from '../src/ops/runSummary.mjs'
+import { buildRunSummary, writeRunSummary, readRunSummary, writeRunStart, readRunStart, sanitize, subReportOf } from '../src/ops/runSummary.mjs'
 import { createClock } from '../src/util/clock.mjs'
 import { memStore } from './tools/memStore.mjs'
 
@@ -33,7 +33,9 @@ const make = (extra = {}) => createPatrol({
     ...extra,
 })
 const resetLogs = () => {
-    fs.rmSync(`${TMP}/log`, { recursive: true, force: true }); fs.mkdirSync(`${TMP}/log/${today}`, { recursive: true }); fs.rmSync(`${TMP}/state/patrol-state.json`, { force: true })
+    fs.rmSync(`${TMP}/log`, { recursive: true, force: true }); fs.mkdirSync(`${TMP}/log/${today}`, { recursive: true })
+    // 巡檢之持久狀態:節流狀態＋事件庫＋遷移之舊事件(同一 state 目錄下之紀錄 md 皆由事件庫渲染)
+    for (const f of ['patrol-state.json', 'patrol-events.jsonl', 'patrol-events-legacy.md']) fs.rmSync(`${TMP}/state/${f}`, { force: true })
 }
 /** 寫一輪日誌(本小時,序號遞增);lines 為日誌行(不含時間戳),finished 決定是否有結束行 */
 const writeLog = (lines, { finished = true, startMinOffset = 0, spanSec = 60 } = {}) => {
@@ -65,6 +67,15 @@ const summaryFor = (stamp, { ms = 1000, extract = {}, relate = {}, fetch = {}, d
     return buildRunSummary({ report, startedAt: 'x', endedAt: 'y', deadlineMs: 2940_000, ai, stamp })
 }
 const record = (p) => fs.readFileSync(p.recordFile, 'utf8')
+/** 以任意啟動時刻寫一輪日誌(clock 時區);lines 為 [秒, 文字];limitMin 給了(含 null)即寫開工標記 */
+const writeRunAt = (startMs, lines, { limitMin } = {}) => {
+    const stamp = fmt(startMs).slice(0, 19).replace(/[-T:]/g, '')
+    fs.mkdirSync(`${TMP}/log/${stamp.slice(0, 8)}`, { recursive: true })
+    fs.writeFileSync(`${TMP}/log/${stamp.slice(0, 8)}/${stamp}-run.log`, lines.map(([s, t]) => `[${fmt(startMs + s * 1000)}] INFO  ${t}`).join('\n') + '\n', 'utf8')
+    if (limitMin !== undefined) writeRunStart({ dir: `${TMP}/log`, stamp, start: { limitMin } })
+    return stamp
+}
+const SKIP_LINE = '管道[知識管線] 略過本輪：另一個執行中（pid 1，已執行 10s，陳舊期限 485 分（持鎖者宣告））'
 
 describe('unit-patrol', function() {
 
@@ -237,6 +248,97 @@ describe('unit-patrol', function() {
         resetLogs()
         const b = await make({ recordFile: `${TMP}/r6b.md` }).assess()
         assert.ok(b.issues.some((x) => /最近 115 分鐘無管線啟動（近 3 日至今 \d{2} 時無日誌）——排程可能未觸發/.test(x)), '全無日誌仍須報')
+    })
+
+    // ── 逐輪判界(2026-09-28):不同上限之輪次共用同一 log 目錄(安裝方每小時 65 分＋長時執行 485 分) ──
+    it('逐輪判界:長時執行(宣告 485 分)進行中不判撞上限,其持鎖期間之略過列資訊;無開工標記之舊輪退觀察者之上限;一般輪次造成之略過仍為異常', async function() {
+        const now = Math.floor(Date.now() / 1000) * 1000 // 對齊整秒:檔名時間戳只到秒,spanSec 才不差 1 秒
+        if (fmt(now - 90 * 60_000).slice(0, 10).replace(/-/g, '') !== today) this.skip() // ② 只判今日之輪次:凌晨 1 點半前構造不出
+        resetLogs()
+        const long = [[0, '管道[知識管線] 啟動（5 段）'], [80 * 60, '內文[x] 成功（100 字，article）']]
+        writeRunAt(now - 90 * 60_000, long, { limitMin: 485 })
+        writeRunAt(now - 20 * 60_000, [[0, SKIP_LINE]], { limitMin: 65 })
+        writeRunAt(now - 5 * 60_000, [[0, SKIP_LINE]], { limitMin: 65 })
+        const p = make({ recordFile: `${TMP}/r8.md`, scheduleLimitMin: 65 })
+        const a = await p.assess()
+        assert.ok(!a.issues.some((x) => /撞排程上限|早夭/.test(x)), `以其宣告之 485 分判界(此前以觀察者 65 分判而誤報撞上限):${a.issues.join('｜')}`)
+        assert.ok(!a.issues.some((x) => /因上一輪仍在執行而略過/.test(x)), '長時執行持鎖期間之略過非異常')
+        assert.ok(a.info.some((x) => /因長時執行持鎖而略過（其宣告之上限長於略過輪，設計如此）/.test(x)), a.info.join('｜'))
+        assert.ok(a.info.some((x) => /進行中/.test(x)))
+        await p.patrolFromPipeline()
+        assert.match(record(p), /⏭ 略過（長時執行持鎖中）/)
+        assert.match(record(p), /⏳ 進行中（9\d 分）/)
+
+        // 升版前之輪次(無開工標記、未跑完無 run.json):退觀察者之 65 分
+        for (const f of fs.readdirSync(`${TMP}/log`, { recursive: true }).map(String).filter((f) => f.endsWith('.start.json'))) fs.rmSync(`${TMP}/log/${f}`)
+        const b = await make({ recordFile: `${TMP}/r8b.md`, scheduleLimitMin: 65 }).assess()
+        assert.ok(b.issues.some((x) => /撞排程上限未跑完：.*\(4800s\)/.test(x)), b.issues.join('｜'))
+
+        resetLogs()
+        writeRunAt(now - 30 * 60_000, [[0, '管道[知識管線] 啟動（5 段）'], [60, '內文[x] 成功（100 字，article）']], { limitMin: 65 })
+        const hm = fmt(now - 3 * 60_000).slice(11, 16)
+        writeRunAt(now - 3 * 60_000, [[0, SKIP_LINE]], { limitMin: 65 })
+        const c = await make({ recordFile: `${TMP}/r8c.md`, scheduleLimitMin: 65 }).assess()
+        assert.ok(c.issues.some((x) => x.includes(`今日有 1 輪因上一輪仍在執行而略過：${hm}`)), `同上限之輪次重疊仍為異常:${c.issues.join('｜')}`)
+    })
+
+    it('逐輪判界:⑫ 以各輪上限判——宣告 485 分之長時執行耗時 300 分不報;無標記之舊輪退 run.json 預算推回(只放寬);逼近自身上限者照報', async () => {
+        resetLogs()
+        const t0 = Date.parse(`${today.slice(0, 4)}-${today.slice(4, 6)}-${today.slice(6, 8)}T00:00:00${tz}`)
+        const done = (s) => [[0, '管道[知識管線] 啟動（5 段）'], [s, `管道[知識管線] 結束，耗時 ${s}.0s`]]
+        writeRunAt(t0, done(18000), { limitMin: 485 })
+        const s2 = writeRunAt(t0 + 60_000, done(18000)) // 升版前之長時執行:無開工標記,run.json 之預算 479 分 → 推回 485 分
+        writeRunSummary({ dir: `${TMP}/log`, stamp: s2, summary: { ...summaryFor(s2, { ms: 18000_000 }), deadlineMs: 479 * 60_000 } })
+        writeRunAt(t0 + 120_000, done(3600), { limitMin: 65 })
+        const a = await make({ recordFile: `${TMP}/r9.md`, scheduleLimitMin: 65 }).assess()
+        const slow = a.issues.find((x) => /整輪耗時逼近排程上限/.test(x)) || ''
+        assert.match(slow, /^整輪耗時逼近排程上限 65 分：00:02=3600s——/, `只報逼近自身上限之輪:${slow}`)
+        // 開工標記宣告 null(未給上限)者用本巡檢之值
+        resetLogs()
+        writeRunAt(t0, done(3600), { limitMin: null })
+        const b = await make({ recordFile: `${TMP}/r9b.md`, scheduleLimitMin: 65 }).assess()
+        assert.ok(b.issues.some((x) => /^整輪耗時逼近排程上限 65 分：00:00=3600s——/.test(x)))
+        const c = await make({ recordFile: `${TMP}/r9c.md`, scheduleLimitMin: 485 }).assess()
+        assert.ok(!c.issues.some((x) => /整輪耗時逼近/.test(x)), '宣告 null 者隨觀察者之上限')
+    })
+
+    it('開工標記:writeRunStart／readRunStart 往返;stamp 格式不符回 null;版本不符或壞檔讀回 null', () => {
+        const stamp = `${today}${hh}9800`
+        const file = writeRunStart({ dir: `${TMP}/log`, stamp, start: { pid: 1, limitMin: 485, deadlineMs: 1, f: () => 1 } })
+        assert.ok(file.endsWith(`${stamp}-run.start.json`))
+        const j = readRunStart(file)
+        assert.deepEqual([j.version, j.stamp, j.limitMin, j.pid, j.f], [1, stamp, 485, 1, undefined])
+        assert.equal(writeRunStart({ dir: `${TMP}/log`, stamp: 'bad' }), null)
+        assert.equal(writeRunStart(null), null)
+        fs.writeFileSync(file, '{壞', 'utf8')
+        assert.equal(readRunStart(file), null)
+        fs.writeFileSync(file, JSON.stringify({ version: 9 }), 'utf8')
+        assert.equal(readRunStart(file), null)
+        assert.equal(readRunStart(''), null)
+        fs.rmSync(file)
+    })
+
+    it('scheduleLimitMin／schedulePeriodMin 正規化:字串 \'60\' 取 60(此前 ① 門檻成 \'6060\')、0／負／非數字用預設;週期入 ① 與檔頭', async () => {
+        resetLogs()
+        const p = make({ recordFile: `${TMP}/r10.md`, scheduleLimitMin: '60' })
+        assert.equal(p.scheduleLimitMin, 60)
+        assert.ok((await p.assess()).issues.some((x) => /^最近 120 分鐘無管線啟動/.test(x)))
+        for (const bad of [0, -5, 'abc', null]) assert.equal(make({ scheduleLimitMin: bad }).scheduleLimitMin, 60, String(bad))
+        const q = make({ recordFile: `${TMP}/r10b.md`, scheduleLimitMin: 65, schedulePeriodMin: 30 })
+        assert.equal(q.schedulePeriodMin, 30)
+        assert.ok((await q.assess()).issues.some((x) => /^最近 95 分鐘無管線啟動/.test(x)), '週期 30＋上限 65')
+        await q.patrolFromPipeline()
+        assert.match(record(q), /每 30 分一輪/, '檔頭不再寫死「每小時一輪」')
+    })
+
+    it('runTask 包裝之收尾行「完成，總耗時 Ns」視為已跑完並取其耗時(此前不認,被判未跑完)', async () => {
+        resetLogs()
+        writeLog(['知識管線啟動'], { finished: false, spanSec: 5 })
+        const f = fs.readdirSync(`${TMP}/log/${today}`).find((x) => x.endsWith('-run.log'))
+        fs.appendFileSync(`${TMP}/log/${today}/${f}`, `[${clock.iso8()}] INFO  知識管線完成，總耗時 12.5s\n`, 'utf8')
+        const a = await make({ recordFile: `${TMP}/r11.md` }).assess()
+        const row = a.rows.find((r) => r.file === f)
+        assert.deepEqual([row.finished, row.elapsed], [true, 12.5])
     })
 
     it('runCli:未給 dirs.tmp 時鎖檔退至 dirs.state(建構期只要求 log/state,此前 path.join(undefined) 拋 TypeError);結束即釋放', async () => {

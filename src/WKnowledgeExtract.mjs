@@ -9,7 +9,7 @@ import { createKnowledgeExtract } from './core/createKnowledgeExtract.mjs'
 import { createFetchObject, createOrganizeObject, createRelateObject, createDistillObject } from './core/objects.mjs'
 import { defineMw, defineFirstMw, applyTaps, makeMsg, count, composeChain, runChainOverMsgs, stdReport, MwContractError } from './core/kernel.mjs'
 import { resolvePlugins, mergeTaps } from './core/plugins.mjs'
-import { acquireLock } from './core/lock.mjs'
+import { acquireLock, inspectLock } from './core/lock.mjs'
 import { resolveSettings, FETCH_DEFAULT, KNOWLEDGE_DEFAULT, SOURCE_POLICY_DEFAULT, AI_DEFAULT, SKIP_TITLE_PATTERNS_DEFAULT } from './core/settingsDefault.mjs'
 // ── 子階段工廠與 mw 積木 ──
 import { stageSeedSync, mwSyncSeeds, mwCullSources } from './stages/seedSyncStage.mjs'
@@ -46,8 +46,8 @@ import { createAiAdapter } from './ai/adapter.mjs'
 import { createProviderHealth } from './ai/providerHealth.mjs'
 import { KIND_MAX_PROMPT_CHARS, maxPromptCharsOf, fitChain } from './ai/capability.mjs'
 import { createLogger } from './ops/logger.mjs'
-import { createPatrol } from './ops/patrol.mjs'
-import { buildRunSummary, writeRunSummary, readRunSummary, subReportOf, RUN_SUMMARY_VERSION } from './ops/runSummary.mjs'
+import { createPatrol, PATROL_MARK_HEAD, PATROL_MARK_TAIL } from './ops/patrol.mjs'
+import { buildRunSummary, writeRunSummary, readRunSummary, writeRunStart, readRunStart, subReportOf, RUN_SUMMARY_VERSION } from './ops/runSummary.mjs'
 import { regenCore, listCores } from './ops/regenCore.mjs'
 import { ingestNotes } from './ops/ingestNotes.mjs'
 import { reviveDeadDocs, deadMatcher } from './ops/reviveDocs.mjs'
@@ -215,6 +215,8 @@ let WKnowledgeExtract = {
 
     //營運配套(巡檢/維運/執行摘要;CLI 殼由執行端提供)
     createPatrol,
+    PATROL_MARK_HEAD,
+    PATROL_MARK_TAIL,
     regenCore,
     listCores,
     ingestNotes,
@@ -223,6 +225,8 @@ let WKnowledgeExtract = {
     buildRunSummary,
     writeRunSummary,
     readRunSummary,
+    writeRunStart,
+    readRunStart,
     subReportOf,
     RUN_SUMMARY_VERSION,
 
@@ -261,6 +265,7 @@ let WKnowledgeExtract = {
 
     //工具
     acquireLock,
+    inspectLock,
     renderFrontmatter,
     parseFrontmatter,
     writeMd,

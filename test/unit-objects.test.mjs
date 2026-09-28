@@ -15,20 +15,12 @@ import { createClock } from '../src/util/clock.mjs'
 import { setConceptFold, normalizeConcept } from '../src/util/text.mjs'
 import { memStore } from './tools/memStore.mjs'
 import { nullLogger } from './tools/nullLogger.mjs'
+import { stubAi } from './tools/stubAi.mjs'
 
 // 暫存路徑 cwd 相對(自套件根執行):測試專用,after 清除(原寫在 ./tmp 且從未清除,留下 smoke-x/kf-objects 殘檔)
 const TMP = path.resolve(`test/_tmp/objects-${process.pid}`).replace(/\\/g, '/')
 const TMP_X = `${TMP}/x`
 const TMP_O = `${TMP}/o`
-// 總組裝測試用之 AI 調度層替身(不讀 .env;真 adapter 於啟動期檢核席位,測試環境無金鑰會拋)
-const stubAi = {
-    callJson: async () => ({ ok: false, data: null, error: 'stub', skipped: false, attempts: 0, preview: '' }),
-    getWkf: () => ({}),
-    withBudget: (s) => s,
-    recordCall: () => {},
-    drainStats: () => '無呼叫',
-    aiUsageToday: () => ({ today: '', used: 0, byKey: {}, chain: '', providers: [], skipped: [] }),
-}
 
 describe('unit-objects', function() {
 

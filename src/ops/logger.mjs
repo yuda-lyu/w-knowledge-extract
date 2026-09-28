@@ -1,7 +1,7 @@
 // logger.mjs — 內建日誌:每次執行一份日誌檔(兩種工廠,同一核心)
 //   createRunLogger({ root, getISO, echo }):open 與建立分離,檔名 {root}/{day}/{runId}[-{name}].log(執行殼件,自 tai-news 移入)
 //   createLogger(name, { dir, clock, echo }):建構即 open(clock.stamp8(), day, name),檔名 {dir}/{day}/{stamp}-{name}.log
-//     (本套件各段、trigger 與 ops/patrol 所用;另附 now／cliFail／elapsed)
+//     (本套件各段與 ops/patrol 所用;另附 now／cliFail／elapsed)
 //
 // 【格式是套件契約】排程執行沒有 console 可看,日誌是唯一的事後診斷來源;ops/patrol 依此格式解析逐輪統計——
 //   logFactory 可被安裝方置換,但置換者須自負巡檢解析。
@@ -120,7 +120,7 @@ export function createRunLogger(opt = {}) {
 }
 
 /**
- * 本套件之日誌工廠:建構即開檔 {dir}/{day}/{stamp}-{name}.log(本套件各段、trigger 與 ops/patrol 所用)。
+ * 本套件之日誌工廠:建構即開檔 {dir}/{day}/{stamp}-{name}.log(本套件各段與 ops/patrol 所用)。
  *
  * @param {String} name 輸入日誌名字串(檔名尾段)，必填
  * @param {Object} opt 輸入設定物件

@@ -23,7 +23,7 @@ import readEnvFile from 'w-dispatch-ai/src/readEnvFile.mjs'
 import createFileStore from 'w-dispatch-ai/src/wkf/createFileStore.mjs'
 import createUsageCounter from 'w-dispatch-ai/src/wkf/createUsageCounter.mjs'
 import { loadSettings, decorateSettings, createSettingsHolder, DF_DIRS } from './core/loadSettings.mjs'
-import { acquireLock } from './core/lock.mjs'
+import { acquireLock, inspectLock } from './core/lock.mjs'
 import { createClock, createTime } from './util/clock.mjs'
 import { createRunLogger, createLogger } from './ops/logger.mjs'
 import { runTask } from './ops/runTask.mjs'
@@ -48,7 +48,7 @@ import { oneline, cliFailDetail, firstLineClamp, readJson, writeJson } from './u
  * 不載入知識管線(stages／domain／opencc-js／w-orm-lmdb),主入口 WKnowledgeExtract 亦含本物件全部成員(同名即同一實作)
  *
  * @returns {Object} 回傳執行殼物件,含 loadSettings、decorateSettings、createSettingsHolder、DF_DIRS、createTime、createClock、
- *     createRunLogger、createLogger、runTask、installProcessGuards、acquireLock、createTelegramNotifier、escapeHtml、TELEGRAM_TEXT_MAX、
+ *     createRunLogger、createLogger、runTask、installProcessGuards、acquireLock、inspectLock、createTelegramNotifier、escapeHtml、TELEGRAM_TEXT_MAX、
  *     createAiCaller、createAiAdapter、logAiOutcome、createAiEventLogger、OUTCOME_TEXT、parseIndexList、parseJsonArray、
  *     makeArrayCoverageValidator、resolveCatalogue、mergeCatalogue、timeoutPatch、readEnvFile、createFileStore、createUsageCounter、
  *     runJsonCli、makeLineEmitter、oneline、cliFailDetail、firstLineClamp、readJson、writeJson
@@ -89,6 +89,7 @@ let taskRunner = {
     runTask,
     installProcessGuards,
     acquireLock,
+    inspectLock,
 
     //通知
     createTelegramNotifier,

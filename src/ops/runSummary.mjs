@@ -9,6 +9,8 @@
 // 【內容:只留可序列化之純量與扁平物件】stage.result 內可能帶大物件(子階段 report 之 detail
 //   含統計,無原文);一律經 sanitize 截字串、限深度,檔案永遠只有幾 KB。
 // 【失敗不影響管線】寫檔失敗只回 null,不拋——摘要是附加產物,不承擔本輪成敗。
+// 【開工標記 run.start.json】run.json 於收尾才寫,被砍的輪次沒有它;開工標記於開工即寫本輪之上限宣告
+//   (limitMin 等),巡檢對不同上限之輪次共用同一個 log 目錄時逐輪判界靠它(2026-09-28)。
 
 import fs from 'fs'
 import path from 'path'
@@ -17,6 +19,9 @@ import isobj from 'wsemi/src/isobj.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 
 export const RUN_SUMMARY_VERSION = 1
+
+// 開工標記之格式版本(與執行摘要分開演進)
+const RUN_START_VERSION = 1
 
 /**
  * 深度清洗任意值為可序列化形狀:只保留純量／陣列／物件,限深度與字串長度;函數與循環參照一律剔除
@@ -176,6 +181,68 @@ export function readRunSummary(file) {
 }
 
 /**
+ * 寫入開工標記 log/<day>/<stamp>-run.start.json(本輪上限之宣告,開工即寫;檔頭);回傳檔案路徑,失敗回 null(不承擔本輪成敗)
+ *
+ * @param {Object} p 輸入來源物件
+ * @param {String} p.dir 輸入 log 根目錄字串
+ * @param {String} p.stamp 輸入時間戳字串(與日誌檔同一時間戳,格式須為 14 碼數字)
+ * @param {Object} [p.start={}] 輸入開工資訊物件 { pid, startedAt, limitMin, scheduleLimitMin, deadlineMs, lockStaleMs }，
+ *   limitMin 為巡檢判本輪「進行中 vs 被砍」與「耗時逼近上限」之分鐘數(未宣告為 null)
+ * @returns {String} 回傳檔案路徑;p 非物件、stamp 格式不符或寫入失敗時回傳 null
+ * @example
+ * need test in nodejs.
+ *
+ * let file = writeRunStart({ dir: './log', stamp: '20260921120000', start: { pid: 1234, limitMin: 65 } })
+ */
+export function writeRunStart(p) {
+
+    //check
+    if (!isobj(p)) {
+        return null
+    }
+
+    try {
+        const stamp = String(p.stamp || '')
+        if (!/^\d{14}$/.test(stamp)) return null
+        const folder = path.join(p.dir, stamp.slice(0, 8))
+        fsCreateFolder(folder)
+        const file = path.join(folder, `${stamp}-run.start.json`)
+        fs.writeFileSync(file, JSON.stringify({ ...(isobj(p.start) ? sanitize(p.start) : {}), version: RUN_START_VERSION, stamp }, null, 2), 'utf8')
+        return file
+    }
+    catch {
+        return null
+    }
+}
+
+/**
+ * 讀取開工標記;不存在、壞檔、版本不符或 file 非有效字串皆回 null(巡檢退回其他判界來源)
+ *
+ * @param {String} file 輸入開工標記檔案路徑字串(日誌檔 <stamp>-run.log 對應 <stamp>-run.start.json)
+ * @returns {Object} 回傳開工標記物件;讀取失敗或版本不符時回傳 null
+ * @example
+ * need test in nodejs.
+ *
+ * let s = readRunStart('./log/20260921/20260921120000-run.start.json')
+ */
+export function readRunStart(file) {
+
+    //check
+    if (!isestr(file)) {
+        return null
+    }
+
+    try {
+        const j = JSON.parse(fs.readFileSync(file, 'utf8'))
+        if (!isobj(j) || j.version !== RUN_START_VERSION) return null
+        return j
+    }
+    catch {
+        return null
+    }
+}
+
+/**
  * 取某階段之子階段 report;無則 null。
  * 先依階段名,找不到再以子階段鍵於全部階段搜尋——階段名(抓取／彙整…)可由安裝方以 opt.name 覆寫,
  * 子階段名(listFetch／extract…)是 hook 名冊之固定鍵,才是穩定的接縫(2026-09-12 複審 B9)
@@ -195,4 +262,4 @@ export function subReportOf(summary, stageName, subName) {
     return pick(stages.find((s) => s.name === stageName)) || stages.map(pick).find(Boolean) || null
 }
 
-export default { buildRunSummary, writeRunSummary, readRunSummary, subReportOf, sanitize, RUN_SUMMARY_VERSION }
+export default { buildRunSummary, writeRunSummary, readRunSummary, writeRunStart, readRunStart, subReportOf, sanitize, RUN_SUMMARY_VERSION }

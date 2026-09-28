@@ -15,9 +15,12 @@
 //   dedup → identity＋seen;內建抓取器＋cfg.fetchers 合併(同 id 置換);
 //   AI 調度層內建(envFile 給金鑰;cfg.aiAdapter 可整組置換);
 //   clock/conceptFold/logFactory 內建;索引自動附掛(always)。
-// 【時間預算單一來源】整輪軟性截止 deadlineMs 與執行鎖陳舊期限 lockStaleMs 皆由排程上限
-//   (cfg.scheduleLimitMin,舊名 cfg.monitor.scheduleLimitMin 仍認)推導;cfg 明給者優先。
+// 【時間預算單一來源】整輪軟性截止 deadlineMs、執行鎖陳舊期限 lockStaleMs、巡檢判界與各路徑皆由 core/runtime 之
+//   resolveRuntime 一次解析(排程上限 cfg.scheduleLimitMin 優先,舊名 cfg.monitor.scheduleLimitMin 只在頂層未給時作用;
+//   cfg 明給者優先);管線、巡檢與 info() 同取此份,不各算各的(2026-09-28)。
 //   各段經 core/budget 之 budgetOf(ctx) 消費同一份預算,不各自持有數字。
+// 【開工標記】每輪開工先寫 log/<day>/<stamp>-run.start.json(本輪上限之宣告):被砍的輪次沒有 run.json,
+//   巡檢逐輪判界(不同上限之輪次共用同一個 log 目錄時)靠它(2026-09-28)。
 // 【啟動期檢核】AI 名額(席位)之 use/fallback 全部可解析才開工——缺金鑰或 id 打錯要在啟動期爆,
 //   不是跑到第一次呼叫才拋、再被批次層當單批異常吞掉(2026-09-12 複審 A3)。
 // 【收尾在管線之外、摘要之後】每輪結束依序:①寫結構化摘要 run.json ②收尾鉤子(預設巡檢)。
@@ -34,6 +37,7 @@ import WOrmDefault from 'w-orm-lmdb/src/WOrmLmdb.mjs'
 import W from 'w-data-pipeline/src/WDataPipeline.mjs'
 import { definePipeline, runPipeline } from 'w-data-pipeline/src/core/definePipeline.mjs'
 import { acquireLock } from './lock.mjs'
+import { resolveRuntime } from './runtime.mjs'
 import { normalizeWorkDir, expandDirs } from './dirs.mjs'
 import { resolveSettings, SKIP_TITLE_PATTERNS_DEFAULT } from './settingsDefault.mjs'
 import { resolvePlugins, mergeTaps } from './plugins.mjs'
@@ -52,7 +56,7 @@ import { resolveVocab, kbLabelOf } from '../domain/vocabDefault.mjs'
 import { createAiAdapter } from '../ai/adapter.mjs'
 import { createLogger } from '../ops/logger.mjs'
 import { createPatrol } from '../ops/patrol.mjs'
-import { buildRunSummary, writeRunSummary } from '../ops/runSummary.mjs'
+import { buildRunSummary, writeRunSummary, writeRunStart } from '../ops/runSummary.mjs'
 import { stageKnowledgeIndex } from '../stages/indexStage.mjs'
 
 /**
@@ -66,14 +70,6 @@ const OBJECT_STAGES = {
     relate: ['relate', 'relationIndex'],
     distill: ['distill'],
 }
-
-// 安全邊際:截止只切得到已接上剩餘預算的呼叫;席位預算於開工當下封頂(core/budget),但已開始的那一次
-// 嘗試最多再跑到其自身 timeout(現行最大 claude:sonnet 360s),邊際取 6 分鐘涵蓋之;下限 10 分
-const DEADLINE_MARGIN_MS = 360_000
-const DEADLINE_DEFAULT_MS = 3000_000
-// 執行鎖陳舊期限須大於排程上限:正常但偏慢的執行不可在跑到一半被下一實例判為殘留而搶鎖
-const LOCK_STALE_EXTRA_MS = 300_000
-const LOCK_STALE_DEFAULT_MS = 3600_000
 
 /**
  * 由 settings.ai 列出全部席位(名稱 → {use,fallback}),供啟動期檢核
@@ -157,10 +153,16 @@ function mergeDomains(builtin, injected) {
  * @param {Object} [cfg.data] 輸入資料物件 { seedSources, gridTopics, vocab, skipTitlePatterns }；vocab 之 kbLabel／guide(prompt 領域句)見 domain/vocabDefault 之 resolveVocab
  * @param {Object} [cfg.domains] 輸入頂層 domain 注入 { triage?, extract?, relate?, distill? }，給了的整組置換內建(須具備內建之全部成員)，同時作用於管線與 info()
  * @param {String} [cfg.indexTitle] 輸入知識庫索引標題，未給則為「<知識庫稱呼>索引」(稱呼見 kbLabelOf，無 domain 時為「知識庫索引」)
- * @param {Object} [cfg.monitor] 輸入巡檢設定(逐鍵覆寫 createPatrol 之 cfg)，其中 pushTitle 未給則為「<知識庫稱呼>巡檢」
+ * @param {Number} [cfg.scheduleLimitMin] 輸入排程執行上限分鐘數(大於 0 之數字或數字字串)，時間預算、鎖陳舊期限與巡檢判界皆由此推導；
+ *   舊名 cfg.monitor.scheduleLimitMin 只在本鍵未給或無效時作用，兩者皆有效且不同時以本鍵為準並警告(解析規則見 core/runtime)
+ * @param {Number} [cfg.deadlineMs] 輸入整輪軟性截止毫秒數，未給由排程上限推導
+ * @param {Number} [cfg.lockStaleMs] 輸入執行鎖陳舊期限毫秒數(持鎖者宣告值)，未給由排程上限與時間預算推導
+ * @param {Boolean|String} [cfg.lock] 輸入執行鎖：false 不上鎖、true 或未給用 <dirs.tmp>/run.lock、字串為鎖檔路徑
+ * @param {Object} [cfg.monitor] 輸入巡檢設定(逐鍵覆寫 createPatrol 之 cfg)，其中 pushTitle 未給則為「<知識庫稱呼>巡檢」；
+ *   scheduleLimitMin 不在此覆寫(巡檢判界一律取執行期生效值，見 cfg.scheduleLimitMin)
  * @returns {Object} 回傳 { run:Function, openStores:Function, closeStores:Function, info:Function }
  * @throws {Error} cfg.workDir 非有效字串、cfg.data.vocab 之 kbLabel／guide 不合規格、cfg.domains 不合規格、
- *   settings.fetch.arxivCategories／gridArxivCategories 型別不符，或 AI 席位無法解析時拋出
+ *   settings.fetch.arxivCategories／gridArxivCategories 型別不符、cfg.lock／envFile／aiWorkspace 型別不符，或 AI 席位無法解析時拋出
  */
 export function createKnowledgeExtract(cfg = {}) {
 
@@ -259,12 +261,12 @@ export function createKnowledgeExtract(cfg = {}) {
         distill: createDistillDomain({ vocab: data.vocab, notesPerTarget: settings.knowledge.distillNotesPerConcept }),
     }, cfg.domains)
 
+    // ── 執行期生效值(core/runtime:排程上限/時間預算/鎖/路徑之單一來源;管線、巡檢與 info() 同取此份)──
+    const runtime = resolveRuntime(cfg, { workDir, dirs })
+    const { envFile, aiWorkspace, lockFile, deadlineMs, lockStaleMs } = runtime
+
     // ── AI 調度層(內建;cfg.aiAdapter 整組置換——測試 stub/自建調度皆走這裡)──
     fsCreateFolder(dirs.state)
-    const envFile = cfg.envFile
-        ? (path.isAbsolute(cfg.envFile) ? cfg.envFile : `${workDir}/${cfg.envFile}`)
-        : `${workDir}/.env`
-    const aiWorkspace = cfg.aiWorkspace || `${workDir}/tmp/ai-workspace`
     // 當輪日誌:adapter 於建構期建立而日誌逐輪建立,健康層事件經此轉寫進當輪日誌(輪外為 null 即靜默)
     let runLog = null
     const ai = cfg.aiAdapter || createAiAdapter({
@@ -284,6 +286,8 @@ export function createKnowledgeExtract(cfg = {}) {
         const r = ai.validateSeats(listSeats(settings.ai))
         for (const w of r?.warnings || []) startupWarnings.push(w)
     }
+    // 執行期生效值之警告(無效值、新舊名不一致、未給上限):每輪記入日誌,巡檢以 ⑰ 揭露
+    for (const w of runtime.warnings) startupWarnings.push(w)
 
     // 提煉工作流:惰性建構(名額 id 驗證與 wkf 建立延後到提煉真的要跑;
     // 金鑰全缺的環境(測試/純抓取端)不因此在啟動期爆)
@@ -401,22 +405,7 @@ export function createKnowledgeExtract(cfg = {}) {
         getDistillWorkflow,
     })
 
-    const lockFile = cfg.lock === false ? null : (cfg.lock || `${dirs.tmp}/run.lock`)
     const mkLog = cfg.logFactory || (() => createLogger('run', { dir: dirs.log, clock }))
-
-    // 時間預算單一來源(檔頭):排程上限 − 安全邊際;明給 deadlineMs 者優先。執行鎖陳舊期限同源推導。
-    // cfg.scheduleLimitMin 為正式鍵(舊名 monitor.scheduleLimitMin 仍認:它此前只是巡檢環境,現為預算上游)
-    const limitMin = Number(cfg.scheduleLimitMin ?? cfg.monitor?.scheduleLimitMin)
-    const hasLimit = Number.isFinite(limitMin) && limitMin > 0
-    const deadlineMs = Number.isFinite(cfg.deadlineMs) && cfg.deadlineMs > 0
-        ? cfg.deadlineMs
-        : (hasLimit ? Math.max(600_000, limitMin * 60_000 - DEADLINE_MARGIN_MS) : DEADLINE_DEFAULT_MS)
-    const lockStaleMs = Number.isFinite(cfg.lockStaleMs) && cfg.lockStaleMs > 0
-        ? cfg.lockStaleMs
-        : (hasLimit ? limitMin * 60_000 + LOCK_STALE_EXTRA_MS : LOCK_STALE_DEFAULT_MS)
-    if (!hasLimit && !(Number.isFinite(cfg.deadlineMs) && cfg.deadlineMs > 0)) {
-        startupWarnings.push(`未給 scheduleLimitMin 亦未給 deadlineMs，整輪時間預算採套件預設 ${DEADLINE_DEFAULT_MS / 60000} 分（與本安裝端之排程上限無關）`)
-    }
 
     // 巡檢之「主力供應商」＝各名額(extract/relate/distill 各席)之 use;用量占比判定據此計算。
     // 曾以 providerPick[0] 當主力:主力換家後每小時誤報一次(2026-08-13 起累計 257 筆)
@@ -446,7 +435,6 @@ export function createKnowledgeExtract(cfg = {}) {
                 closeStores,
                 aiUsageToday: () => ai.aiUsageToday(),
                 primaryProviderIds,
-                scheduleLimitMin: hasLimit ? limitMin : undefined,
                 // 狀態機全集(pending 兩態＋終態):多出來的狀態即「未判定即丟棄」類機制被重新引入之訊號
                 knownStatuses: ['new', 'raw', ...settings.fetch.terminalStatuses],
                 // 待辦表用:四關卡之每輪容量(由設定推導,與各階段實際取量同源)與提煉選題門檻
@@ -464,6 +452,9 @@ export function createKnowledgeExtract(cfg = {}) {
                 // 推送標題與索引標題同源(知識庫稱呼);cfg.monitor.pushTitle 可覆寫
                 pushTitle: `${kbLabel}巡檢`,
                 ...(cfg.monitor || {}),
+                // 判界取執行期生效值(置於展開之後):舊名 monitor.scheduleLimitMin 已於 resolveRuntime 依序解析並正規化,
+                // 此前展開時蓋掉頂層值——管線以 480 分跑、巡檢以 60 分判界(安裝方回報)
+                scheduleLimitMin: runtime.patrolLimitMin ?? undefined,
             })
         }
         return patrolMemo
@@ -474,16 +465,25 @@ export function createKnowledgeExtract(cfg = {}) {
 
     return {
         /**
-         * 執行一輪知識管線(開集合 → 跑 pipeline＋索引段 → 寫執行摘要 → 收尾鉤子 → 關集合)
+         * 執行一輪知識管線(寫開工標記 → 開集合 → 跑 pipeline＋索引段 → 寫執行摘要 → 收尾鉤子 → 關集合)
          *
-         * @returns {Promise} 回傳 Promise，resolve 回傳 report(runPipeline 之產物,額外含 summaryFile；
-         *   未取得執行鎖時 report.lockSkipped 為 true,不寫摘要、不觸發收尾鉤子)
+         * @returns {Promise} 回傳 Promise，resolve 回傳 report(runPipeline 之產物,額外含 summaryFile 與 afterRun(收尾鉤子之回傳值;
+         *   預設巡檢為 { ok, skipped?, recordWritten, result })；未取得執行鎖時 report.lockSkipped 為 true,不寫摘要、不觸發收尾鉤子)
          */
         run: async () => {
             for (const d of Object.values(dirs)) fsCreateFolder(d)
             const log = mkLog()
             runLog = log
             for (const w of startupWarnings) log.warn(`啟動期檢核：${w}`)
+            // 本輪時間戳:與日誌檔名同一 stamp(自訂 logFactory 無 now 者取開工時刻);開工標記與執行摘要共用
+            const stamp = /^\d{14}$/.test(String(log.now || '')) ? log.now : clock.stamp8()
+            // 開工標記(檔頭):本輪上限之宣告先落地——被砍的輪次沒有 run.json,巡檢逐輪判界靠它;失敗只留 warn
+            const startFile = writeRunStart({
+                dir: dirs.log,
+                stamp,
+                start: { pid: process.pid, startedAt: clock.iso8(), limitMin: runtime.patrolLimitMin, scheduleLimitMin: runtime.scheduleLimitMin, deadlineMs, lockStaleMs },
+            })
+            if (!startFile) log.warn?.('開工標記（run.start.json）寫入失敗——巡檢對本輪退用觀察者之排程上限判界')
             const stores = openStores()
             try {
                 const seen = W.createSeenStore({ collection: stores.docs, identity, log })
@@ -503,7 +503,6 @@ export function createKnowledgeExtract(cfg = {}) {
                 if (report.lockSkipped) return report
 
                 // ① 結構化摘要先落地(巡檢／健康檢查優先讀它;失敗只留 warn,不影響本輪成敗)
-                const stamp = /^\d{14}$/.test(String(log.now || '')) ? log.now : clock.stamp8()
                 const file = writeRunSummary({
                     dir: dirs.log,
                     stamp,
@@ -512,15 +511,22 @@ export function createKnowledgeExtract(cfg = {}) {
                 if (!file) log.warn?.('執行摘要（run.json）寫入失敗——巡檢將退回正則解析日誌')
                 report.summaryFile = file
 
-                // ② 收尾鉤子(預設巡檢):在管線外、摘要之後;失敗留痕,不影響本輪成敗(檔頭)
+                // ② 收尾鉤子(預設巡檢):在管線外、摘要之後;失敗留痕,不影響本輪成敗(檔頭)。
+                //   回傳值掛 report.afterRun(巡檢之結構化結果由此取得;此前被丟棄)。日誌分完成／略過／失敗三種,
+                //   失敗時依 recordWritten 說明紀錄是否已更新——此前推送拋錯也記成「監控紀錄停留在上一輪」,實則已寫入
                 if (typeof afterRun === 'function') {
                     const t0 = Date.now()
                     try {
                         const r = await afterRun({ report, summaryFile: file, log, deps })
-                        if (r && r.ok === false) log.warn(`收尾失敗：${oneline(r.error, 200)}（管線本身不受影響；監控紀錄停留在上一輪）`)
-                        else log.info(`收尾完成（${((Date.now() - t0) / 1000).toFixed(1)}s）`)
+                        report.afterRun = r
+                        const sec = ((Date.now() - t0) / 1000).toFixed(1)
+                        if (r && r.ok === false) log.warn(`收尾失敗：${oneline(r.error, 200)}（管線本身不受影響；${r.recordWritten ? '監控紀錄已更新' : '監控紀錄停留在上一輪'}）`)
+                        else if (r && r.skipped) log.warn(`收尾略過：${oneline(r.message || r.skipped, 200)}（${sec}s；監控紀錄停留在上一輪）`)
+                        else log.info(`收尾完成（${sec}s）`)
+                        if (r?.result?.pushError) log.warn(`巡檢推送失敗：${oneline(r.result.pushError, 200)}（紀錄已落地，不影響本輪）`)
                     }
                     catch (e) {
+                        report.afterRun = { ok: false, error: oneline(e?.message, 200) }
                         log.warn(`收尾鉤子拋錯：${oneline(e?.message, 200)}`)
                     }
                 }
@@ -534,8 +540,31 @@ export function createKnowledgeExtract(cfg = {}) {
         /** 維運入口(工具用):同一套集合定義,呼叫端自負開關 */
         openStores,
         closeStores,
-        /** 維運入口:不開管線時取得依賴(clock/dirs/settings/ai/domains/patrol/deadlineMs/lockStaleMs/startupWarnings) */
-        info: () => ({ dirs, settings, clock, ai, domains, registry, lmdb, data, deadlineMs, lockStaleMs, startupWarnings, patrol: getPatrol() }),
+        /**
+         * 維運入口:不開管線時取得依賴與執行期生效值(與管線實際使用同源,皆取自 resolveRuntime)
+         *
+         * @returns {Object} 回傳 { dirs, settings, clock, ai, domains, registry, lmdb, data, deadlineMs, lockStaleMs, startupWarnings,
+         *   scheduleLimitMin(未給為 null), envFile, aiWorkspace(注入 cfg.aiAdapter 時為 null), lockFile(cfg.lock 為 false 時為 null), patrol }；
+         *   envFile／aiWorkspace／lockFile 為絕對路徑(相對路徑以當下 cwd 解析,與實際讀寫相同)；巡檢之實際路徑見 patrol.paths
+         */
+        info: () => ({
+            dirs,
+            settings,
+            clock,
+            ai,
+            domains,
+            registry,
+            lmdb,
+            data,
+            deadlineMs,
+            lockStaleMs,
+            startupWarnings,
+            scheduleLimitMin: runtime.scheduleLimitMin,
+            envFile: path.resolve(envFile),
+            aiWorkspace: aiWorkspace === null ? null : path.resolve(aiWorkspace),
+            lockFile: lockFile === null ? null : path.resolve(lockFile),
+            patrol: getPatrol(),
+        }),
     }
 }
 

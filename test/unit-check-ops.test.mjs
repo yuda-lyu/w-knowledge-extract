@@ -232,8 +232,8 @@ describe('unit-check-ops', function() {
     // ── patrol.mjs ──
     describe('createPatrol', function() {
         it('cfg 非物件視為 {} 後仍依既有檢查拋錯(dirs/clock 缺失)，不為 TypeError', () => {
-            assert.throws(() => createPatrol(undefined), /createPatrol 需要 \{ dirs:\{log,state,tmp\}, clock \}/)
-            assert.throws(() => createPatrol('not-obj'), /createPatrol 需要 \{ dirs:\{log,state,tmp\}, clock \}/)
+            assert.throws(() => createPatrol(undefined), /createPatrol 需要 \{ dirs:\{log,state\}, clock \}/)
+            assert.throws(() => createPatrol('not-obj'), /createPatrol 需要 \{ dirs:\{log,state\}, clock \}/)
         })
 
         it('有效輸入行為不變：合法 cfg 正常建構並可執行 patrolFromPipeline', async () => {
@@ -253,7 +253,8 @@ describe('unit-check-ops', function() {
             assert.equal(typeof p.patrolFromPipeline, 'function')
             assert.equal(p.recordFile, `${dir}/record.md`)
             const r = await p.patrolFromPipeline()
-            assert.deepEqual(r, { ok: true })
+            assert.equal(r.ok, true)
+            assert.equal(r.recordWritten, true)
             assert.ok(fs.existsSync(`${dir}/record.md`), '紀錄檔須落地')
         })
     })

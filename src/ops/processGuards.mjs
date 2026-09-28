@@ -9,9 +9,6 @@
 //
 // 【為何不在此發送通知】通知是非同步且可能失敗的動作,而此刻行程正要退出,等待送出會拖住退出、失敗又會觸發
 //   第二層例外。失敗通知交由 runTask 的 catch 路徑(那裡行程仍健全)處理。
-//
-// ※ 原專案之執行端(trigger)仍手寫同樣兩行 process.on(訊息落 console.error);改用本函數
-//   須先決定 onFatal 落日誌的方式(其 logger 於組裝期才建立),列為已知不修(2026-09-21)。
 
 import isobj from 'wsemi/src/isobj.mjs'
 import isfun from 'wsemi/src/isfun.mjs'

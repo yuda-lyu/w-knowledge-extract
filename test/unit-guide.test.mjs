@@ -22,21 +22,13 @@ import { createDefaultFetchers } from '../src/fetchers/defaultFetchers.mjs'
 import { createPatrol } from '../src/ops/patrol.mjs'
 import { createClock } from '../src/util/clock.mjs'
 import { setConceptFold } from '../src/util/text.mjs'
+import { stubAi } from './tools/stubAi.mjs'
 
 const TMP = path.resolve(`test/_tmp/guide-${process.pid}`).replace(/\\/g, '/')
 const GOLDEN = JSON.parse(fs.readFileSync(path.resolve('test/golden/prompts-1.0.0.json'), 'utf8'))
 // 刻意變更(規格①之唯一例外):regime_dependency／temporal 之稱呼改回與 md 章節同名
 const intended = (s) => s.split('時效與條件相依').join('時效與機制相依')
 const count = (s, m) => s.split(m).length - 1
-
-const stubAi = {
-    callJson: async () => ({ ok: false, data: null, error: 'stub', skipped: false, attempts: 0, preview: '' }),
-    getWkf: () => ({}),
-    withBudget: (s) => s,
-    recordCall: () => {},
-    drainStats: () => '無呼叫',
-    aiUsageToday: () => ({ today: '', used: 0, byKey: {}, chain: '', providers: [], skipped: [] }),
-}
 
 /** 各段欄位之標記值(字串/陣列/證據等級物件依型別給) */
 function markerGuide() {
@@ -225,9 +217,11 @@ describe('unit-guide', function() {
         const flowSent = []
         const base = { afterRun: false, aiAdapter: stubAi, monitor: { notify: (s) => flowSent.push(s) } }
         const f1 = createKnowledgeExtract({ workDir: `${TMP}/p1`, ...base, data: { vocab: { kbLabel: 'ML知識庫' } } })
-        assert.deepEqual(await f1.info().patrol.patrolFromPipeline(), { ok: true })
+        const r1 = await f1.info().patrol.patrolFromPipeline()
+        assert.equal(r1.ok, true)
+        assert.equal(r1.result.pushed, true, '自訂 notify 回傳非 false 即視為已送出')
         const f2 = createKnowledgeExtract({ workDir: `${TMP}/p2`, ...base, monitor: { ...base.monitor, pushTitle: '自訂巡檢' } })
-        assert.deepEqual(await f2.info().patrol.patrolFromPipeline(), { ok: true })
+        assert.equal((await f2.info().patrol.patrolFromPipeline()).ok, true)
         assert.match(flowSent[0], /^(✅|⚠️) ML知識庫巡檢 /)
         assert.match(flowSent[1], /^(✅|⚠️) 自訂巡檢 /)
     })

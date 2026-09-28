@@ -232,9 +232,13 @@ describe('unit-runner', function() {
             const clock = createClock('Asia/Taipei')
             const openStores = () => ({ docs: memStore(), notes: memStore(), relations: memStore(), cores: memStore(), sources: memStore(), frontier: memStore() })
             const mk = (extra) => createPatrol({ dirs: { log: `${dir}/log`, state: `${dir}/state`, tmp: `${dir}/tmp` }, workDir: dir, clock, openStores, closeStores: async () => {}, aiUsageToday: () => ({ used: 0, byKey: {}, chain: '', providers: [] }), recordFile: `${dir}/r.md`, ...extra })
-            assert.deepEqual(await mk({}).patrolFromPipeline(), { ok: true })
+            const r0 = await mk({}).patrolFromPipeline()
+            assert.equal(r0.ok, true)
+            assert.deepEqual([r0.result.pushed, r0.result.pushError], [false, ''], '無 envFile → 靜默略過(未送出、非錯誤)')
             assert.equal(calls.length, 0, '無 envFile → 靜默略過')
-            assert.deepEqual(await mk({ envFile }).patrolFromPipeline(), { ok: true })
+            const r1 = await mk({ envFile }).patrolFromPipeline()
+            assert.equal(r1.ok, true)
+            assert.equal(r1.result.pushed, true)
             assert.equal(calls.length, 1)
             assert.equal(calls[0].url, 'https://api.telegram.org/bottk/sendMessage')
             assert.equal(calls[0].body.chat_id, '42')
@@ -242,7 +246,11 @@ describe('unit-runner', function() {
             assert.match(calls[0].body.text, /^(✅|⚠️) 知識庫巡檢 /, '推送標題為領域中立之「知識庫巡檢」')
             assert.doesNotMatch(calls[0].body.text, /[<>]|&(?!amp;|lt;|gt;)/, '內文已轉義：不得有裸 < > 或非實體之 &')
             okResp = false
-            assert.deepEqual(await mk({ envFile }).patrolFromPipeline(), { ok: true }, '推送失敗不影響巡檢')
+            const r2 = await mk({ envFile }).patrolFromPipeline()
+            assert.equal(r2.ok, true, '推送失敗不影響巡檢')
+            assert.equal(r2.recordWritten, true)
+            assert.equal(r2.result.pushed, false)
+            assert.match(r2.result.pushError, /HTTP 400/, '推送失敗之原因記入 pushError(此前靜默)')
             assert.equal(calls.length, 2, '巡檢推送不重試（maxRetries 0）')
         }
         finally {
