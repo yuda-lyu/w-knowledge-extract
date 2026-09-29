@@ -126,6 +126,15 @@ describe('unit-kernel', function() {
         assert.throws(() => applyTaps(base, { a: { add: [{ name: 'x', probe: () => 1 }] } }), /非 first 錨點/)
     })
 
+    it('opt.retired:對退役錨點掛載 → 拋錯附對照;未列者維持原訊息;retired 非物件視為無', () => {
+        const base = [defineMw({ name: 'a', handle: (m, c, n) => n(m) })]
+        const t = { old: { after: [] } }
+        assert.throws(() => applyTaps(base, t, { chainName: 'X', retired: { old: '改名 a' } }), (e) => e instanceof MwContractError && e.message === '鏈[X] 無錨點「old」(改名 a；可用:a)')
+        assert.throws(() => applyTaps(base, { nope: { after: [] } }, { chainName: 'X', retired: { old: '改名 a' } }), (e) => e.message === '鏈[X] 無錨點「nope」(可用:a)')
+        assert.throws(() => applyTaps(base, t, { chainName: 'X', retired: 'bad' }), (e) => e.message === '鏈[X] 無錨點「old」(可用:a)')
+        assert.throws(() => applyTaps(base, { toString: { after: [] } }, { retired: {} }), (e) => /無錨點「toString」\(可用:a\)/.test(e.message), '原型鏈上之名不當成退役對照')
+    })
+
     it('鏈內 mw 名重複/非 defineMw 產物 → 定義期拋錯', () => {
         const a = defineMw({ name: 'a', handle: (m, c, n) => n(m) })
         assert.throws(() => composeChain([a, defineMw({ name: 'a', handle: (m, c, n) => n(m) })]), /重複/)

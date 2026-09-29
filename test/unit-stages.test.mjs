@@ -1,4 +1,5 @@
-// unit-stages.test.mjs — 階段機制的回歸測試：slug 容錯、衝突雙寫、角色鏈接線、降級保底、md 往返
+// unit-stages.test.mjs — 階段機制的回歸測試：slug 容錯、衝突雙寫、md 往返、佇列選取與例外落帳
+// 提煉(2.0 主張庫＋差量)之階段行為另見 unit-distill-stage.test.mjs(1.x 之角色鏈與降級採 A 稿已退役,2026-09-29)
 // 執行：npx mocha test/unit-stages.test.mjs（暫存落 test/_tmp/stages-<pid>，測完即刪）
 
 import assert from 'node:assert/strict'
@@ -7,7 +8,6 @@ import path from 'node:path'
 import { memStore } from './tools/memStore.mjs'
 import { nullLogger } from './tools/nullLogger.mjs'
 import { makeSlugResolver, markConflict, applyRelationsToNote, stageRelate } from '../src/stages/relateStage.mjs'
-import { buildWorkflowStages, mwBuildBase, mwRunWorkflow, mwAdoptResult, mwRenderCore, mwPersistCore } from '../src/stages/distillStage.mjs'
 import { mwNormalizeItems, stageListFetch } from '../src/stages/listFetchStage.mjs'
 import { stageExpand } from '../src/stages/expandStage.mjs'
 import { createRelateDomain } from '../src/domain/relateDomain.mjs'
@@ -16,7 +16,7 @@ import { stageDocMaintain } from '../src/stages/docMaintainStage.mjs'
 import { stageExtract } from '../src/stages/extractStage.mjs'
 import { stageTriage } from '../src/stages/triageStage.mjs'
 import { defineMw, composeChain, makeMsg } from '../src/core/kernel.mjs'
-import { buildDistillPrompt } from '../src/domain/distillDomain.mjs'
+import { createDistillDomain } from '../src/domain/distillDomain.mjs'
 import { renderFrontmatter, parseFrontmatter, writeMd, readMd, sectionOf, dropSection } from '../src/md/md.mjs'
 import { createClock } from '../src/util/clock.mjs'
 
@@ -103,10 +103,14 @@ describe('unit-stages', function() {
         assert.match(md2.body, /\[\[e-55555555\]\]/)
         assert.doesNotMatch(md2.body, /\[\[d-44444444\]\] T：/, '舊關聯行須被整章重寫')
         assert.ok(sectionOf(md2.body, '⚠ 衝突與反例')?.text.includes('[[d-44444444]]'), '衝突章節於關聯重寫後仍在')
-        // ⑤提煉輸入：去關聯章、留衝突章（disputes 的直接材料）
-        const prompt = buildDistillPrompt('概念', [{ id: note.id, title: 'B', file, sourceName: 's', sourceUrl: 'u' }], '')
-        assert.match(prompt, /衝突與反例[\s\S]*丙說P丁說Q/)
-        assert.doesNotMatch(prompt, /## 關聯/)
+        // ⑤提煉輸入(2.0 分節摘要)：去關聯章、留衝突章（爭議的直接材料）；衝突對象依是否同批標代號或標題
+        const titles = { 'c-33333333': 'C 標題' }
+        const d = createDistillDomain({}).noteDigest({ id: note.id, title: 'B', sourceName: 's' }, readMd(file), {
+            code: 'N1', codeOf: (id) => (id === 'd-44444444' ? 'N2' : ''), titleOf: (id) => titles[id] || '',
+        })
+        assert.match(d.text, /【⚠ 衝突與反例】[\s\S]*丙說P丁說Q/)
+        assert.doesNotMatch(d.text, /## 關聯|\[\[e-55555555\]\]/, '關聯章不進提煉輸入')
+        assert.match(d.text, /衝突對象：〈C 標題〉（非本批）、N2（同批）/)
         // dropSection 對「關聯在前、衝突在後」亦只去關聯章
         const body3 = '# X\n\n內文\n\n## 關聯\n\n- a\n\n## ⚠ 衝突與反例\n\n- 與 [[y]] Y：r'
         assert.equal(dropSection(body3, '關聯'), '# X\n\n內文\n\n## ⚠ 衝突與反例\n\n- 與 [[y]] Y：r')
@@ -128,85 +132,6 @@ describe('unit-stages', function() {
         assert.equal(m2.data._outcome?.ok, false)
         assert.equal(m2.data._outcome.reason, 'contract-error')
         assert.equal(m2.stats.srcFail, 1)
-    })
-
-    // ── 角色鏈接線 ──
-    const KINDS = {
-        audit: { produces: 'issues', check: () => true, build: ({ draft, issues }) => `AUDIT|d=${draft}|i=${issues}` },
-        revise: { produces: 'draft', check: () => true, build: ({ draft, issues }) => `REVISE|d=${draft}|i=${issues}` },
-    }
-    it('buildWorkflowStages：啟動期驗證', () => {
-        assert.throws(() => buildWorkflowStages([], KINDS, {}), /未設定或為空/)
-        assert.throws(() => buildWorkflowStages([{ stage: 'revise' }], KINDS, {}), /須為產出意見/)
-        assert.throws(() => buildWorkflowStages([{ stage: 'nope' }], KINDS, {}), /未知的 stage/)
-    })
-    it('buildWorkflowStages：自動編號與稿件/意見接線', () => {
-        const stages = buildWorkflowStages(
-            [{ stage: 'audit' }, { stage: 'revise' }, { stage: 'audit' }, { stage: 'revise' }],
-            KINDS, {},
-        )
-        assert.deepEqual(stages.map((s) => s.id), ['audit', 'revise', 'audit2', 'revise2'], '同種重複自動編號')
-        const ctx = { input: 'DRAFT0', results: { audit: { issues: ['i1'] }, revise: 'DRAFT1', audit2: { issues: ['i2'] } } }
-        assert.equal(stages[0].prompt(ctx), 'AUDIT|d=DRAFT0|i=null', '第一棒吃前段整合稿')
-        assert.equal(stages[1].prompt(ctx), 'REVISE|d=DRAFT0|i=i1')
-        assert.equal(stages[2].prompt(ctx), 'AUDIT|d=DRAFT1|i=i1', 'audit2 吃 revise 的新稿')
-        assert.equal(stages[3].prompt(ctx), 'REVISE|d=DRAFT1|i=i2', 'revise2 吃最近的意見 audit2')
-    })
-
-    // ── 提煉：降級保底與版本化 ──
-    const distillCfg = (wkfResult) => ({
-        stores: { notes: memStore([]), cores: memStore([]) },
-        log,
-        clock,
-        dirs: { core: TMP },
-        notesPerTarget: 5,
-        workflow: { wkf: { runFanoutPipeline: async () => wkfResult }, fanout: { indeps: [{}], integrate: {} }, pipeline: [{ stage: 'audit' }] },
-        domain: {
-            kinds: KINDS,
-            buildBasePrompt: () => 'base',
-            checkCore: () => true,
-            coreSchema: '{}',
-            renderCore: (t, data) => ({ body: `# 核心：${t.concept}\n\n${data.essence}` }),
-        },
-    })
-    const target = () => ({ concept: '注意力機制', notes: [{ id: 'n1', createdAt: '2026-08-01' }], core: null })
-
-    /** 逐概念鏈執行(2026-08-20 起提煉為動作鏈:buildBase→runWorkflow→adoptResult→renderCore→persistCore) */
-    const runDistillTarget = async (cfg, t) => {
-        const chain = composeChain([mwBuildBase({ notesPerTarget: cfg.notesPerTarget }), mwRunWorkflow(), mwAdoptResult(), mwRenderCore(), mwPersistCore()])
-        const ctx = {
-            deps: { stores: cfg.stores, clock: cfg.clock, dirs: cfg.dirs, ai: null, settings: { knowledge: { distillNotesPerConcept: cfg.notesPerTarget } } },
-            log: cfg.log,
-        }
-        const msg = makeMsg('concept', { target: t, _domain: cfg.domain, _workflow: cfg.workflow })
-        await chain(msg, ctx)
-        return { updated: msg.stats.updated || 0, aiCalls: msg.stats.aiCalls || 0 }
-    }
-
-    it('提煉：B 段失敗降級採用 A 整合稿（欄位名 result）', async () => {
-        const cfg = distillCfg({ ok: false, error: 'B段炸了', A: { result: { essence: '降級稿本質' } } })
-        const r = await runDistillTarget(cfg, target())
-        assert.equal(r.updated, 1, '降級路徑必須落盤——此路徑曾因欄位名寫錯靜默失效三天')
-        const core = (await cfg.stores.cores.select())[0]
-        assert.equal(core.version, 1)
-        assert.match(core.essence, /降級稿本質/)
-        assert.match(readMd(core.file).body, /降級稿本質/)
-    })
-
-    it('提煉：A 也沒有結果才算失敗；成功路徑版本遞增', async () => {
-        const cfg1 = distillCfg({ ok: false, error: '全滅', A: null })
-        assert.equal((await runDistillTarget(cfg1, target())).updated, 0)
-
-        const cfg2 = distillCfg({ ok: true, result: { essence: '正式稿' }, totalMs: 1000 })
-        cfg2.stores.notes = memStore([{ id: 'n1', createdAt: '2026-08-01' }]) // 預載依據筆記,distilledAt 之 patch 才有對象
-        const t2 = target()
-        await runDistillTarget(cfg2, t2)
-        const core = (await cfg2.stores.cores.select())[0]
-        // 第二版：帶既有 core 再跑一次
-        await runDistillTarget(cfg2, { ...t2, core })
-        assert.equal((await cfg2.stores.cores.select())[0].version, 2, '版本必須遞增')
-        // used notes 須標 distilledAt(此前 memStore 未預載 n1,patch 為 no-op,本斷言形同虛設)
-        assert.ok((await cfg2.stores.notes.get('n1')).distilledAt, '依據筆記須標 distilledAt')
     })
 
     // ── 補全文佇列：不得因容量或時間丟棄（2026-09-07 移除時間型過期）──

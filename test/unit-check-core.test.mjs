@@ -11,6 +11,7 @@ import { createKnowledgeExtract } from '../src/core/createKnowledgeExtract.mjs'
 import { resolveSettings, FETCH_DEFAULT, AI_DEFAULT } from '../src/core/settingsDefault.mjs'
 import { decorateSettings, loadSettings, createSettingsHolder } from '../src/core/loadSettings.mjs'
 import { normalizeWorkDir, expandDirs } from '../src/core/dirs.mjs'
+import { setConceptFold } from '../src/util/text.mjs'
 import { stubAi } from './tools/stubAi.mjs'
 
 const TMP = path.resolve(`test/_tmp/check-core-${process.pid}`).replace(/\\/g, '/')
@@ -24,6 +25,7 @@ describe('unit-check-core', function() {
 
     after(function() {
         fs.rmSync(TMP, { recursive: true, force: true })
+        setConceptFold(null) // createKnowledgeExtract 會注入模組級 opencc 折疊,不留給同 worker 之他檔(2.0 分群折向簡體後,殘留即改變他檔之分群鍵)
     })
 
     // ── kernel.mjs:applyTaps ──

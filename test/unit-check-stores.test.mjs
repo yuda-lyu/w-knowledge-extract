@@ -206,25 +206,26 @@ describe('unit-check-stores', function() {
         it('conceptVocabulary：notes 缺 select 拋錯；limit 非正整數回退為 60', async () => {
             await assert.rejects(() => conceptVocabulary({}), /conceptVocabulary 需要 notes 集合/)
             const notes = memStore(Array.from({ length: 2 }, (_, i) => ({ id: `${i}`, concepts: ['甲'] })))
-            const vocab = await conceptVocabulary(notes, -1)
+            const vocab = await conceptVocabulary(notes, -1, { counts: true })
             assert.match(vocab[0], /^甲\(2\)$/, 'limit 非正整數回退為 60，不影響本例(僅 1 個概念)之輸出')
             const vocab2 = await conceptVocabulary(notes, 1)
             assert.equal(vocab2.length, 1, '有效輸入 limit 行為不變')
+            assert.deepEqual(await conceptVocabulary(notes, 60, 'bad'), ['甲'], 'opt 非物件視為{}(預設只回名稱)')
         })
 
         it('pickConcepts：notes／cores 非陣列回傳 []；minNotes 非數值維持「不過濾」語意', () => {
             assert.deepEqual(pickConcepts(null, undefined), [], 'notes/cores 非陣列回傳空陣列')
-            const notes = [{ concepts: ['甲'], createdAt: '2026-09-01T00:00:00Z' }, { concepts: ['甲'], createdAt: '2026-09-02T00:00:00Z' }]
+            const notes = [{ id: 'a', concepts: ['甲'], createdAt: '2026-09-01T00:00:00Z' }, { id: 'b', concepts: ['甲'], createdAt: '2026-09-02T00:00:00Z' }]
             const out = pickConcepts(notes, [], { minNotes: 'abc', now: Date.parse('2026-09-10T00:00:00Z') })
-            assert.equal(out.length, 1, 'minNotes 非數值視為 0，維持現行不過濾語意')
-            assert.equal(out[0].notes.length, 2)
+            assert.equal(out.length, 1, 'minNotes 非數值視為 0，維持現行不過濾語意(未關聯者逾寬限 3 天放行)')
+            assert.equal(out[0].pending.length, 2)
             const outValid = pickConcepts(notes, [], { minNotes: 3, now: Date.parse('2026-09-10T00:00:00Z') })
             assert.equal(outValid.length, 0, '有效 minNotes 過濾行為不變')
         })
 
         it('pickCategories：notes／cores 非陣列回傳 []；有效輸入選題行為不變', () => {
             assert.deepEqual(pickCategories(null, null), [])
-            const notes = Array.from({ length: 6 }, () => ({ category: '其他' }))
+            const notes = Array.from({ length: 6 }, (_, i) => ({ id: `n${i}`, category: '其他', relatedAt: 'x' }))
             const out = pickCategories(notes, [], { minNotes: 6, minGain: 4 })
             assert.equal(out.length, 1, '有效輸入行為不變')
         })

@@ -19,29 +19,33 @@ const ROOT = path.resolve(`test/_tmp/flow-smoke-${process.pid}`) // cwd 相對(�
 const LONG = '梯度下降以學習率控制每步更新幅度，實務常用學習率衰減以穩定收斂。'.repeat(20)
 const silentLog = { info: () => {}, warn: () => {}, error: () => {}, file: '', now: '', elapsed: () => '0.0', cliFail: () => '' }
 
-// ── stub AI:triage/extract 與 relate 的回應以 check 相容性自動配對(形狀互斥)──
+// ── stub AI:triage/extract、relate、提煉之提案與審查的回應以 check 相容性自動配對(形狀互斥:前兩者為陣列,提案帶 ops、審查帶 verdicts)──
 const extractData = [
     { index: 1, relevant: true, title: '學習率決定梯度下降步長', key_points: ['更新量＝學習率×梯度'], concepts: ['梯度下降'], summary: '更新量＝學習率×梯度。', category: '方法與技術', claim_type: '理論模型', evidence_level: '中', explore: [{ type: 'keyword', value: '學習率排程', why: '測試線索' }] },
     { index: 2, relevant: true, title: '學習率衰減穩定收斂', key_points: ['學習率衰減犧牲初期速度換取收斂穩定'], concepts: ['梯度下降'], summary: '學習率衰減犧牲初期速度換取收斂穩定。', category: '方法與技術', claim_type: '理論模型', evidence_level: '中' },
 ]
 const relateData = [{ index: 1, relations: [] }, { index: 2, relations: [] }]
+const proposeData = {
+    ops: [
+        { op: 'add', ref: 'a', kind: 'principle', text: '學習率決定梯度下降之步長，衰減以初期速度換取收斂穩定', basis: '理論', sources: ['N1', 'N2'] },
+        { op: 'essence', text: '梯度下降以學習率控制每步更新幅度', claims: ['@a'], reason: '首版' },
+    ],
+    skipped: [],
+}
+const reviewData = { verdicts: [{ i: 0, action: 'keep' }, { i: 1, action: 'keep' }] }
 let aiCalls = 0
+const distillCalls = []
 const aiAdapter = {
-    callJson: async (prompt, check) => {
+    callJson: async (prompt, check, opt) => {
         aiCalls++
-        for (const d of [extractData, relateData]) {
-            if (check(d)) return { ok: true, data: d, error: '', skipped: false, attempts: 1, preview: '' }
+        for (const d of [extractData, relateData, proposeData, reviewData]) {
+            if (check(d)) {
+                if (d === proposeData || d === reviewData) distillCalls.push({ kind: d === proposeData ? 'propose' : 'review', acceptTruncated: opt?.acceptTruncated })
+                return { ok: true, data: d, error: '', skipped: false, attempts: 1, preview: '', providerId: 'stub' }
+            }
         }
         return { ok: false, data: null, error: 'stub 無匹配形狀', skipped: false, attempts: 1, preview: '' }
     },
-    // 回傳可用的 stub wkf:提煉子階段須真的執行到「無合格概念」的正常收工,
-    // 而不是因缺 wkf 拋錯被隔離(那會讓子階段級的靜默失效逃過冒煙)
-    getWkf: () => ({
-        runFanoutPipeline: async () => {
-            throw new Error('冒煙不應真的跑提煉工作流')
-        }
-    }),
-    withBudget: (s) => s,
     recordCall: () => {},
     drainStats: () => '無呼叫',
     aiUsageToday: () => ({ today: '', used: 0, byKey: {}, chain: '', providers: [], skipped: [] }),
@@ -110,7 +114,9 @@ describe('unit-flow-smoke', function() {
             aiAdapter,
             plugins: [countingPlugin],
             domains: { relate: countingRelate },
-            knowledge: { distillMinNotes: 99, categoryFallback: { minNotes: 999, minGain: 999 } },
+            // 提煉以內建預設走完一輪(真 prompt、真狀態檔、真 LMDB 記錄):兩篇同概念即成新核心
+            // (本冒煙之時間預算僅 60 秒,開工門檻歸零)
+            knowledge: { distillMinNotes: 2, distillRelateGraceDays: 0, distillMinRemainingMs: 0 },
             deadlineMs: 60_000,
             logFactory: () => silentLog,
             // 收尾鉤子在管線之外、摘要之後被呼叫:巡檢(預設收尾)須讀得到當輪 run.json
@@ -186,12 +192,33 @@ describe('unit-flow-smoke', function() {
         assert.ok(Number.isFinite(summary.deadlineMs), '摘要帶本輪時間預算')
     })
 
-    it('第二輪:去重(不重複產筆記)與 relatedAt 持久化(不重關聯同批筆記)', async function() {
+    it('第一輪:提煉(2.0)以內建預設成核心——狀態檔為真理、md 與索引為投影;提案與審查皆單次呼叫且截斷一律換家', function() {
+        assert.deepEqual(distillCalls.map((c) => c.kind), ['propose', 'review'])
+        assert.ok(distillCalls.every((c) => c.acceptTruncated === false))
+        const coreFiles = fs.readdirSync(path.join(ROOT, 'knowledge/core')).filter((f) => f.endsWith('.md'))
+        assert.equal(coreFiles.length, 1)
+        const md = fs.readFileSync(path.join(ROOT, 'knowledge/core', coreFiles[0]), 'utf8')
+        assert.match(md, /stateFormat: 2/)
+        assert.match(md, /〔C1〕學習率決定梯度下降之步長/)
+        assert.match(md, /## 本質\n\n梯度下降以學習率控制每步更新幅度（依〔C1〕）/)
+        const stateFiles = fs.readdirSync(path.join(ROOT, 'knowledge/core')).filter((f) => f.endsWith('.state.json'))
+        assert.deepEqual(stateFiles, [coreFiles[0].replace(/\.md$/, '.state.json')], '狀態檔與核心 md 同目錄同名')
+        const st = JSON.parse(fs.readFileSync(path.join(ROOT, 'knowledge/core', stateFiles[0]), 'utf8'))
+        assert.deepEqual([st.version, st.rev, st.consumed.length, st.claims[0].sources.length], [1, 1, 2, 2])
+        const dist = rep.stages.find((s) => s.name === '提煉').result
+        assert.match(String(dist.summary || ''), /概念 1、更新 1 則核心、消化 2 篇（AI 2 次）/, '提煉段摘要(「更新 N 則核心」為巡檢日誌正則之契約)')
+        const idx = fs.readFileSync(path.join(ROOT, 'knowledge/index.md'), 'utf8')
+        assert.match(idx, /梯度下降以學習率控制每步更新幅度/, '索引列出核心本質')
+    })
+
+    it('第二輪:去重(不重複產筆記)與 relatedAt 持久化(不重關聯同批筆記);已用過之筆記不再提煉', async function() {
+        const n0 = distillCalls.length
         const rep2 = await flow.run()
         assert.equal(rep2.ok, true)
         assert.equal(fs.readdirSync(path.join(ROOT, 'knowledge/notes')).filter((f) => f.endsWith('.md')).length, 2, '重跑不得重複產筆記')
         const rel2 = rep2.stages.find((s) => s.name === '關聯').result
         assert.equal(rel2.detail.relate.detail.targets, 0, 'relatedAt 已持久化——第二輪不得重關聯同批筆記')
+        assert.equal(distillCalls.length, n0, '無新筆記:不呼叫提煉')
     })
 
 })

@@ -1,5 +1,7 @@
 // misc.mjs — 顯示與 JSON 檔小工具(泛用件,原樣自執行端抽提;oneline／cliFailDetail／firstLineClamp 亦為執行殼層共用件)
 
+import fs from 'fs'
+import path from 'path'
 import isarr from 'wsemi/src/isarr.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import isp0int from 'wsemi/src/isp0int.mjs'
@@ -7,6 +9,7 @@ import cint from 'wsemi/src/cint.mjs'
 import strTruncate from 'wsemi/src/strTruncate.mjs'
 import fsReadJson from 'wsemi/src/fsReadJson.mjs'
 import fsWriteJson from 'wsemi/src/fsWriteJson.mjs'
+import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 
 
 /**
@@ -135,6 +138,81 @@ export function writeJson(file, data) {
 
     const r = fsWriteJson(file, data, { useFormat: true })
     if (r?.error !== undefined) throw new Error(`writeJson(${file}) 失敗:${r.error?.message || r.error}`)
+}
+
+
+/** rename 被暫時占用之錯誤碼(Windows 下防毒、同步軟體或編輯器開著目標檔) */
+const BUSY_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
+
+/**
+ * 同步小睡(原子寫之短重試用;不佔 CPU)
+ *
+ * @param {Integer} ms 輸入毫秒數
+ * @returns {undefined} 無回傳值
+ */
+const sleepSync = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+
+/**
+ * 原子寫檔:先寫同目錄暫存檔再 rename(寫到一半中止不會留下半份檔案);rename 被暫時占用(EPERM／EBUSY／EACCES)時短重試,
+ * 仍失敗者——opt.fallbackOverwrite 為 true(投影檔:可由真理重建,如巡檢紀錄 md)退回直接覆寫,否則拋錯
+ * (真理檔:如核心狀態,退回非原子覆寫即失去「中止不留半份」之保證,寧可本次不寫)
+ *
+ * @param {String} file 輸入目標檔案路徑字串
+ * @param {String} text 輸入檔案內容
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Integer} [opt.retries=3] 輸入 rename 被占用時之重試次數(間隔 50、100、150…毫秒)
+ * @param {Boolean} [opt.fallbackOverwrite=false] 輸入重試仍被占用時是否退回直接覆寫
+ * @returns {String} 回傳 file
+ * @throws {Error} file 非有效字串、寫暫存檔失敗、rename 非占用類失敗、或占用重試後仍失敗且未允許覆寫時拋出(暫存檔已清除)
+ * @example
+ * need test in nodejs.
+ *
+ * writeFileAtomic('./tmp/state.json', '{}')
+ */
+export function writeFileAtomic(file, text, opt = {}) {
+
+    //check
+    if (!isestr(file)) {
+        throw new Error('writeFileAtomic 需要 file（檔案路徑字串）')
+    }
+    if (opt === null || typeof opt !== 'object') {
+        opt = {}
+    }
+    const retries = isp0int(opt.retries) ? cint(opt.retries) : 3
+
+    fsCreateFolder(path.dirname(file))
+    const tmp = `${file}.${process.pid}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}.tmp`
+    const cleanTmp = () => {
+        try {
+            fs.rmSync(tmp, { force: true })
+        }
+        catch { /* 暫存檔清不掉不影響本次結果 */ }
+    }
+    try {
+        fs.writeFileSync(tmp, text, 'utf8')
+    }
+    catch (e) {
+        cleanTmp()
+        throw e
+    }
+    let last = null
+    for (let k = 0; k <= retries; k++) {
+        try {
+            fs.renameSync(tmp, file)
+            return file
+        }
+        catch (e) {
+            last = e
+            if (!BUSY_CODES.has(e.code)) break
+            if (k < retries) sleepSync(50 * (k + 1))
+        }
+    }
+    cleanTmp()
+    if (opt.fallbackOverwrite === true && BUSY_CODES.has(last?.code)) {
+        fs.writeFileSync(file, text, 'utf8')
+        return file
+    }
+    throw last
 }
 
 

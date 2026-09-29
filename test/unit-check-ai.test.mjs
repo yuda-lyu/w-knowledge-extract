@@ -53,9 +53,9 @@ describe('unit-check-ai', function() {
                 clock: createClock('Asia/Taipei'),
             })
             assert.equal(typeof ai.callJson, 'function')
-            assert.equal(typeof ai.withBudget, 'function')
             assert.equal(typeof ai.chainFor, 'function')
             assert.equal(typeof ai.validateSeats, 'function')
+            assert.deepEqual([ai.getWkf, ai.withBudget], [undefined, undefined], '1.x 提煉工作流入口已於 2.0 移除')
         })
     })
 
@@ -97,31 +97,6 @@ describe('unit-check-ai', function() {
                 assert.deepEqual([r.attempts, r.errors], [0, []], '全數逾長未送出:無嘗試、無失敗歷程(失敗形狀一律帶 errors)')
             }
             assert.deepEqual(rOmitted, rNull, 'callOpt 省略與 null 須產生相同結果,證明 null 已正確回退為 {}')
-        })
-    })
-
-    // ── adapter.mjs:withBudget 之 seat 檢查 ──
-    describe('adapter：withBudget 之 seat 檢查', function() {
-
-        const mkAi = () => createAiAdapter({
-            ai: { providerPick: ['claude:sonnet'], providerTimeouts: { 'claude:sonnet': 3000 }, cooldownMs: 1000, maxRetries: 0 },
-            envFile: `${TMP}/.env`,
-            stateDir: TMP,
-            workspace: TMP,
-            clock: createClock('Asia/Taipei'),
-        })
-
-        it('seat 非物件 → 拋錯', () => {
-            const ai = mkAi()
-            assert.throws(() => ai.withBudget(null), /withBudget 需要席位物件 \{ use, fallback \}/)
-            assert.throws(() => ai.withBudget('bad'), /withBudget 需要席位物件/)
-        })
-
-        it('seat 為有效物件時行為不變:已給 budgetMs 原樣回傳,未給則補鏈 timeout 總和', () => {
-            const ai = mkAi()
-            assert.deepEqual(ai.withBudget({ use: 'x', fallback: [], budgetMs: 999 }), { use: 'x', fallback: [], budgetMs: 999 })
-            const seat = ai.withBudget({ use: 'claude:sonnet', fallback: [] })
-            assert.equal(seat.budgetMs, 3000)
         })
     })
 

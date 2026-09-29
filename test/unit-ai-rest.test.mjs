@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
 import dispatchAiFallback from 'w-dispatch-ai/src/dispatchAiFallback.mjs'
+import budgetFor from 'w-dispatch-ai/src/budgetFor.mjs'
 import extractJsonLoose from 'w-dispatch-ai/src/wkf/extractJsonLoose.mjs'
 import salvageTruncatedArray from 'w-dispatch-ai/src/wkf/salvageTruncatedArray.mjs'
 import { createAiAdapter } from '../src/ai/adapter.mjs'
@@ -31,6 +32,11 @@ const SCENES = {
     ok: { fr: 'stop', content: '[{"index":1,"v":"a"},{"index":2,"v":"b"},{"index":3,"v":"c"}]' },
     plain: { fr: 'stop', content: '好的,這是純文字回覆,不是 JSON。' },
     ratetext: { fr: 'stop', content: '本文討論 API 的 rate limit 與 quota exceeded 之應對方式。' }, // 內容談及限流字樣(非 JSON)
+    // 全有全無之輸出(提煉差量:外包物件)
+    dobj: { fr: 'stop', content: '{"ops":[{"op":"add","text":"a"},{"op":"confirm","id":"C1"}],"skipped":[]}' },
+    dtrunc: { fr: 'length', content: '{"ops":[{"op":"add","text":"a"},{"op":"confirm","id":"C1"},{"op":"essence","text":"x' }, // REST 截斷
+    dcut: { fr: 'stop', content: '{"ops":[{"op":"add","text":"a"},{"op":"confirm","id":"C1"},{"op":"ess' }, // 拿不到終止訊號之截斷(CLI 型)
+    darr: { fr: 'stop', content: '[{"op":"add","text":"a"}]' }, // 頂層陣列(未照外包物件格式)
 }
 const hits = [] // 每次請求 { model, key }
 
@@ -124,6 +130,10 @@ const ENTRIES = [
     rest('rest:slow', 'slow401', 'FAKE_SLOW'),
     rest('rest:plan', 'plan', 'FAKE_PLAN'), // 依排程表(兩把 ka、kb)
     rest('rest:nokey', 'plain', null), // 無金鑰條目(不帶認證標頭;回非 JSON → 驗證失敗)
+    rest('rest:dobj', 'dobj'),
+    rest('rest:dtrunc', 'dtrunc'),
+    rest('rest:dcut', 'dcut'),
+    rest('rest:darr', 'darr'),
 ]
 const ENV = { FAKE_ONE: 'k1', FAKE_DEAD2: 'deadA, deadB,', FAKE_HALF: 'deadX,liveY', FAKE_SLOW: 'slowA,slowB', FAKE_PLAN: 'ka,kb' }
 const IDS = ENTRIES.map((e) => e.id)
@@ -410,22 +420,112 @@ describe('unit-ai-rest', function() {
         })
     })
 
-    // ── R11:使用者裁示 (a)——提煉工作流維持現況 ──
-    describe('R11 提煉工作流 callAi(只給 check)遇截斷仍換家', function() {
+    // (R11 為 1.x 提煉工作流 getWkf().callAi 之截斷語意;工作流入口已於 2.0 移除,同一語意由 R12 之 callJson acceptTruncated:false 承接)
 
-        it('S1／S0 → 整組跳過(incomplete)由遞補成交;無遞補則失敗', async () => {
-            const ai = mkAdapter()
-            const wkf = ai.getWkf()
-            for (const use of ['rest:s1', 'rest:s0']) {
-                const r = await wkf.callAi('提煉', { spec: { use, fallback: ['rest:ok'] }, check })
+    // ── R12:全有全無之輸出(提煉差量)走 callJson 時之截斷語意與逐次選項 ──
+    describe('R12 callJson 之 acceptTruncated:false、外包物件驗證、逐次選項、席位層覆寫', function() {
+
+        // 提煉差量之結構驗證(機制所有):須為非陣列物件且 ops 為陣列
+        const strict = (d) => !!d && typeof d === 'object' && !Array.isArray(d) && Array.isArray(d.ops)
+        const lenient = (d) => !!d && typeof d === 'object'
+
+        it('acceptTruncated:false:S1／S0／外包物件之 REST 截斷皆整組跳過(incomplete)由遞補成交;無遞補則失敗(同 R11 裁示之語意)', async () => {
+            for (const use of ['rest:s1', 'rest:s0', 'rest:dtrunc']) {
+                const ai = mkAdapter()
+                const r = await ai.callJson('提煉', strict, { spec: { use, fallback: ['rest:dobj'] }, acceptTruncated: false })
                 assert.equal(r.ok, true, use)
-                assert.equal(r.providerId, 'rest:ok', `${use} 多一次遞補(裁示維持)`)
-                assert.equal(r.tried[0].outcome, 'skip-group')
-                assert.equal(r.tried[0].errorType, 'incomplete')
+                assert.equal(r.providerId, 'rest:dobj', `${use} 截斷即換家`)
+                assert.equal(r.truncated, undefined)
+                assert.deepEqual(r.data.ops.map((o) => o.op), ['add', 'confirm'])
+                assert.equal(r.attempts, 2)
+                assert.equal(r.errors, undefined, '成功時不帶 errors')
             }
-            const r2 = await wkf.callAi('提煉', { spec: { use: 'rest:s0' }, check })
+            const ai = mkAdapter()
+            const r2 = await ai.callJson('提煉', strict, { spec: { use: 'rest:dtrunc' }, acceptTruncated: false })
             assert.equal(r2.ok, false)
-            assert.equal(r2.errorType, 'incomplete')
+            assert.match(r2.errors.join(','), /rest:dtrunc#0:incomplete/)
+        })
+
+        it('對照:未給 acceptTruncated(預設放行)時外包物件之截斷被搶救成內層陣列——寬鬆 check 會把半份差量當成功(故結構驗證須歸機制)', async () => {
+            const ai = mkAdapter()
+            const r = await ai.callJson('提煉', lenient, { spec: { use: 'rest:dtrunc' } })
+            assert.equal(r.ok, true)
+            assert.equal(r.truncated, true)
+            assert.ok(Array.isArray(r.data), '外包物件被搶救成內層陣列(形狀改變)')
+            assert.deepEqual(r.data.map((o) => o.op), ['add', 'confirm'], '末尾之 essence 靜默遺失')
+            const r2 = await ai.callJson('提煉', strict, { spec: { use: 'rest:dtrunc', fallback: ['rest:dobj'] } })
+            assert.equal(r2.providerId, 'rest:dobj', '結構驗證只收外包物件 → 即使放行截斷亦換家')
+        })
+
+        it('拿不到終止訊號之截斷(finish_reason=stop 而本文被切)與頂層陣列:外包物件驗證判失敗換家', async () => {
+            for (const use of ['rest:dcut', 'rest:darr']) {
+                const ai = mkAdapter()
+                const r = await ai.callJson('提煉', strict, { spec: { use, fallback: ['rest:dobj'] }, acceptTruncated: false })
+                assert.equal(r.providerId, 'rest:dobj', use)
+                assert.equal(r.attempts, 2)
+            }
+            const ai = mkAdapter()
+            const r = await ai.callJson('提煉', strict, { spec: { use: 'rest:dcut' }, acceptTruncated: false })
+            assert.equal(r.ok, false)
+            assert.equal(r.error, 'OUTPUT_VALIDATION_FAILED')
+        })
+
+        it('callOpt.onEvent:計帳／健康照常,呼叫端回呼收到 try／ok 事件;回呼拋錯不影響呼叫', async () => {
+            const ai = mkAdapter()
+            const seen = []
+            const r = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj' }, onEvent: (ev) => seen.push(ev.type) })
+            assert.equal(r.ok, true)
+            assert.deepEqual(seen.filter((t) => t === 'try' || t === 'ok'), ['try', 'ok'])
+            assert.equal(ai.health.snapshot().counts['rest:dobj'].ok, 1, '健康層仍計入(事件單一入口)')
+            const boom = () => {
+                throw new Error('boom')
+            }
+            const r2 = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj' }, onEvent: boom })
+            assert.equal(r2.ok, true)
+        })
+
+        it('工作目錄(子進程 cwd)不存在時於派送前建立(預設 <workDir>/tmp/ai-workspace 無人建立 → 命令列型供應商全數 spawn ENOENT,真實模型驗收實測)', async () => {
+            const ws = `${TMP}/ws-${++seq}/nested/ai-workspace`
+            assert.equal(fs.existsSync(ws), false)
+            const ai = mkAdapter({ workspace: ws })
+            const r = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj' } })
+            assert.equal(r.ok, true)
+            assert.equal(fs.existsSync(ws), true, '派送前已建立')
+            fs.rmSync(ws, { recursive: true, force: true })
+            assert.equal((await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj' } })).ok, true)
+            assert.equal(fs.existsSync(ws), true, 'tmp 被清後之下一次呼叫亦重建')
+        })
+
+        it('minAttemptMs:剩餘預算低於門檻即不開工(skipped);逐次值優先於席位值,未給則用上游預設 20 秒', async () => {
+            const ai = mkAdapter()
+            const r = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj' }, budgetMs: 30_000, minAttemptMs: 90_000 })
+            assert.equal(r.ok, false)
+            assert.equal(r.skipped, true)
+            assert.equal(hits.length, 0, '未送出')
+            const r2 = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj', minAttemptMs: 90_000 }, budgetMs: 30_000 })
+            assert.equal(r2.skipped, true, '席位層 minAttemptMs 生效')
+            const r3 = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj', minAttemptMs: 90_000 }, budgetMs: 30_000, minAttemptMs: 10_000 })
+            assert.equal(r3.ok, true, '逐次值優先')
+            const r4 = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj' }, budgetMs: 30_000 })
+            assert.equal(r4.ok, true, '未給:上游預設 20 秒 ≤ 30 秒')
+            const r5 = await ai.callJson('提煉', strict, { spec: { use: 'rest:dobj', budgetMs: 10_000 } })
+            assert.equal(r5.skipped, true, '席位層 budgetMs 與鏈預算取小(10 秒 < 20 秒門檻)')
+        })
+
+        it('席位層 timeoutMs 覆寫鏈內各條目之值(預算隨之);未給者沿用條目值', async () => {
+            const ai = mkAdapter()
+            const c = ai.chainFor({ use: 'rest:dobj', fallback: ['rest:ok'], timeoutMs: 600_000 })
+            assert.deepEqual(c.map((e) => e.timeoutMs), [600_000, 600_000])
+            assert.deepEqual(ai.chainFor({ use: 'rest:dobj', fallback: ['rest:ok'] }).map((e) => e.timeoutMs), [60_000, 60_000])
+            assert.equal(budgetFor(ai.chainFor({ use: 'rest:dobj', fallback: ['rest:ok'], timeoutMs: 600_000 })), 1_200_000, '鏈預算(callJson 之 budgetFor)隨席位覆寫')
+        })
+
+        it('啟動期席位檢核:不認得之鍵與非正數之數值鍵拋錯(不可靜默無效)', async () => {
+            const ai = mkAdapter()
+            assert.throws(() => ai.validateSeats({ 'ai.distill.propose': { use: 'rest:dobj', timeoutMS: 600_000 } }), /ai\.distill\.propose → 不認得的鍵「timeoutMS」/)
+            assert.throws(() => ai.validateSeats({ 'ai.distill.review': { use: 'rest:dobj', minAttemptMs: 0 } }), /minAttemptMs 須為正數/)
+            assert.throws(() => ai.validateSeats({ s: { use: 'rest:dobj', stage: 'audit' } }), /不認得的鍵「stage」/)
+            assert.deepEqual(ai.validateSeats({ s: { use: 'rest:dobj', fallback: ['rest:ok'], timeoutMs: 600_000, minAttemptMs: 90_000, budgetMs: 1_800_000 } }), { ok: true, warnings: [] })
         })
     })
 

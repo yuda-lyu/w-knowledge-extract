@@ -1,318 +1,703 @@
-// distillStage.mjs — 提煉階段的泛用機制：選題、角色鏈接線、版本化落盤、降級保底
+// distillStage.mjs — 提煉階段(2.0):主張庫＋差量更新。選題 → 逐核心(待審 → 整併 → 提案批次×追趕)→ 程式套用 → 落盤
 //
-// 【機制入套件、prompt／工作流設定留執行端】
-//   選題（概念層 gain 優先、類別層後備）、used-notes 取新排序、核心檔版本化、
-//   distilledAt 標記、B 段失敗降級採用 A 整合稿——這些是機制；
-//   各角色的提示詞（audit/revise/accept）、fanout 名額、schema 全是領域與 AI 設定，
-//   由執行端注入（kinds 表 + wkf 實例 + fanout/pipeline 宣告）。
+// 【為何改寫】1.x 每版把核心 md 讀回、截斷 2,500 字、多家整份重寫:舊知識逐版流失(更新 1 版後陷阱保留 13%、爭議 5%)、
+//   出處只剩最近一批、選篇只取最新 8 篇、篇幅與保留互相拉扯(安裝方〈建議w-knowledge-extract優化〉§1,2026-09-29)。
+//   2.0:狀態(stores/coreState)為真理、md 與 cores 記錄為投影;模型只提差量操作,程式逐條套用並檢查不變式;
+//   已用過＝逐核心累積出處;全部 AI 呼叫走 ai.callJson(能力預篩、JSON 驗證、遞補、預算封頂)——1.x 之工作流路徑退役。
+//   規劃與兩輪雙審之定案見 tmp/wke-distill-b-全盤.md §11～§12。
 //
-// 【降級保底的教訓】欄位名是 result 不是 final——這條路徑曾因欄位名寫錯而
-//   靜默失效三天（B 段失敗卻報「工作流失敗」），故此處有測試義務（接入後補）。
+// 【機制與領域分工】本檔:選題、選篇、呼叫、審查裁決之套用、涵蓋落帳、失敗帳、狀態檔 IO、投影、分身;
+//   提示詞、規則文字、分節摘要、版型、舊版封存屬 domain(domain/distillDomain)。
+// 【寫入順序】dirty 標記 → 狀態(CAS、原子寫、.prev)→ 再驗磁碟 rev → md(手改偵測)→ cores 記錄 → 筆記 distilledAt → 分身 → 清 dirty。
+//   中斷者下輪由 dirty 標記或載入時之對帳(rev 比對)以狀態重建投影(無 AI)。
+// 【截斷一律換家】提案與審查皆為全有全無之外包物件:acceptTruncated:false＋結構驗證只收物件(使用者 2026-09-24 對 R11 之裁示)。
+// 【審查失敗之降級】非終態操作照套(reviewed:false);終態操作(取代／撤回／合併)存入待審,下次審查成功時先以獨立差量裁決——
+//   不把未審之不可逆變更套進真理,也不遺失其內容。整併之審查失敗 → 整份不套。
+// 【失敗帳】dirs.state/distill-attempts.json:本段行程內單一共享物件(並行概念共寫,讀改寫會失落更新),每核心處理後原子寫;
+//   記 tries／lastTriedAt／lastError(失敗即回隊尾)、noteTries(批內未涵蓋之重送次數)、整併嘗試。
 
+import fs from 'fs'
 import path from 'path'
 import isobj from 'wsemi/src/isobj.mjs'
-import { readMd, writeMd } from '../md/md.mjs'
-import { slugify } from '../util/text.mjs'
-import { oneline } from '../util/misc.mjs'
-import { pickConcepts, pickCategories } from '../stores/conceptGroups.mjs'
+import isarr from 'wsemi/src/isarr.mjs'
+import { readMd, writeMd, mdText } from '../md/md.mjs'
+import { slugify, normalizeConcept } from '../util/text.mjs'
+import { oneline, readJson, writeFileAtomic } from '../util/misc.mjs'
+import { createClock } from '../util/clock.mjs'
+import { createDistillDomain } from '../domain/distillDomain.mjs'
+import { pickConcepts, pickCategories, orphanNotes, twinsOf } from '../stores/conceptGroups.mjs'
+import { selectNotes } from '../stores/noteSelection.mjs'
+import { createCoreStore, mdHashOf } from '../stores/coreStore.mjs'
+import {
+    emptyState, upgradeState, findItem, applyDelta, applyVerdicts, coverageOf, commitBatch, checkInvariants, stateDigest, renderRules,
+    queuePendingReview, pendingReviewOps, TERMINAL_OPS
+} from '../stores/coreState.mjs'
 import { defineMw, applyTaps, makeMsg, count, runChainOverMsgs, stdReport } from '../core/kernel.mjs'
 import { budgetOf } from '../core/budget.mjs'
 
-/**
- * 把宣告式的角色鏈展開成 runRolePipeline 的 stages（自動編號、接線由程式處理）。
- *
- * 【接線】每一棒自動接上「它之前最近一份稿件」與「它之前最近一份審計意見」，
- *   故 audit→revise→audit→revise 這種組合直接在設定宣告即可，不必改程式。
- * 【驗證在啟動期】階段種類或順序不合法立即拋出，不默默降級。
- *
- * @param {Array} pipeline 設定宣告 [{stage, ...spec}]；非陣列或空陣列拋錯
- * @param {Object} kinds 執行端注入的種類表 { audit:{produces,check,build}, revise:{...}, accept:{...} }；非物件拋錯
- * @param {Object} bind 綁定給 build 的脈絡 { concept, basePrompt }；非物件視為{}
- * @returns {Array} 回傳展開後之 stages 陣列，供 runFanoutPipeline 之 stages 使用
- * @throws {Error} pipeline 非陣列或為空、kinds 非物件、stage 名未知、或階段順序不合法(缺前置審計類階段)時拋出
- */
-export function buildWorkflowStages(pipeline, kinds, bind) {
-
-    //check
-    if (!Array.isArray(pipeline) || pipeline.length === 0) throw new Error('distill pipeline 未設定或為空')
-    if (!isobj(kinds)) throw new Error('buildWorkflowStages 需要 kinds（角色種類表）')
-    if (!isobj(bind)) {
-        bind = {}
-    }
-
-    const kindNames = Object.keys(kinds)
-    const seen = {}
-    const ids = []
-    const kindSeq = []
-    return pipeline.map((item, i) => {
-        const { stage, ...spec } = item
-        const kind = kinds[stage]
-        if (!kind) throw new Error(`distill pipeline[${i}]：未知的 stage「${stage}」（可用：${kindNames.join('／')}）`)
-        if (i === 0 && kind.produces !== 'issues') throw new Error('distill pipeline[0] 須為產出意見的階段（初稿由前段 fanout 整合產生，本鏈不含 draft）')
-        if (kind.produces === 'draft' && !kindSeq.some((k) => kinds[k].produces === 'issues')) {
-            throw new Error(`distill pipeline[${i}]：${stage} 之前必須先有審計類階段`)
-        }
-        seen[stage] = (seen[stage] || 0) + 1
-        const id = seen[stage] === 1 ? stage : `${stage}${seen[stage]}`
-        const prevIds = [...ids]
-        const prevKinds = [...kindSeq]
-        ids.push(id)
-        kindSeq.push(stage)
-        return {
-            id,
-            ...spec,
-            check: kind.check,
-            prompt: (ctx) => {
-                // 最近一份稿件：往前找最後一個產稿階段；都沒有就是前段整合稿（ctx.input）
-                let draft = ctx.input
-                for (let k = prevIds.length - 1; k >= 0; k--) {
-                    if (kinds[prevKinds[k]].produces === 'draft') {
-                        draft = ctx.results[prevIds[k]]; break
-                    }
-                }
-                // 最近一份審計意見：往前找最後一個 issues 階段
-                let issues = null
-                for (let k = prevIds.length - 1; k >= 0; k--) {
-                    if (kinds[prevKinds[k]].produces === 'issues') {
-                        issues = ctx.results[prevIds[k]]?.issues; break
-                    }
-                }
-                return kind.build({ ...bind, draft, issues })
-            },
-        }
-    })
+const TERMINAL = new Set(['superseded', 'retracted'])
+// 提示詞長度保險絲(只警示):狀態摘要列全部非終態項而不截斷,樞紐概念之整併若無效,提示詞會無界成長
+//   (2026-09-29 判識 B;生產篇幅 12 篇批之提案約 2～3 萬字,見判識 A 之量測)
+const PROMPT_WARN_CHARS = 60_000
+// 1.x 之錨點(2.0 起不存在):舊 tap／插件掛上時拋錯並指出改掛何處,不可只得到「無錨點」(安裝方 2026-09-29:其生產 tap 掛 buildBase／runWorkflow)
+const RETIRED_ANCHORS = {
+    buildBase: '1.x 錨點已退役：選材與組稿拆為 loadState(載入核心狀態)與 selectNotes(選篇、配發批內代號)',
+    runWorkflow: '1.x 錨點已退役：工作流改為單次呼叫之 propose(提案或整併)與 review(審查);席位由 settings.ai.distill 設定',
+    adoptResult: '1.x 錨點已退役且無對應：2.0 不再採用整份定稿,差量由 applyDelta 以程式套用,審查失敗之降級在 review 內處理',
+    renderCore: '1.x 錨點已退役：改名 renderState(自核心狀態渲染 md)',
+    persistCore: '1.x 錨點已退役：改名 persistState(狀態 → md → 核心記錄之落盤)',
+}
+// distillTarget(單一目標、不讀寫磁碟)之鏈刻意不含者
+const TARGET_ABSENT = {
+    ...RETIRED_ANCHORS,
+    loadState: 'distillTarget 不讀磁碟：既有狀態由 opt.state 給',
+    persistState: 'distillTarget 不落盤：結果見回傳之 state 與 render',
 }
 
-// ─── 逐概念動作鏈(hook 錨點:distill.distill.{buildBase, runWorkflow, adoptResult,
-//     renderCore, persistCore}) ───
+/**
+ * 核心相關之附屬目錄(不在知識目錄內:.prev、隔離／封存檔、手改副本、dirty 標記)
+ *
+ * @param {Object} dirs 輸入 deps.dirs
+ * @returns {Object} 回傳 { prev, archive, manual, dirty }
+ */
+export function coreAuxDirs(dirs) {
+    const base = path.join(dirs.state, 'core')
+    return { prev: path.join(base, 'prev'), archive: path.join(base, 'archive'), manual: path.join(base, 'manual'), dirty: path.join(base, 'dirty') }
+}
 
 /**
- * 錨點:buildBase(選材與組稿計畫:used 取新排序(不排序會讓累積式深化名存實亡)、既有核心續版)
+ * 失敗帳(行程內單一共享物件;每次 save 原子寫整份)
  *
- * 讀 msg.data(target、_domain、_workflow.pipeline);寫 msg.data._plan({used,coreSlug,file,priorBody,basePrompt,stages});不短路(恆呼叫 next)
- *
- * @param {Object} [opt={}] 輸入設定物件，非物件則視為{}
- * @param {Integer} [opt.notesPerTarget] 輸入每次組稿取用之最新筆記數上限，未給則用 settings.knowledge.distillNotesPerConcept
- * @returns {Object} 回傳 defineMw 產物
+ * @param {String} file 輸入帳檔路徑
+ * @returns {Object} 回傳 { data, entry(key), save() }
  */
-export const mwBuildBase = (opt = {}) => {
-
-    //check
-    if (!isobj(opt)) {
-        opt = {}
-    }
-
-    return defineMw({
-        name: 'buildBase',
-        handle: async (msg, ctx, next) => {
-            const { dirs } = ctx.deps
-            const { target: t, _domain: domain, _workflow: workflow } = msg.data
-            const used = t.notes.slice()
-                .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
-                .slice(0, opt.notesPerTarget ?? ctx.deps.settings.knowledge.distillNotesPerConcept)
-            const coreSlug = t.core?.id || slugify(t.concept, `core|${t.concept}`)
-            const file = path.join(dirs.core, `${coreSlug}.md`)
-            const priorBody = t.core ? (readMd(file)?.body || '') : ''
-            const basePrompt = domain.buildBasePrompt(t, used, priorBody)
-            msg.data._plan = {
-                used,
-                coreSlug,
-                file,
-                priorBody,
-                basePrompt,
-                stages: buildWorkflowStages(workflow.pipeline, domain.kinds, { concept: t.concept, basePrompt }),
-            }
-            return next(msg)
+export function createDistillLedger(file) {
+    const data = readJson(file, {}) || {}
+    return {
+        data,
+        entry: (key) => {
+            if (!isobj(data[key])) data[key] = {}
+            if (!isobj(data[key].noteTries)) data[key].noteTries = {}
+            return data[key]
         },
-    })
-}
-
-/**
- * 錨點:runWorkflow(工作流執行:fanout(並行多開)→整合→串行角色鏈;實績走 onSeat 回調)
- *
- * 讀 msg.data(target、_domain、_workflow、_plan);寫 msg.data._raw(工作流原始結果);不短路(恆呼叫 next)
- *
- * 【時間預算聯動】各名額之 budgetMs 只保證「走完自己的遞補鏈」,A/B 兩段串起來的總和
- *   可超過整輪預算(依 2026-09 設定最壞 66 分 > 排程 55 分;2026-08-28 11:00 輪第二概念卡到被砍)。
- *   故把 ctx.expired() 接成 w-dispatch-ai 的 shouldStop:逾預算後每次嘗試之間即中止(ABORTED),
- *   已完成之 A 段整合稿仍可由 adoptResult 降級採用——當輪成果不因硬砍而全丟。
- * 【逐次事件寫日誌】工作流內的嘗試/遞補/中止原本只進用量計帳,卡住 45 分鐘日誌全無痕跡;
- *   現在成交記 info、失敗類記 warn(巡檢已列為已知常態),計帳仍由本回調轉呼叫 usage。
- *
- * @param {Object} [opt={}] 輸入設定物件，非物件則視為{}
- * @param {Function} [opt.shouldStop] 輸入時間預算守門函數，未給則用 budgetOf(ctx).shouldStop
- * @param {Function} [opt.onSeat] 輸入席位成交回調 (name, seatResult) => void，未給則用 ctx.deps.ai.recordCall
- * @returns {Object} 回傳 defineMw 產物
- */
-export const mwRunWorkflow = (opt = {}) => {
-
-    //check
-    if (!isobj(opt)) {
-        opt = {}
+        save: () => writeFileAtomic(file, `${JSON.stringify(data, null, 2)}\n`),
     }
-
-    return defineMw({
-        name: 'runWorkflow',
-        handle: async (msg, ctx, next) => {
-            const { target: t, _domain: domain, _workflow: workflow, _plan: plan } = msg.data
-            const ai = ctx.deps.ai
-            const budget = budgetOf(ctx)
-            const shouldStop = opt.shouldStop || budget.shouldStop
-            // aiCalls 計實際嘗試(try 事件),不計名目席位數:遞補與重試會讓實際次數遠大於席位數
-            //(2026-09-09 11:00 輪報 16 次,實際成交＋遞補略過 >30 次),巡檢的用量判讀因此失真
-            let tries = 0
-            /** 轉呼叫調度層之統一入口(計帳＋供應商健康);累計 try 事件次數(tries),其餘轉寫日誌 */
-            const onEvent = (ev) => {
-                // 轉呼叫調度層之統一入口(計帳＋供應商健康);舊版 adapter 只有 usage.onEvent 時退回之
-                try {
-                    (ai?.onEvent || ai?.usage?.onEvent)?.(ev)
-                }
-                catch { /* 計帳失敗不影響工作流 */ }
-                if (!ev) return
-                if (ev.type === 'try') {
-                    tries++; return
-                }
-                const tag = `提煉事件[${t.concept}]`
-                if (ev.type === 'ok') ctx.log.info(`${tag} ${ev.keyId || ev.providerId || ''} 成交（${Math.round((ev.durationMs || 0) / 1000)}s）`)
-                else ctx.log.warn(`${tag} ${ev.type} ${ev.keyId || ev.providerId || ''}${ev.error ? `：${oneline(ev.error, 120)}` : ''}`)
-            }
-            // 席位預算以「開工當下」的剩餘時間封頂(core/budget 之 capSeat 以 getter 於工作流展開該席位時求值):
-            // dispatchAiFallback 以剩餘預算封頂每次嘗試之 timeout,進行中的最後一次呼叫才會在截止時被切斷。
-            // 此前席位預算為靜態鏈總和,shouldStop 只擋「下一次嘗試」——2026-09-09 10:00/11:00 兩輪各超過截止
-            // 210s/196s 皆出於末席位之 sonnet 254s;第一版修正在工作流開工時取一次剩餘時間,序列後段席位拿到的是
-            // 數十分鐘前的值,對同一 case 仍不生效(2026-09-12 複審 B3)
-            const r = await workflow.wkf.runFanoutPipeline({
-                task: plan.basePrompt,
-                agents: workflow.fanout.indeps.map(budget.capSeat),
-                integrate: budget.capSeat(workflow.fanout.integrate),
-                check: domain.checkCore,
-                schema: domain.coreSchema,
-                stages: plan.stages.map(budget.capSeat),
-                callOpt: { shouldStop, onEvent },
-            })
-            // 實際被呼叫之席位(有結果者):aiCalls＝任務數,與萃取/關聯之批次數同義;aiAttempts＝含遞補之嘗試數
-            const seats = [
-                ...(r.A?.agents || []).map((x, i) => [`起草${i + 1}`, x]),
-                ['整合', r.A?.integrateDetail],
-                ...plan.stages.map((s) => [s.id, r.B?.stages?.[s.id]]),
-            ].filter(([, x]) => x)
-            const onSeat = opt.onSeat || (ctx.deps.ai?.recordCall && ((name, x) => ctx.deps.ai.recordCall(x)))
-            if (onSeat) for (const [name, x] of seats) onSeat(name, x)
-            count(msg, 'aiCalls', seats.length || (tries ? 1 : 0))
-            count(msg, 'aiAttempts', tries)
-            msg.data._raw = r
-            return next(msg)
-        },
-    })
 }
 
 /**
- * 錨點:adoptResult(採稿:走完用定稿;審計鏈失敗降級採 A 整合稿(欄位名 result——曾因寫錯靜默失效);全敗短路)
+ * 新核心之 id:種子為「core|名」(類別層「core|category|名」);撞到任何既有記錄或檔案(任何 scope／status)——
+ * 同 (scope, 鍵) 之 merged 記錄 → 復活(沿用其 id);其餘 → 以「core|<scope>|<名>|<n>」重新種子
  *
- * 讀 msg.data(target、_raw);寫 msg.data._result(採用之定稿);短路:全敗(無 r.ok 亦無 r.A.result)時直接回傳 msg(不呼叫 next)
+ * @param {Object} t 輸入選題項(取 concept、scope、key)
+ * @param {Array} cores 輸入核心記錄陣列
+ * @param {Object} dirs 輸入 deps.dirs
+ * @returns {Object} 回傳 { id, revive:Object|null }
+ */
+export function newCoreIdOf(t, cores, dirs) {
+    const byId = new Map((isarr(cores) ? cores : []).map((c) => [c.id, c]))
+    const taken = (id) => byId.has(id) || fs.existsSync(path.join(dirs.core, `${id}.md`)) || fs.existsSync(path.join(dirs.coreState, `${id}.state.json`))
+    const seed = t.scope === 'category' ? `core|category|${t.concept}` : `core|${t.concept}`
+    const first = slugify(t.concept, seed)
+    const rec = byId.get(first)
+    if (rec && rec.status === 'merged' && (rec.scope || 'concept') === t.scope && normalizeConcept(rec.concept) === t.key) return { id: first, revive: rec }
+    if (!taken(first)) return { id: first, revive: null }
+    for (let n = 1; n < 1000; n++) {
+        const id = slugify(t.concept, `core|${t.scope}|${t.concept}|${n}`)
+        if (!taken(id)) return { id, revive: null }
+    }
+    throw new Error(`提煉：無法為「${t.concept}」配發不撞號之核心 id`)
+}
+
+/**
+ * 狀態中被引用之筆記(非終態項之出處聯集)——「提煉自」與「依據 N 篇」之口徑(consumed 另含略過與逾限者)
+ *
+ * @param {Object} s 輸入狀態
+ * @returns {Array} 回傳筆記 id 陣列
+ */
+function usedOf(s) {
+    return [...new Set([...(s.claims || []), ...(s.parameters || []), ...(s.disputes || []), ...(s.questions || [])]
+        .filter((x) => !TERMINAL.has(x.status)).flatMap((x) => x.sources || []))]
+}
+
+/**
+ * 狀態自較舊來源接續時(.prev 還原、git 回滾)取投影之高水位:rev 與各前綴之下一個 id——
+ * 否則同一 rev 或同一〔C5〕在投影與新狀態中指不同內容(對帳誤判「已同步」、舊 md 之引用指錯主張)
+ *
+ * @param {Object} state 輸入狀態(就地修改)
+ * @param {Object} rec 輸入 cores 記錄(可為 null)
+ * @returns {Object} 回傳 state
+ */
+function highWater(state, rec) {
+    if (!rec) return state
+    if (Number.isFinite(rec.rev)) state.rev = Math.max(Number(state.rev) || 0, rec.rev)
+    for (const [p, n] of Object.entries(rec.nextIdHigh || {})) state.nextId[p] = Math.max(Number(state.nextId[p]) || 1, Number(n) || 1)
+    return state
+}
+
+/**
+ * 狀態 → cores 記錄(投影);essence 於新本質產生前顯示舊本質並標「（舊版）」
+ *
+ * @param {Object} s 輸入狀態
+ * @param {Object} o 輸入 { id, file }
+ * @returns {Object} 回傳 cores 記錄
+ */
+function recordOf(s, o) {
+    const essence = s.essence?.text || (s.legacy?.essence ? `（舊版）${s.legacy.essence}` : '')
+    return {
+        id: o.id,
+        concept: s.concept,
+        scope: s.scope || 'concept',
+        file: String(o.file).replace(/\\/g, '/'),
+        noteCount: usedOf(s).length,
+        noteIds: [...(s.consumed || [])],
+        version: s.version,
+        rev: s.rev,
+        essence: String(essence).replace(/\s+/g, ' ').slice(0, 300),
+        updatedAt: s.updatedAt || '',
+        proposedAt: s.proposedAt || '',
+        stateFormat: 2,
+        status: 'active',
+        nextIdHigh: { ...(s.nextId || {}) },
+        pendingReview: (s.pendingReview || []).length, // 待審數:無待提煉筆記之核心亦據此排待審專步
+    }
+}
+
+/**
+ * 渲染 md(domain 版型＋機制之 frontmatter;時刻取自狀態,同一狀態逐字相同)
+ *
+ * @param {Object} s 輸入狀態
+ * @param {Object} domain 輸入提煉 domain
+ * @param {Map} notesById 輸入筆記 id → 記錄
+ * @param {String} id 輸入核心 id
+ * @returns {Object} 回傳 { front, body, hash }
+ */
+function renderOf(s, domain, notesById, id) {
+    const r = domain.renderState(s, { notesById })
+    const last = (s.changelog || [])[s.changelog.length - 1]
+    const front = {
+        concept: s.concept,
+        slug: id,
+        type: 'core',
+        scope: s.scope || 'concept',
+        version: s.version,
+        stateFormat: 2,
+        note_count: usedOf(s).length,
+        notes: isarr(last?.batch) ? last.batch : [],
+        updated: s.updatedAt || '',
+        ...(isobj(r?.front) ? r.front : {}),
+    }
+    const body = String(r?.body || '')
+    return { front, body, hash: mdHashOf(mdText(front, body)) }
+}
+
+/**
+ * 以狀態重建投影(無 AI):md(手改偵測)、cores 記錄、筆記 distilledAt——對帳與 dirty 補做共用
+ *
+ * @param {Object} o 輸入 { id, file, state, env, domain }
+ * @returns {Promise} 回傳 Promise，resolve 回傳 cores 記錄
+ */
+async function writeProjections(o) {
+    const { id, file, state, env, domain } = o
+    const rendered = renderOf(state, domain, env.notesById, id)
+    const saved = env.store.guardManualEdit(file, [...(state.renderHashes || []), rendered.hash], env.stamp, env.aux.manual)
+    if (saved) env.log.warn(`提煉手改另存[${state.concept}]：核心 md 與上次渲染不符，覆寫前已另存 ${saved.replace(/\\/g, '/')}`)
+    writeMd(file, rendered.front, rendered.body)
+    const rec = recordOf(state, { id, file })
+    await env.stores.cores.replace(rec)
+    const k = env.cores.findIndex((c) => c.id === id)
+    if (k >= 0) env.cores.splice(k, 1, rec)
+    else env.cores.push(rec)
+    for (const nid of state.consumed || []) {
+        const n = env.notesById.get(nid)
+        if (n && !n.distilledAt) {
+            await env.stores.notes.patch(nid, { distilledAt: env.at })
+            n.distilledAt = env.at
+        }
+    }
+    return rec
+}
+
+/**
+ * 主核心落盤後處理同 (scope, 鍵) 之分身:標 merged＋mergedInto → 原 md 封存並改寫轉址頁(已是轉址頁者不再包)→ 狀態檔封存;
+ * 並補完先前中斷之分身(mergedInto＝本核心而 md 尚非轉址頁者)。冪等。
+ *
+ * @param {Object} rec 輸入主核心記錄
+ * @param {Object} env 輸入本段環境
+ * @returns {Promise} 回傳 Promise，resolve 回傳本次新標記之分身數
+ */
+async function settleTwins(rec, env) {
+    const twins = twinsOf(env.cores, rec)
+    const unfinished = env.cores.filter((c) => c.status === 'merged' && c.mergedInto === rec.id && readMd(c.file)?.front?.type !== 'redirect')
+    let n = 0
+    for (const tw of [...twins, ...unfinished]) {
+        const md = readMd(tw.file)
+        let archivedFile = tw.archivedFile || ''
+        if (md && md.front?.type !== 'redirect') {
+            archivedFile = path.join(env.aux.archive, `${tw.id}.md.merged-${env.stamp}.md`).replace(/\\/g, '/')
+            fs.mkdirSync(env.aux.archive, { recursive: true })
+            fs.copyFileSync(tw.file, archivedFile)
+            writeMd(tw.file, { type: 'redirect', concept: tw.concept, mergedInto: rec.id, stateFormat: 2 },
+                `# ${tw.concept}\n\n本概念已併入 [[${rec.id}]]（${rec.concept}）。合併前之內容已封存於 ${archivedFile}。`)
+        }
+        env.store.archive(tw.id, 'merged', env.stamp)
+        const merged = { ...tw, status: 'merged', mergedInto: rec.id, mergedAt: tw.mergedAt || env.at, archivedFile }
+        await env.stores.cores.replace(merged)
+        const k = env.cores.findIndex((c) => c.id === tw.id)
+        if (k >= 0) env.cores.splice(k, 1, merged)
+        if (twins.includes(tw)) {
+            n++
+            env.log.warn(`提煉分身合併[${tw.concept}]：同鍵之分身併入 ${rec.concept}（${rec.id}）；分身原 v${tw.version ?? '?'}、依據 ${tw.noteCount ?? '?'} 篇，原文已封存（如為折疊誤合，請以 vocab.conceptRenames 拆開）`)
+        }
+    }
+    return n
+}
+
+/**
+ * 被操作觸及之既有條目摘要(審查用)
+ *
+ * @param {Object} s 輸入狀態
+ * @param {Array} ops 輸入操作陣列
+ * @returns {String} 回傳摘要文字
+ */
+function touchedDigest(s, ops) {
+    const ids = new Set()
+    for (const o of isarr(ops) ? ops : []) {
+        for (const v of [o?.id, o?.by, o?.into, o?.dispute, o?.claim, ...(isarr(o?.from) ? o.from : []), ...(isarr(o?.claims) ? o.claims : []),
+            ...(isarr(o?.sides) ? o.sides.flatMap((sd) => (isarr(sd?.claims) ? sd.claims : [])) : [])]) {
+            if (typeof v === 'string' && findItem(s, v)) ids.add(v)
+        }
+    }
+    const lines = [...ids].map((id) => {
+        const x = findItem(s, id).item
+        // 爭議列出各方立場與所引主張:審查員據以判斷兩方是否回答同一問題、結論是否相反(拆解與「非對立」之依據)
+        const sides = isarr(x.sides) ? `｜${x.sides.map((sd, k) => `第${k + 1}方：${sd.position}${(sd.claims || []).length ? `〔${sd.claims.join('〕〔')}〕` : ''}`).join('；')}` : ''
+        return `〔${id}〕${x.text || x.question || `${x.name}＝${x.value}`}（${x.status}${x.evidence?.level ? `｜證據${x.evidence.level}` : ''}｜出處 ${(x.sources || []).length} 篇）${sides}`
+    })
+    return lines.join('\n') || '（無）'
+}
+
+
+// ─── 逐核心動作鏈(hook 錨點:distill.distill.{loadState, selectNotes, propose, review, applyDelta, renderState, persistState}) ───
+
+/**
+ * 錨點:loadState(載入真理):狀態檔分流(正常／壞檔以 .prev 救回並隔離／2.0 狀態遺失以 .prev 還原或隔離／1.0.3 舊核心封存匯入／新核心);
+ * 對帳(rev 與投影不符 → 無 AI 重建投影;狀態比投影舊者 WARN 並保 id 高水位)
+ *
+ * 讀 msg.data(target、mode、_env、_domain);寫 msg.data._core({ id, file, record, state, expectRev });短路:壞檔、較新格式、讀取失敗、2.0 狀態遺失且無 .prev
  *
  * @returns {Object} 回傳 defineMw 產物
  */
-export const mwAdoptResult = () => defineMw({
-    name: 'adoptResult',
+export const mwLoadState = () => defineMw({
+    name: 'loadState',
     handle: async (msg, ctx, next) => {
-        const { target: t, _raw: r } = msg.data
-        if (r.ok) {
-            msg.data._result = r.result
-            ctx.log.info(`提煉[${t.concept}]：工作流走完（共 ${Math.round((r.totalMs || 0) / 1000)}s）`)
+        const { target: t, _env: env, _domain: domain } = msg.data
+        let record = t.core || null
+        let id = record?.id
+        let revive = null
+        if (!record) {
+            const r = newCoreIdOf(t, env.cores, env.dirs)
+            id = r.id
+            revive = r.revive
         }
-        else if (r.A?.result) {
-            // 【降級採用整合稿】審計鏈失敗時 A 段整合稿仍是合格成品,棄之等於 fanout＋整合白做。
-            // 修訂稿不採用——半套審計的中間態不可信。
-            msg.data._result = r.A.result
-            ctx.log.warn(`提煉[${t.concept}]：審計鏈失敗（${r.error}）→ 降級採用 A 整合稿`)
+        const file = path.join(env.dirs.core, `${id}.md`)
+        const base = { id, file, record: record || revive }
+        const r = env.store.load(id)
+        let state = null
+        let expectRev = null
+        if (r.status === 'ok') {
+            state = r.state
+            expectRev = r.state.rev
+        }
+        else if (r.status === 'recovered') {
+            const moved = env.store.quarantine(id, env.stamp)
+            ctx.log.warn(`提煉狀態還原[${t.concept}]：狀態檔毀損（${oneline(r.error, 120)}），已隔離為 ${String(moved).replace(/\\/g, '/')} 並由上一版還原（落後一次寫入）`)
+            state = highWater(r.state, record)
+        }
+        else if (r.status === 'missing') {
+            const rec = record || revive
+            const md = rec ? readMd(rec.file) : null
+            const is2 = !!rec && !revive && (rec.stateFormat >= 2 || md?.front?.stateFormat >= 2)
+            if (is2) {
+                const p = env.store.loadPrev(id)
+                if (p.status !== 'ok') {
+                    ctx.log.error(`提煉[${t.concept}]：2.0 核心之狀態檔遺失且無上一版可還原（${env.store.fileOf(id).replace(/\\/g, '/')}）；本概念跳過、不重新匯入（避免主張庫被當成舊散文封存）。請自備份或版控還原狀態檔`)
+                    msg.data._halt = 'state-lost'
+                    return msg
+                }
+                ctx.log.warn(`提煉狀態還原[${t.concept}]：狀態檔遺失，已由上一版還原（落後一次寫入；該次所用之筆記將重新待提煉）`)
+                state = highWater(p.state, rec)
+            }
+            else {
+                state = emptyState({ coreId: id, concept: t.concept, scope: t.scope })
+                if (rec) {
+                    // 1.0.3 舊核心(或復活之分身):封存舊散文、不轉主張;consumed 自 ∅ 起——1.x 之 noteIds 只是末批,其知識只在封存區
+                    const src = revive ? readMd(revive.archivedFile || revive.file) : md
+                    state.version = Number(rec.version) || 0
+                    if (src) {
+                        const lg = domain.importLegacy({ body: src.body })
+                        state.legacy = { body: lg.body, essence: lg.essence || '', version: state.version, importedAt: env.at }
+                    }
+                    ctx.log.info(`提煉遷移[${t.concept}]：${revive ? '復活之分身' : '升版前之核心'} v${state.version} 之內容已封存，主張自本批起累積`)
+                }
+            }
         }
         else {
-            ctx.log.warn(`提煉[${t.concept}]：工作流失敗（${r.error}）`)
-            return msg // 短路:本概念本輪無產出
+            const tag = r.status === 'newer' ? '格式版本新於本套件' : (r.status === 'corrupt' ? '狀態檔毀損且無上一版' : '狀態檔讀取失敗')
+            if (r.status === 'corrupt') env.store.quarantine(id, env.stamp)
+            ctx.log.error(`提煉[${t.concept}]：${tag}（${oneline(r.error, 160)}）；本概念跳過、不覆寫`)
+            msg.data._halt = r.status
+            return msg
         }
+        // 對帳:投影(cores 記錄／md)之 rev 或版本與狀態不符 → 以狀態重建(無 AI)
+        if (r.status === 'ok' && record && (record.rev !== state.rev || record.version !== state.version || readMd(file)?.front?.version !== state.version)) {
+            if (Number.isFinite(record.rev) && record.rev > state.rev) {
+                // 狀態比投影舊(如 git 回滾):以狀態為準,但 rev 與 id 取高水位
+                const was = state.rev
+                const w = env.store.save(id, highWater(state, record), { expectRev })
+                state = w
+                expectRev = w.rev
+                ctx.log.warn(`提煉投影補正[${t.concept}]：狀態（rev ${was}）比投影舊（rev ${record.rev}），以狀態為準重建投影（回滾後被退掉之版次所用筆記重新待提煉）`)
+            }
+            else ctx.log.warn(`提煉投影補正[${t.concept}]：投影落後於狀態（rev ${record.rev ?? '無'} → ${state.rev}），以狀態重建`)
+            await writeProjections({ id, file, state, env, domain })
+        }
+        msg.data._core = { ...base, state, expectRev }
         return next(msg)
     },
 })
 
 /**
- * 錨點:renderCore(版型組裝:版本遞增＋front/body,不落地;replace 此環＝換核心版型)
+ * 錨點:selectNotes(選篇):候選以狀態之 consumed 再濾一次;配發 N 代號;分節摘要。待審模式以待審操作所引之筆記為「批」;整併模式無筆記
  *
- * 讀 msg.data(target.core.version、_domain、_plan.used、_result);寫 msg.data._render({version,front?,body});不短路(恆呼叫 next)
+ * 讀 msg.data(target、mode、_core、_env、_domain);寫 msg.data._batch([{ code, id, note, digest }]);短路:增量模式無可用筆記(記 lastTriedAt,不呼叫 AI、不計 tries)
  *
+ * @param {Object} [opt={}] 輸入設定物件
+ * @param {Integer} [opt.notesPerTarget] 輸入每批篇數，未給則用 settings.knowledge.distillNotesPerConcept
  * @returns {Object} 回傳 defineMw 產物
  */
-export const mwRenderCore = () => defineMw({
-    name: 'renderCore',
+export const mwSelectNotes = (opt = {}) => defineMw({
+    name: 'selectNotes',
     handle: async (msg, ctx, next) => {
-        const { target: t, _domain: domain, _plan: plan, _result: data } = msg.data
-        const version = (t.core?.version || 0) + 1
-        msg.data._render = { version, ...domain.renderCore(t, data, plan.used, { version }) }
-        return next(msg)
-    },
-})
-
-/**
- * 錨點:persistCore(版本化落盤:md＋cores 索引＋筆記 distilledAt 標記)
- *
- * 讀 msg.data(target、_plan、_result、_render);不寫 msg.data(落地為 md 檔、stores.cores、stores.notes);不短路(恆呼叫 next)
- *
- * @returns {Object} 回傳 defineMw 產物
- */
-export const mwPersistCore = () => defineMw({
-    name: 'persistCore',
-    handle: async (msg, ctx, next) => {
-        const { stores, clock } = ctx.deps
-        const { target: t, _plan: plan, _result: data, _render: rendered } = msg.data
-        writeMd(plan.file, {
-            // 識別與版本欄位由套件掌管(機制);其餘 frontmatter 由 domain 補(內容)
-            concept: t.concept,
-            slug: plan.coreSlug,
-            type: 'core',
-            scope: t.scope || 'concept',
-            version: rendered.version,
-            note_count: t.notes.length,
-            notes: plan.used.map((n) => n.id),
-            updated: clock.iso8(),
-            ...(rendered.front || {}),
-        }, rendered.body)
-
-        await stores.cores.replace({
-            id: plan.coreSlug,
-            concept: t.concept,
-            scope: t.scope || 'concept',
-            file: plan.file.replace(/\\/g, '/'),
-            noteCount: t.notes.length,
-            noteIds: plan.used.map((n) => n.id),
-            version: rendered.version,
-            essence: String(data.essence || '').replace(/\s+/g, ' ').slice(0, 300),
-            updatedAt: clock.iso8(),
+        const { target: t, mode, _core: core, _env: env, _domain: domain } = msg.data
+        const k = ctx.deps.settings.knowledge
+        let picked = []
+        if (mode === 'delta') {
+            const consumed = new Set(core.state.consumed || [])
+            const cands = (t.candidates || []).filter((c) => !consumed.has(c.note.id))
+            const tries = env.ledger.entry(msg.data._ledgerKey).noteTries
+            picked = selectNotes(cands, {
+                limit: opt.notesPerTarget ?? k.distillNotesPerConcept,
+                sourceCap: k.distillSourceCap,
+                publishedOf: (n) => env.docsById.get(n.docId)?.publishedAt || '',
+                sourceOf: (n) => env.docsById.get(n.docId)?.sourceId || n.sourceName || '',
+                conflicts: env.conflicts,
+                levels: env.levels,
+                triesOf: (nid) => tries[nid] || 0,
+            })
+            if (!picked.length) {
+                env.ledger.entry(msg.data._ledgerKey).lastTriedAt = env.at
+                ctx.log.info(`提煉無可用筆記[${t.concept}]：候選皆已用過或未就緒，本輪不呼叫 AI`)
+                msg.data._halt = 'no-notes'
+                return msg
+            }
+        }
+        else if (mode === 'pending') {
+            const ids = [...new Set(pendingReviewOps(core.state).ops.flatMap((o) => o.sources || []))]
+            picked = ids.map((id, i) => ({ code: `N${i + 1}`, id, note: env.notesById.get(id) || { id, title: id }, primary: true }))
+        }
+        const codeOf = new Map(picked.map((p) => [p.id, p.code]))
+        msg.data._batch = picked.map((p) => {
+            const d = domain.noteDigest(p.note, readMd(p.note.file), { code: p.code, codeOf: (nid) => codeOf.get(nid) || '', titleOf: (nid) => env.notesById.get(nid)?.title || '' })
+            if (d && d.sectioned === false) count(msg, 'unsectioned')
+            return { code: p.code, id: p.id, note: p.note, digest: String(d?.text ?? d ?? '') }
         })
-        for (const n of plan.used) await stores.notes.patch(n.id, { distilledAt: clock.iso8() })
-
-        count(msg, 'updated')
-        ctx.log.info(`提煉[${t.concept}]：v${rendered.version} 完成（依據 ${plan.used.length} 篇，概念累計 ${t.notes.length} 篇）`)
         return next(msg)
     },
 })
 
 /**
- * 提煉子階段:選題(概念層 gain 優先、類別層後備)→ 並行逐概念鏈 → 軟性截止。hook 錨點:distill.distill.{buildBase, runWorkflow, adoptResult, renderCore, persistCore}
+ * 錨點:propose(提案或整併:callJson 單次呼叫,截斷一律換家、只收外包物件);待審模式不呼叫(操作取自待審)
+ *
+ * 讀 msg.data(target、mode、_core、_batch、_env、_domain、_seats);寫 msg.data._delta({ ops, skipped }、provider);短路:全鏈失敗(記失敗帳)
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwPropose = () => defineMw({
+    name: 'propose',
+    handle: async (msg, ctx, next) => {
+        const { target: t, mode, _core: core, _batch: batch, _env: env, _domain: domain, _seats: seats } = msg.data
+        if (mode === 'pending') {
+            // 待審操作之出處存的是筆記 id:換成本批代號,與提案同一形狀——審查員對得上【筆記】之代號,fix 刪減出處之比對亦一致
+            const codeOf = new Map((batch || []).map((b) => [b.id, b.code]))
+            msg.data._delta = { ops: pendingReviewOps(core.state).ops.map((o) => ({ ...o, sources: (o.sources || []).map((id) => codeOf.get(id) || id) })), skipped: [] }
+            return next(msg)
+        }
+        const k = ctx.deps.settings.knowledge
+        const rulesText = renderRules(domain.rules)
+        const live = core.state.claims.filter((c) => !TERMINAL.has(c.status)).length
+        const prompt = mode === 'consolidate'
+            ? domain.buildConsolidatePrompt({ concept: t.concept, scope: t.scope, digest: stateDigest(core.state, { full: true }), live, cap: k.distillClaimsCap, rulesText })
+            : domain.buildProposePrompt({ concept: t.concept, scope: t.scope, digest: stateDigest(core.state), batch, rulesText })
+        if (prompt.length > PROMPT_WARN_CHARS) {
+            count(msg, 'longPrompts')
+            ctx.log.warn(`提煉[${t.concept}]：${mode === 'consolidate' ? '整併' : '提案'}提示詞 ${prompt.length} 字偏長（有效主張 ${live} 條）——狀態摘要不截斷，持續成長會拖慢並終致逾時；請檢視整併是否有效，或以 regenCore 重練`)
+        }
+        const check = (d) => isobj(d) && !isarr(d) && isarr(d.ops) && domain.checkDeltaExtra(d) !== false
+        const r = await env.call(prompt, check, mode === 'consolidate' ? seats.consolidate : seats.propose, t, msg)
+        if (!r.ok) {
+            const led = env.ledger.entry(msg.data._ledgerKey)
+            led.tries = (led.tries || 0) + 1
+            led.lastTriedAt = env.at
+            led.lastError = oneline(r.error, 200)
+            ctx.log.warn(`提煉[${t.concept}]：${mode === 'consolidate' ? '整併' : '提案'}失敗（${oneline(r.error, 160)}${r.errors?.length ? `；歷程 ${r.errors.join('、')}` : ''}）`)
+            msg.data._halt = r.skipped ? 'budget' : 'ai-failed'
+            return msg
+        }
+        msg.data._delta = { ops: r.data.ops, skipped: isarr(r.data.skipped) ? r.data.skipped : [] }
+        msg.data._provider = r.providerId || ''
+        return next(msg)
+    },
+})
+
+/**
+ * 錨點:review(審查:逐操作裁決;未設審查席或無操作者略過)。失敗:增量 → 降級(終態操作存待審);整併與待審 → 不套用
+ *
+ * 讀 msg.data(target、mode、_core、_batch、_delta、_env、_domain、_seats);寫 msg.data._review({ status:'none'|'ok'|'failed', verdicts? })
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwReview = () => defineMw({
+    name: 'review',
+    handle: async (msg, ctx, next) => {
+        const { target: t, mode, _core: core, _batch: batch, _delta: delta, _env: env, _domain: domain, _seats: seats } = msg.data
+        if (!seats.review || !delta.ops.length) {
+            // 未設審查席＝安裝方選擇不審:待審者(先前設有審查席時暫緩者)亦照此政策直接套用,不懸置
+            if (mode === 'pending' && delta.ops.length) ctx.log.info(`提煉[${t.concept}]：未設審查席，待審之 ${delta.ops.length} 項直接套用`)
+            msg.data._review = { status: 'none' }
+            return next(msg)
+        }
+        const prompt = domain.buildReviewPrompt({
+            concept: t.concept, scope: t.scope, mode, ops: delta.ops, batch, touched: touchedDigest(core.state, delta.ops), rulesText: renderRules(domain.rules), pending: mode === 'pending',
+        })
+        const check = (d) => isobj(d) && !isarr(d) && isarr(d.verdicts)
+        const r = await env.call(prompt, check, seats.review, t, msg)
+        if (!r.ok) {
+            if (mode !== 'delta') {
+                ctx.log.warn(`提煉[${t.concept}]：${mode === 'consolidate' ? '整併' : '待審'}之審查失敗（${oneline(r.error, 120)}），本次不套用${mode === 'pending' ? '、待審保留' : ''}`)
+                msg.data._halt = 'review-failed'
+                return msg
+            }
+            const n = delta.ops.filter((o) => TERMINAL_OPS.includes(o?.op)).length
+            count(msg, 'degraded')
+            ctx.log.warn(`提煉降級[${t.concept}]：審查失敗（${oneline(r.error, 120)}），套用未審提案；終態操作 ${n} 項改存待審`)
+            msg.data._review = { status: 'failed' }
+            return next(msg)
+        }
+        const v = applyVerdicts(delta, r.data.verdicts, { defaultKind: domain.claimKinds?.[0] })
+        // 不可逆操作(取代／撤回／合併)須明列裁決:漏列者不因審查漏列而未審即套——提案與待審比照降級(存待審);
+        // 整併之合併不入待審(待審以一般差量裁決,合併不在其操作集),本次不採、下次整併再提
+        const unv = new Set(v.unverdicted)
+        const unvTerminal = (o) => unv.has(o._i) && TERMINAL_OPS.includes(o.op)
+        const nUnv = v.delta.ops.filter(unvTerminal).length
+        v.delta.ops = mode === 'consolidate'
+            ? v.delta.ops.filter((o) => !unvTerminal(o))
+            : v.delta.ops.map((o) => (unvTerminal(o) ? { ...o, _withhold: true } : o))
+        if (nUnv) ctx.log.info(`提煉審查[${t.concept}]：${nUnv} 項不可逆操作未得裁決，${mode === 'consolidate' ? '本次不採' : '改存待審'}`)
+        if (v.verdictRejected.length) ctx.log.info(`提煉審查[${t.concept}]：${v.verdictRejected.length} 則裁決無效（${v.verdictRejected.slice(0, 3).map((x) => x.reason).join('；')}），相應操作按未裁決處理`)
+        msg.data._review = { status: 'ok', verdicts: v }
+        msg.data._delta = { ...delta, ops: v.delta.ops }
+        return next(msg)
+    },
+})
+
+/**
+ * 錨點:applyDelta(程式套用＋涵蓋落帳＋證據重算＋不變式自檢);違反不變式即整個差量不落盤
+ *
+ * 讀 msg.data(target、mode、_core、_batch、_delta、_review、_env、_domain);寫 msg.data._next(新狀態)、_applied;短路:不變式違反
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwApplyDelta = () => defineMw({
+    name: 'applyDelta',
+    handle: async (msg, ctx, next) => {
+        const { target: t, mode, _core: core, _batch: batch, _delta: delta, _review: review, _env: env, _domain: domain } = msg.data
+        const reviewedFailed = review?.status === 'failed'
+        const r = applyDelta(core.state, delta, {
+            batch: batch.map((b) => ({ code: b.code, id: b.id })),
+            mode: mode === 'consolidate' ? 'consolidate' : 'delta',
+            claimKinds: domain.claimKinds,
+            limits: domain.limits,
+            withhold: reviewedFailed ? TERMINAL_OPS : [],
+            keyOf: normalizeConcept,
+            self: t.concept,
+            at: env.at,
+            meta: { provider: msg.data._provider || '', reviewed: review?.status || 'none', ...(mode !== 'delta' ? { step: mode } : {}) },
+        })
+        let s = r.state
+        if (mode === 'pending') s.pendingReview = []
+        const queued = r.withheld.filter((w) => w.resolved)
+        if (queued.length) {
+            const q = queuePendingReview(s, queued, { at: env.at, reason: reviewedFailed ? '審查失敗' : '審查未裁決' })
+            s = q.state
+            if (q.dropped.length) ctx.log.warn(`提煉[${t.concept}]：待審逾上限，最舊 ${q.dropped.length} 項已丟棄`)
+        }
+        const k = ctx.deps.settings.knowledge
+        let cov = { used: [], pending: [], skipped: [], dropped: [], uncovered: [], badSkipped: [] }
+        let exhausted = []
+        if (mode === 'delta') {
+            cov = coverageOf({ batch: batch.map((b) => ({ code: b.code, id: b.id })), applied: r.applied, skipped: delta.skipped, dropped: review?.verdicts?.dropped, queued, removed: review?.verdicts?.removed })
+            const tries = env.ledger.entry(msg.data._ledgerKey).noteTries
+            const covered = new Set([...cov.used, ...cov.pending, ...cov.skipped.map((x) => x.note), ...cov.dropped.map((x) => x.note)])
+            for (const nid of covered) delete tries[nid]
+            for (const nid of cov.uncovered) {
+                const n = (tries[nid] || 0) + 1
+                if (n >= (k.distillNoteTries ?? 2)) {
+                    exhausted.push(nid)
+                    delete tries[nid]
+                }
+                else tries[nid] = n
+            }
+            s = commitBatch(s, cov, { exhausted })
+            s.proposedAt = env.at
+        }
+        domain.evidence.apply(s, env.notesById)
+        const violations = checkInvariants(core.state, s, { touched: r.touched })
+        if (violations.length) {
+            const led = env.ledger.entry(msg.data._ledgerKey)
+            led.tries = (led.tries || 0) + 1
+            led.lastTriedAt = env.at
+            led.lastError = `不變式違反：${violations.slice(0, 3).join('；')}`
+            ctx.log.error(`提煉不變式違反[${t.concept}]：${violations.slice(0, 5).join('；')}（本次不落盤，狀態維持；請回報套件）`)
+            msg.data._halt = 'invariant'
+            return msg
+        }
+        count(msg, 'opsApplied', r.applied.length)
+        count(msg, 'opsRejected', r.rejected.length)
+        count(msg, 'opsWithheld', r.withheld.length)
+        count(msg, 'overLimit', r.overLimit)
+        count(msg, 'lengthChecked', r.lengthChecked)
+        // 絕對語氣指標(只計數不擋;安裝方驗收 §3 #4):本次新寫入或改寫之有效主張文字
+        const prevText = new Map(core.state.claims.map((c) => [c.id, c.text]))
+        const tones = s.claims.filter((c) => !TERMINAL.has(c.status) && c.text !== prevText.get(c.id)).map((c) => [c.id, domain.toneOf(c.text)]).filter(([, p]) => p)
+        if (tones.length) {
+            count(msg, 'absoluteTone', tones.length)
+            ctx.log.info(`提煉語氣[${t.concept}]：${tones.length} 條新寫主張含絕對語氣（${tones.slice(0, 5).map(([id, p]) => `〔${id}〕「${p}」`).join('、')}）`)
+        }
+        count(msg, 'questionsAdded', r.applied.filter((a) => a.op === 'question_add').length)
+        count(msg, 'questionsResolved', r.applied.filter((a) => a.op === 'question_resolve').length)
+        count(msg, 'notesUsed', cov.used.length)
+        count(msg, 'notesSkipped', cov.skipped.length + cov.dropped.length)
+        count(msg, 'notesUncovered', cov.uncovered.length - exhausted.length)
+        count(msg, 'notesExhausted', exhausted.length)
+        if (r.rejected.length) {
+            const by = {}
+            for (const x of r.rejected) by[x.reason] = (by[x.reason] || 0) + 1
+            ctx.log.info(`提煉拒收[${t.concept}]：${Object.entries(by).map(([k2, n]) => `${k2}×${n}`).join('、')}`)
+        }
+        if (cov.badSkipped.length) ctx.log.info(`提煉未涵蓋[${t.concept}]：略過清單中 ${cov.badSkipped.length} 項代號或理由不合，按未涵蓋處理`)
+        msg.data._next = s
+        msg.data._applied = { applied: r.applied.length, rejected: r.rejected.length, withheld: r.withheld.length, cov, exhausted, bumped: s.version !== core.state.version }
+        return next(msg)
+    },
+})
+
+/**
+ * 錨點:renderState(版型組裝:自狀態渲染 md,不落地;replace 此環＝換核心版型)
+ *
+ * 讀 msg.data(_core、_next、_env、_domain);寫 msg.data._render({ front, body, hash })、_next.renderHashes(最近兩次)
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwRenderState = () => defineMw({
+    name: 'renderState',
+    handle: async (msg, ctx, next) => {
+        const { _core: core, _next: s, _env: env, _domain: domain } = msg.data
+        const rendered = renderOf(s, domain, env.notesById, core.id)
+        const prev = (core.state.renderHashes || []).slice(-1)
+        s.renderHashes = [...new Set([...prev, rendered.hash])].slice(-2)
+        msg.data._render = rendered
+        return next(msg)
+    },
+})
+
+/**
+ * 錨點:persistState(落盤:dirty → 狀態(CAS)→ 再驗 rev → md(手改偵測)→ cores 記錄 → distilledAt → 分身 → 清 dirty)
+ *
+ * 讀 msg.data(target、mode、_core、_next、_render、_applied、_env);寫 msg.data._out(落盤後之狀態);短路:CAS 衝突或寫檔失敗
+ *
+ * @returns {Object} 回傳 defineMw 產物
+ */
+export const mwPersistState = () => defineMw({
+    name: 'persistState',
+    handle: async (msg, ctx, next) => {
+        const { target: t, mode, _core: core, _next: s, _render: rendered, _applied: ap, _env: env } = msg.data
+        const dirty = path.join(env.aux.dirty, core.id)
+        fs.mkdirSync(env.aux.dirty, { recursive: true })
+        fs.writeFileSync(dirty, env.at, 'utf8')
+        let written
+        try {
+            written = env.store.save(core.id, s, { expectRev: core.expectRev })
+        }
+        catch (e) {
+            fs.rmSync(dirty, { force: true })
+            env.ledger.entry(msg.data._ledgerKey).lastError = oneline(e.message, 200)
+            ctx.log.error(`提煉[${t.concept}]：${oneline(e.message, 240)}`)
+            msg.data._halt = 'cas'
+            return msg
+        }
+        // 維運工具(regenCore)恰在狀態寫入之後封存時,不可再寫回投影(否則 cores 記錄復活而狀態已不在)
+        if (env.store.diskRev(core.id) !== written.rev) {
+            ctx.log.error(`提煉[${t.concept}]：狀態寫入後即被他處改動（如 regenCore），不寫投影`)
+            msg.data._halt = 'cas'
+            return msg
+        }
+        const saved = env.store.guardManualEdit(core.file, core.state.renderHashes || [], env.stamp, env.aux.manual)
+        if (saved) ctx.log.warn(`提煉手改另存[${t.concept}]：核心 md 與上次渲染不符，覆寫前已另存 ${saved.replace(/\\/g, '/')}`)
+        writeMd(core.file, rendered.front, rendered.body)
+        const rec = recordOf(written, { id: core.id, file: core.file })
+        await env.stores.cores.replace(rec)
+        const k = env.cores.findIndex((c) => c.id === core.id)
+        if (k >= 0) env.cores.splice(k, 1, rec)
+        else env.cores.push(rec)
+        for (const nid of written.consumed) {
+            const n = env.notesById.get(nid)
+            if (n && !n.distilledAt) {
+                await env.stores.notes.patch(nid, { distilledAt: env.at })
+                n.distilledAt = env.at
+            }
+        }
+        count(msg, 'twinsMerged', await settleTwins(rec, env))
+        fs.rmSync(dirty, { force: true })
+        const led = env.ledger.entry(msg.data._ledgerKey)
+        led.tries = 0
+        led.lastError = ''
+        if (ap.bumped) count(msg, 'bumps') // 升版次數(追趕時同一核心可多次);「更新 N 則核心」以核心計,由階段於逐核心結束時計
+        count(msg, mode === 'delta' ? 'batches' : (mode === 'consolidate' ? 'consolidated' : 'pendingReviewed'))
+        const c = ap.cov
+        ctx.log.info(`提煉[${t.concept}]：${ap.bumped ? `v${written.version} 完成` : `v${written.version} 未改版`}（${mode === 'delta' ? `本批 ${msg.data._batch.length} 篇：引用 ${c.used.length}、略過 ${c.skipped.length + c.dropped.length}、未涵蓋 ${c.uncovered.length}${ap.exhausted.length ? `（逾限 ${ap.exhausted.length}）` : ''}；` : (mode === 'consolidate' ? '整併；' : '待審裁決；')}操作 套用 ${ap.applied}、拒收 ${ap.rejected}${ap.withheld ? `、存待審 ${ap.withheld}` : ''}；有效主張 ${written.claims.filter((x) => !TERMINAL.has(x.status)).length} 條）`)
+        msg.data._out = written
+        return next(msg)
+    },
+})
+
+
+/**
+ * 提煉子階段:選題(概念層、類別層後備)→ 並行逐核心(待審 → 整併(到期時)→ 提案批次×追趕)→ 軟性截止。
+ * hook 錨點:distill.distill.{loadState, selectNotes, propose, review, applyDelta, renderState, persistState}
  *
  * @param {Object} [opt={}] 輸入設定物件，非物件則視為{}
  * @param {Array} [opt.chain] 輸入自組動作鏈(defineMw 產物陣列)，未給則以 tap 組裝預設鏈
  * @param {Object} [opt.tap] 輸入認名掛載規格(applyTaps 之 taps)
  * @param {Object} [opt.domain] 輸入整組置換之提煉領域物件，未給則用 ctx.deps.domains.distill
- * @param {Object} [opt.workflow] 輸入整組置換之工作流物件({wkf,fanout,pipeline})，未給則用 ctx.deps.getDistillWorkflow()
- * @param {Function} [opt.onSeat] 輸入席位成交回調，傳給 mwRunWorkflow
- * @param {Function} [opt.shouldStop] 輸入工作流中止判定，傳給 mwRunWorkflow，預設 ctx.expired
- * @param {Integer} [opt.minNotes] 輸入概念層選題之最少筆記數門檻，傳給 pickConcepts
- * @param {Integer} [opt.notesPerTarget] 輸入每次組稿取用之最新筆記數上限，傳給 mwBuildBase
- * @param {Integer} [opt.parallel] 輸入本輪並行概念數，未給則用 settings.knowledge.distillPerRun
- * @param {Object} [opt.categoryFallback] 輸入類別層後備選題之門檻設定，未給則用 settings.knowledge.categoryFallback
+ * @param {Function} [opt.shouldStop] 輸入 AI 呼叫之中止判定，預設 budgetOf(ctx).shouldStop
+ * @param {Integer} [opt.minNotes] 輸入新核心門檻，未給則用 settings.knowledge.distillMinNotes
+ * @param {Integer} [opt.notesPerTarget] 輸入每批篇數，未給則用 settings.knowledge.distillNotesPerConcept
+ * @param {Integer} [opt.parallel] 輸入本輪並行核心數，未給則用 settings.knowledge.distillPerRun
+ * @param {Object} [opt.categoryFallback] 輸入類別後備之門檻 { minNotes, minGain }(給物件＝開啟；false＝停用)，未給或 null 則用 settings.knowledge.categoryFallback(預設 null＝停用)
  * @param {Function} [opt.deadline] 輸入軟性截止判定函數，未給則用 budgetOf(ctx).expired
- * @param {Integer} [opt.minRemainingMs=600000] 輸入開工門檻:剩餘時間不足即不開工之毫秒數，未給則用 settings.knowledge.distillMinRemainingMs
+ * @param {Integer} [opt.minRemainingMs=600000] 輸入開工與每一步之門檻:剩餘時間不足即不再開始下一步，未給則用 settings.knowledge.distillMinRemainingMs
  * @returns {Object} 回傳 stage 物件 { name, run }
+ * @throws {Error} opt 含 1.x 之 workflow／onSeat(2.0 已移除)時拋出
  */
 export function stageDistill(opt = {}) {
 
@@ -320,69 +705,358 @@ export function stageDistill(opt = {}) {
     if (!isobj(opt)) {
         opt = {}
     }
+    const retired = ['workflow', 'onSeat'].filter((k) => opt[k] !== undefined)
+    if (retired.length) {
+        throw new Error(`stageDistill 之 opt.${retired.join('／')} 已於 2.0 移除：提煉改走單次呼叫(提案 → 審查 → 程式套用)，席位由 settings.ai.distill 設定、實績由調度層計帳`)
+    }
 
     const chain = opt.chain || applyTaps(
-        [mwBuildBase(opt), mwRunWorkflow(opt), mwAdoptResult(opt), mwRenderCore(opt), mwPersistCore(opt)],
-        opt.tap, { chainName: 'distill.distill' },
+        [mwLoadState(opt), mwSelectNotes(opt), mwPropose(opt), mwReview(opt), mwApplyDelta(opt), mwRenderState(opt), mwPersistState(opt)],
+        opt.tap, { chainName: 'distill.distill', retired: RETIRED_ANCHORS },
     )
 
     return {
         name: 'distill',
         run: async (ctx) => {
-            const { stores, settings } = ctx.deps
+            const { stores, settings, dirs, clock } = ctx.deps
+            const k = settings.knowledge
             const log = ctx.log
-            const stat = { concepts: 0, updated: 0, aiCalls: 0, aiAttempts: 0 }
+            const stat = { concepts: 0, updated: 0, bumps: 0, failed: 0, aiCalls: 0, aiAttempts: 0, batches: 0, consolidated: 0, pendingReviewed: 0, tails: 0, degraded: 0, opsApplied: 0, opsRejected: 0, opsWithheld: 0, overLimit: 0, lengthChecked: 0, absoluteTone: 0, questionsAdded: 0, questionsResolved: 0, longPrompts: 0, notesUsed: 0, notesSkipped: 0, notesUncovered: 0, notesExhausted: 0, unsectioned: 0, twinsMerged: 0, repaired: 0 }
             const budget = budgetOf(ctx)
             const deadline = opt.deadline || budget.expired
-            // 開工門檻:剩餘時間不足一個概念之合理下限即不開工(整個工作流最短亦需數分鐘;開了只會在截止時被切斷、
-            // 白耗前段席位)。門檻可由 opt.minRemainingMs／knowledge.distillMinRemainingMs 覆寫,預設 10 分
-            const minRemainingMs = opt.minRemainingMs ?? settings.knowledge?.distillMinRemainingMs ?? 600_000
-            const remainingMs = budget.remainingMs()
-
-            if (deadline() || remainingMs < minRemainingMs) {
-                log.info(`提煉：${deadline() ? '逾時間預算' : `剩餘時間預算 ${Math.round(remainingMs / 1000)}s 不足下限 ${Math.round(minRemainingMs / 1000)}s`}，本輪不再提煉`)
+            const minRemainingMs = opt.minRemainingMs ?? k.distillMinRemainingMs ?? 600_000
+            const timeOk = () => !deadline() && budget.remainingMs() >= minRemainingMs
+            if (!timeOk()) {
+                const rem = budget.remainingMs()
+                log.info(`提煉：${deadline() ? '逾時間預算' : `剩餘時間預算 ${Math.round(rem / 1000)}s 不足下限 ${Math.round(minRemainingMs / 1000)}s`}，本輪不再提煉`)
                 return stdReport({ detail: { ...stat, skippedForBudget: true } })
             }
             const domain = opt.domain || ctx.deps.domains.distill
-            const workflow = opt.workflow || ctx.deps.getDistillWorkflow?.()
-            if (!workflow?.wkf) throw new Error('提煉子階段需要 workflow.wkf（AI 調度層之工作流;由 cfg.ai 或 opt.workflow 提供）')
+            const seats = settings.ai.distill || {}
+            if (!seats.propose) throw new Error('提煉需要 settings.ai.distill.propose 席位')
+            const aux = coreAuxDirs(dirs)
+            const conflictType = ctx.deps.domains?.relate?.conflictType
+            const [notes, cores, relations] = await Promise.all([
+                stores.notes.select(), stores.cores.select(), conflictType ? stores.relations.select({ type: conflictType }) : [],
+            ])
+            const conflicts = new Map()
+            for (const e of relations) {
+                if (e.type !== conflictType) continue
+                conflicts.set(e.from, [...(conflicts.get(e.from) || []), e.to])
+                conflicts.set(e.to, [...(conflicts.get(e.to) || []), e.from])
+            }
+            const ledger = createDistillLedger(path.join(dirs.state, 'distill-attempts.json'))
+            const shouldStop = opt.shouldStop || budget.shouldStop
+            const env = {
+                dirs,
+                stores,
+                aux,
+                cores,
+                notesById: new Map(notes.map((n) => [n.id, n])),
+                docsById: new Map(), // 選題後只取候選筆記所屬之文件(發布時間、來源;文件數以萬計,不整庫載入)
+                conflicts,
+                levels: domain.evidence?.levels || [],
+                ledger,
+                log,
+                at: clock.iso8(),
+                stamp: clock.stamp8(),
+                store: createCoreStore({ dir: dirs.coreState || dirs.core, prevDir: aux.prev, archiveDir: aux.archive }),
+                /**
+                 * 提煉之 AI 呼叫:截斷一律換家、剩餘預算封頂、嘗試之間可中止、逐次事件寫日誌(轉呼叫調度層統一入口已由 callJson 處理)
+                 *
+                 * @param {String} prompt 輸入提示詞
+                 * @param {Function} check 輸入結構驗證
+                 * @param {Object} seat 輸入席位規格
+                 * @param {Object} t 輸入選題項
+                 * @param {Object} msg 輸入訊息信封(計數用)
+                 * @returns {Promise} 回傳 callJson 之結果
+                 */
+                call: async (prompt, check, seat, t, msg) => {
+                    count(msg, 'aiCalls')
+                    return ctx.deps.ai.callJson(prompt, check, {
+                        spec: seat,
+                        acceptTruncated: false,
+                        budgetMs: budget.remainingMs(),
+                        shouldStop,
+                        onEvent: (ev) => {
+                            if (!ev) return
+                            if (ev.type === 'try') {
+                                count(msg, 'aiAttempts')
+                                return
+                            }
+                            const tag = `提煉事件[${t.concept}]`
+                            if (ev.type === 'ok') log.info(`${tag} ${ev.keyId || ev.providerId || ''} 成交（${Math.round((ev.durationMs || 0) / 1000)}s）`)
+                            else log.warn(`${tag} ${ev.type} ${ev.keyId || ev.providerId || ''}${ev.error ? `：${oneline(ev.error, 120)}` : ''}`)
+                        },
+                    })
+                },
+            }
 
-            const notes = await stores.notes.select()
-            const cores = await stores.cores.select()
-            const parallel = opt.parallel ?? settings.knowledge.distillPerRun
-            let targets = pickConcepts(notes, cores, { minNotes: opt.minNotes ?? settings.knowledge.distillMinNotes }).slice(0, parallel)
-            if (targets.length === 0) {
-                targets = pickCategories(notes, cores, opt.categoryFallback || settings.knowledge.categoryFallback || {}).slice(0, parallel)
-                if (targets.length > 0) log.info(`提煉：概念層無合格群組，改走類別層（${targets.map((t) => t.concept).join('、')}）`)
+            // 前次中斷者之投影補做(dirty 標記;無 AI)
+            if (fs.existsSync(aux.dirty)) {
+                for (const id of fs.readdirSync(aux.dirty)) {
+                    const r = env.store.load(id)
+                    if (r.status === 'ok') {
+                        const rec = cores.find((c) => c.id === id)
+                        await writeProjections({ id, file: path.join(dirs.core, `${id}.md`), state: r.state, env, domain })
+                        log.warn(`提煉投影補正[${r.state.concept}]：前次落盤中斷（${rec ? `記錄 rev ${rec.rev ?? '無'}` : '無記錄'} → 狀態 rev ${r.state.rev}），已以狀態重建`)
+                        stat.repaired++
+                    }
+                    fs.rmSync(path.join(aux.dirty, id), { force: true })
+                }
             }
-            if (targets.length === 0) {
-                log.info('提煉：無累積足量新筆記的概念或類別')
-                return stdReport({ detail: stat })
+
+            const catchup = Math.max(1, Number(k.distillCatchupBatches) || 1)
+            const pick = {
+                minNotes: opt.minNotes ?? k.distillMinNotes,
+                minPending: k.distillMinPending,
+                maxWaitDays: k.distillMaxWaitDays,
+                notesPerTarget: opt.notesPerTarget ?? k.distillNotesPerConcept,
+                graceDays: k.distillRelateGraceDays,
+                catchup,
+                attempts: Object.fromEntries(Object.entries(ledger.data).map(([key, v]) => [key, v])),
+                now: Date.parse(env.at),
             }
+            // 本輪開工時之積壓(主標籤、該核心未用過之篇數,含未達入選下限者):巡檢以其走勢對照實際消化(notesUsed)
+            stat.backlog = pickConcepts(notes, cores, { ...pick, minPending: 0, maxWaitDays: 0, attempts: {} }).reduce((n, t) => n + t.pending.length, 0)
+            const parallel = opt.parallel ?? k.distillPerRun
+            let targets = pickConcepts(notes, cores, pick).slice(0, parallel)
+            // 閒置輪(概念層無一般目標)之空餘名額,依序:
+            //   ①久候尾數:既有核心只剩 1～3 篇待提煉且等待逾 distillMaxWaitDays 者——一般規則(≥ distillMinPending)下永不入選,
+            //     概念不再進料時這幾篇就永遠進不了核心(2026-09-29 判識 C);閒置輪不擠占滿批,故只在此補做
+            //   ②類別後備(預設停用;opt／knowledge.categoryFallback 給物件才開啟):只收久候孤兒,見 conceptGroups.orphanNotes
+            if (targets.length === 0) {
+                targets = pickConcepts(notes, cores, { ...pick, minPending: 1 }).filter((t) => t.core).slice(0, parallel)
+                if (targets.length > 0) {
+                    stat.tails = targets.length
+                    log.info(`提煉：概念層無一般目標，補做久候尾數（${targets.map((t) => `${t.concept}×${t.pending.length}`).join('、')}）`)
+                }
+            }
+            const cf = opt.categoryFallback ?? k.categoryFallback
+            if (targets.length === 0 && isobj(cf)) {
+                const orphans = orphanNotes(notes, cores, { minNotes: pick.minNotes, maxWaitDays: pick.maxWaitDays, graceDays: pick.graceDays, now: pick.now })
+                targets = pickCategories(orphans, cores, { ...cf, notesPerTarget: pick.notesPerTarget, maxWaitDays: pick.maxWaitDays, graceDays: pick.graceDays, attempts: pick.attempts, now: pick.now }).slice(0, parallel)
+                if (targets.length > 0) log.info(`提煉：概念層無合格群組，改走類別層（${targets.map((t) => t.concept).join('、')}；久候孤兒 ${orphans.length} 篇）`)
+            }
+            if (targets.length === 0) log.info(`提煉：無累積足量新筆記的概念${isobj(cf) ? '或類別' : ''}`)
             stat.concepts = targets.length
-
-            // 逐概念鏈走 runChainOverMsgs(與其他子階段同一執行器:可 ctx.emit、拋錯隔離記 fail)
-            const results = await Promise.all(targets.map(async (t) => {
-                const msg = makeMsg('concept', { target: t, _domain: domain, _workflow: workflow }, { stage: 'distill' })
-                const r = await runChainOverMsgs({ chain, ctx, msgs: [msg], chainName: 'distill.distill' })
-                if (r.fails) log.warn(`提煉異常[${t.concept}]：${r.errors.join('；')}`)
-                // 失敗＝鏈拋錯,或工作流全敗於 adoptResult 短路(無產出);降級採 A 稿仍算成功
-                return { updated: r.stats.updated || 0, aiCalls: r.stats.aiCalls || 0, aiAttempts: r.stats.aiAttempts || 0, failed: r.fails + (r.halts.adoptResult || 0) }
-            }))
-            let failedCount = 0
-            for (const s of results) {
-                stat.updated += s.updated || 0
-                stat.aiCalls += s.aiCalls || 0
-                stat.aiAttempts += s.aiAttempts || 0
-                failedCount += s.failed || 0
+            // 候選筆記所屬之文件(選篇之發布年與來源):逐筆 get,無 get 之集合實作才整庫 select
+            const docIds = [...new Set(targets.flatMap((t) => (t.candidates || []).map((c) => c.note.docId)).filter(Boolean))]
+            if (docIds.length && typeof stores.docs.get === 'function') {
+                for (const id of docIds) {
+                    const d = await stores.docs.get(id)
+                    if (d) env.docsById.set(id, d)
+                }
             }
-            stat.failed = failedCount
-            // fail＝無產出之概念數(此前手組 report 恆 fail:0,工作流全敗被吸收成「一切正常」)
+            else if (docIds.length) for (const d of await stores.docs.select()) env.docsById.set(d.id, d)
+
+            const agg = (r) => {
+                for (const [key, v] of Object.entries(r.stats || {})) if (key in stat && key !== 'backlog') stat[key] += v
+            }
+            const servedIds = new Set()
+            const serve = async (t0) => {
+                const t = { ...t0 }
+                const ledgerKey = `${t.scope}|${t.key}`
+                let bumped = false
+                const run = async (mode) => {
+                    const msg = makeMsg('concept', { target: t, mode, _domain: domain, _env: env, _seats: seats, _ledgerKey: ledgerKey }, { stage: 'distill' })
+                    const r = await runChainOverMsgs({ chain, ctx, msgs: [msg], chainName: 'distill.distill' })
+                    if (r.fails) log.warn(`提煉異常[${t.concept}]：${r.errors.join('；')}`)
+                    agg(r)
+                    const id = msg.data._core?.id
+                    if (id) servedIds.add(id)
+                    // 新核心首批落盤後即綁定其記錄:後續步驟(追趕之次批)載入同一核心,不另配發新 id(否則同輪自造分身)
+                    if (msg.data._out && id) t.core = env.cores.find((c) => c.id === id) || t.core
+                    if (msg.data._out && msg.data._applied?.bumped) bumped = true
+                    return { ok: !r.fails && !!msg.data._out, halt: msg.data._halt || (r.fails ? 'error' : ''), out: msg.data._out }
+                }
+                // 逐核心收尾:「更新 N 則核心」以核心計(追趕時同一核心多批升版只算一則;巡檢之核心更新數據此),落失敗帳
+                const finish = () => {
+                    if (bumped) stat.updated++
+                    try {
+                        ledger.save()
+                    }
+                    catch (e) {
+                        log.warn(`提煉：失敗帳寫入失敗（${oneline(e.message, 160)}）`)
+                    }
+                }
+                let state = t.core ? env.store.load(t.core.id).state : null
+                let served = false
+                let failed = false
+                const led = ledger.entry(ledgerKey)
+                // ①待審:前次未經審查而暫緩之終態操作,先以獨立差量裁決(未設審查席者依其政策直接套用)
+                if (state?.pendingReview?.length && timeOk()) {
+                    led.pendingTriedAt = env.at
+                    const r = await run('pending')
+                    if (r.out) state = r.out
+                }
+                if (t.pendingOnly) {
+                    finish()
+                    return
+                }
+                // ②整併(到期時):有效主張逾上限且距上次嘗試 ≥ 間隔;不消耗筆記、不取代提案
+                if (state && timeOk()) {
+                    const live = state.claims.filter((c) => !TERMINAL.has(c.status)).length
+                    const every = Math.max(1, Number(k.distillConsolidateEvery) || 5)
+                    const cons = led.consolidate || {}
+                    const interval = cons.interval || every
+                    const since = state.version - Math.max(Number(state.lastConsolidated) || 0, Number(cons.version) || 0)
+                    if (live > (k.distillClaimsCap ?? 80) && since >= interval) {
+                        const r = await run('consolidate')
+                        const after = r.out ? r.out.claims.filter((c) => !TERMINAL.has(c.status)).length : live
+                        const effective = r.ok && after <= live * 0.9
+                        led.consolidate = { version: state.version, at: env.at, ok: r.ok, interval: r.ok ? (effective ? every : interval * 2) : interval }
+                        if (r.out) state = r.out
+                    }
+                }
+                // ③提案批次×追趕:每批一般差量、各自 CAS;第二批起須仍有滿批之待提煉。類別目標為低優先之填空,每輪 1 批
+                const batches = t.scope === 'category' ? 1 : catchup
+                for (let b = 0; b < batches; b++) {
+                    if (!timeOk()) break
+                    if (b > 0) {
+                        const consumed = new Set(state?.consumed || [])
+                        const left = (t.pending || []).filter((n) => !consumed.has(n.id)).length
+                        if (left < pick.notesPerTarget) break
+                    }
+                    const r = await run('delta')
+                    if (r.out) {
+                        state = r.out
+                        served = true
+                    }
+                    if (!r.ok) {
+                        if (!served && !['no-notes', 'budget'].includes(r.halt)) failed = true
+                        break
+                    }
+                }
+                if (failed) stat.failed++
+                finish()
+            }
+            await Promise.all(targets.map(serve))
+            // ④待審專步:本輪未處理而有待審之核心——無新筆記者選題選不到,不另排則不可逆操作久懸。
+            //   提案完成後以剩餘時間進行、併發同 distillPerRun(不擠占提案名額)、久未嘗試者先
+            const extra = env.cores
+                .filter((c) => c.status !== 'merged' && Number(c.pendingReview) > 0 && !servedIds.has(c.id))
+                .map((c) => ({ key: normalizeConcept(c.concept), scope: c.scope || 'concept', concept: c.concept, core: c, pending: [], candidates: [], pendingOnly: true }))
+                .map((t) => ({ t, at: ledger.data[`${t.scope}|${t.key}`]?.pendingTriedAt || '' }))
+                .sort((a, b) => a.at.localeCompare(b.at) || a.t.core.id.localeCompare(b.t.core.id))
+                .slice(0, parallel)
+                .map((x) => x.t)
+            if (extra.length && timeOk()) {
+                stat.concepts += extra.length
+                await Promise.all(extra.map(serve))
+            }
+            if (stat.unsectioned) log.warn(`提煉：${stat.unsectioned} 篇筆記找不到預設章節（自訂筆記版型？），摘要退回截斷正文；請以 domains.distill.noteDigest 對應自訂章名`)
             return stdReport({
-                stats: { in: stat.concepts, out: stat.updated, skip: 0, fail: failedCount, aiCalls: stat.aiCalls },
+                stats: { in: stat.concepts, out: stat.updated, skip: 0, fail: stat.failed, aiCalls: stat.aiCalls },
                 detail: stat,
             })
         },
+    }
+}
+
+/**
+ * 對單一選題跑一次提煉,不落盤:以提煉階段**同一條動作鏈**(選篇 → 提案 → 審查 → 套用 → 渲染)執行,回傳各步產物與套用後之狀態。
+ * 供 A/B 評估、盲評與除錯(2.0 起取代 1.x 以 ai.getWkf 自組工作流之作法;安裝方 2026-09-29 之要求)。
+ * 不讀寫知識庫目錄、不寫失敗帳、不處理分身與待審專步;要連續多版時,把回傳之 state 作為下一次之 opt.state。
+ *
+ * @param {Object} opt 輸入設定物件
+ * @param {String} opt.concept 輸入概念(或類別)名
+ * @param {String} [opt.scope='concept'] 輸入 'concept'|'category'
+ * @param {Array} opt.notes 輸入候選筆記記錄陣列(需 id;file 可讀者以分節摘要,否則只列標頭)，一律視為主標籤候選
+ * @param {Object} opt.settings 輸入 resolveSettings 之產物(取 knowledge.* 與 ai.distill 席位)
+ * @param {Object} opt.ai 輸入 AI 調度層(需 callJson)
+ * @param {Object} [opt.state] 輸入既有狀態(不修改)，未給為空狀態
+ * @param {Object} [opt.domain] 輸入提煉 domain，未給用 createDistillDomain({})
+ * @param {String} [opt.mode='delta'] 輸入 'delta'(提案)|'consolidate'(整併)
+ * @param {Integer} [opt.notesPerTarget] 輸入本批篇數上限，未給則用 settings.knowledge.distillNotesPerConcept
+ * @param {Array} [opt.docs=[]] 輸入候選筆記所屬之文件記錄(選篇之發布年與來源)
+ * @param {Array} [opt.relations=[]] 輸入衝突關聯 [{ from, to }](選篇之衝突成對)
+ * @param {Object} [opt.clock] 輸入 createClock 產物，未給用 Asia/Taipei
+ * @param {Object} [opt.log] 輸入日誌物件 { info, warn, error }，未給則靜音
+ * @param {Object} [opt.tap] 輸入認名掛載(同 stageDistill;本入口之鏈無 loadState／persistState)
+ * @returns {Promise} 回傳 Promise，resolve 回傳 { ok, halt, state, batch:[{code,id}], delta, review, applied, render:{front,body}, calls:[{ kind, ok, providerId, error, prompt, data }], stats }
+ * @throws {Error} concept、notes、settings、ai.callJson 不合或未設提案席位時拋出
+ * @example
+ * need test in nodejs.
+ *
+ * let r = await distillTarget({ concept: '學習率預熱', notes, settings: flow.info().settings, ai: flow.info().ai })
+ * console.log(r.ok, r.state.version, r.render.body)
+ */
+export async function distillTarget(opt = {}) {
+
+    //check
+    if (!isobj(opt) || typeof opt.concept !== 'string' || !opt.concept.trim() || !isarr(opt.notes) || !isobj(opt.settings?.knowledge) || typeof opt.ai?.callJson !== 'function') {
+        throw new Error('distillTarget 需要 { concept, notes:Array, settings(resolveSettings 之產物), ai(含 callJson) }')
+    }
+    const seats = opt.settings.ai?.distill || {}
+    if (!seats.propose) throw new Error('distillTarget 需要 settings.ai.distill.propose 席位')
+
+    const scope = opt.scope === 'category' ? 'category' : 'concept'
+    const mode = opt.mode === 'consolidate' ? 'consolidate' : 'delta'
+    const domain = opt.domain || createDistillDomain({})
+    const clock = opt.clock || createClock('Asia/Taipei')
+    const log = isobj(opt.log) ? opt.log : { info: () => {}, warn: () => {}, error: () => {} }
+    const id = slugify(opt.concept, scope === 'category' ? `core|category|${opt.concept}` : `core|${opt.concept}`)
+    const state = opt.state ? upgradeState(JSON.parse(JSON.stringify(opt.state))) : emptyState({ coreId: id, concept: opt.concept, scope })
+    const conflicts = new Map()
+    for (const e of isarr(opt.relations) ? opt.relations : []) {
+        if (!e?.from || !e?.to) continue
+        conflicts.set(e.from, [...(conflicts.get(e.from) || []), e.to])
+        conflicts.set(e.to, [...(conflicts.get(e.to) || []), e.from])
+    }
+    const ledgerData = {}
+    const calls = []
+    const env = {
+        cores: [],
+        notesById: new Map(opt.notes.map((n) => [n.id, n])),
+        docsById: new Map((isarr(opt.docs) ? opt.docs : []).map((d) => [d.id, d])),
+        conflicts,
+        levels: domain.evidence?.levels || [],
+        ledger: {
+            data: ledgerData,
+            entry: (key) => {
+                if (!isobj(ledgerData[key])) ledgerData[key] = { noteTries: {} }
+                return ledgerData[key]
+            },
+            save: () => {},
+        },
+        log,
+        at: clock.iso8(),
+        stamp: clock.stamp8(),
+        /**
+         * AI 呼叫(同階段之 env.call:截斷一律換家);另記錄每次之提示詞與回覆
+         *
+         * @param {String} prompt 輸入提示詞
+         * @param {Function} check 輸入結構驗證
+         * @param {Object} seat 輸入席位規格
+         * @param {Object} t 輸入選題項
+         * @param {Object} msg 輸入訊息信封
+         * @returns {Promise} 回傳 callJson 之結果
+         */
+        call: async (prompt, check, seat, t, msg) => {
+            count(msg, 'aiCalls')
+            const r = await opt.ai.callJson(prompt, check, { spec: seat, acceptTruncated: false })
+            calls.push({ kind: seat === seats.review ? 'review' : (mode === 'consolidate' ? 'consolidate' : 'propose'), ok: !!r?.ok, providerId: r?.providerId || '', error: r?.error || '', prompt, data: r?.data ?? null })
+            return r
+        },
+    }
+    const chain = applyTaps([mwSelectNotes(opt), mwPropose(opt), mwReview(opt), mwApplyDelta(opt), mwRenderState(opt)], opt.tap, { chainName: 'distill.distill', retired: TARGET_ABSENT })
+    const target = { key: normalizeConcept(opt.concept), scope, concept: opt.concept, core: null, pending: opt.notes, candidates: opt.notes.map((note) => ({ note, primary: true })) }
+    const msg = makeMsg('concept', { target, mode, _domain: domain, _env: env, _seats: seats, _ledgerKey: `${scope}|${target.key}`, _core: { id, file: '', record: null, state, expectRev: null } }, { stage: 'distill' })
+    const ctx = { deps: { settings: opt.settings, domains: { distill: domain } }, log }
+    const r = await runChainOverMsgs({ chain, ctx, msgs: [msg], chainName: 'distill.distill' })
+    const d = msg.data
+    return {
+        ok: !r.fails && !d._halt && !!d._next,
+        halt: d._halt || (r.fails ? r.errors.join('；') : ''),
+        state: d._next || null,
+        batch: (d._batch || []).map((b) => ({ code: b.code, id: b.id })),
+        delta: d._delta || null,
+        review: d._review || null,
+        applied: d._applied || null,
+        render: d._render ? { front: d._render.front, body: d._render.body } : null,
+        calls,
+        stats: { ...msg.stats },
     }
 }
 

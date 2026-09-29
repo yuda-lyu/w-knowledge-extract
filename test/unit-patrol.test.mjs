@@ -59,7 +59,7 @@ const summaryFor = (stamp, { ms = 1000, extract = {}, relate = {}, fetch = {}, d
             { name: '抓取', step: 1, status: 'ok', ms: 10, result: { ok: true, stats: {}, detail: { listFetch: sub({}, { newDocs: fetch.newDocs ?? 3, sourcesTried: 1 }), detailFetch: sub({}, { filled: 1, queued: fetch.queued ?? 100, queuedOldestDays: 40, left: fetch.left ?? 0 }) } } },
             { name: '彙整', step: 2, status: 'ok', ms: 10, result: { ok: true, stats: {}, detail: { extract: sub({ aiCalls: extract.aiCalls ?? 18, fail: extract.fail ?? 0 }, { processed: extract.processed ?? 54, notes: extract.notes ?? 7, skipped: extract.skipped ?? 47, explore: 1, pool: extract.pool ?? 60, poolOldestDays: 0, stopped: !!extract.stopped }) } } },
             { name: '關聯', step: 3, status: 'ok', ms: 10, result: { ok: true, stats: {}, detail: { relate: sub({ aiCalls: 6 }, { targets: 30, edges: 100, conflicts: 5, pending: relate.pending ?? 100 }) } } },
-            { name: '提煉', step: 4, status: 'ok', ms: 10, result: { ok: true, stats: {}, detail: { distill: sub({ aiCalls: 16 }, { concepts: 2, updated: distill.updated ?? 2, aiCalls: 16 }) } } },
+            { name: '提煉', step: 4, status: 'ok', ms: 10, result: { ok: true, stats: {}, detail: { distill: sub({ aiCalls: 16 }, { concepts: 2, updated: distill.updated ?? 2, aiCalls: 16, ...(distill.backlog != null ? { backlog: distill.backlog, notesUsed: distill.notesUsed ?? 0 } : {}) }) } } },
             { name: '索引', step: 5, status: 'ok', ms: 1, result: { ok: true, stats: {}, detail: { notes: 11454, cores: 175, edges: 36314 } } },
         ],
     }
@@ -122,6 +122,40 @@ describe('unit-patrol', function() {
         const t = record(p)
         assert.match(t, /\| run \| 新文件 3｜知識 7（略過 47）｜關聯 100 條｜核心 \+2 \| 40 \|/, 'JSON 之數字覆寫正則;AI＝18＋6＋16')
         assert.match(t, /\| run·正則 \| 新文件 -｜知識 2（略過 7）｜關聯 - 條｜核心 \+- \| 3 \|/, '無 JSON 者退回正則並標示')
+    })
+
+    // ── ⑤b 提煉積壓(2.0,以篇計)與提煉資訊行 ──
+    it('⑤b 提煉積壓:快照與提煉段同一組選題參數(distillPick);超過六輪容量且近 3 輪無淨消化才報(附實際消化);連續失敗與未遷移核心列資訊', async () => {
+        const old = '2026-01-01T00:00:00+08:00'
+        const notes = memStore(Array.from({ length: 20 }, (_, i) => ({ id: `a${i}`, concepts: ['甲'], createdAt: old, relatedAt: old })))
+        const cores = memStore([
+            { id: 'legacy', concept: '乙', version: 5, noteIds: [] }, // 1.x 記錄(無 stateFormat)
+            { id: 'twin', concept: '丙', version: 1, status: 'merged', mergedInto: 'x' }, // 已併入之分身不計
+            { id: 'cat', concept: '其他', scope: 'category', version: 1, noteIds: [] }, // 1.x 類別核心:類別後備停用時列「不再更新」,不算未遷移
+        ])
+        fs.writeFileSync(`${TMP}/state/distill-attempts.json`, JSON.stringify({ 'concept|丁': { tries: 3, lastError: 'x' }, 'concept|戊': { tries: 1 } }), 'utf8')
+        const distillPick = { minNotes: 2, minPending: 4, maxWaitDays: 30, notesPerTarget: 12, graceDays: 3, catchup: 3 }
+        const mk = (name) => make({ recordFile: `${TMP}/${name}.md`, openStores: stores({ notes, cores }), distillPick })
+        resetLogs()
+        for (const [backlog, used] of [[100, 5], [110, 5], [120, 5]]) {
+            const s = writeLog([])
+            writeRunSummary({ dir: `${TMP}/log`, stamp: s, summary: summaryFor(s, { distill: { backlog, notesUsed: used } }) })
+        }
+        const a = await mk('r5b').assess()
+        assert.deepEqual([a.snap.distillBacklog, a.snap.distillReady, a.snap.coresUnmigrated, a.snap.coresCategoryFrozen, a.snap.distillStuck, a.snap.cores], [20, 20, 1, 1, 1, 2])
+        assert.ok(a.info.some((x) => /^類別核心 1 個不再更新（類別後備預設停用）/.test(x)))
+        assert.equal((await make({ recordFile: `${TMP}/r5c.md`, openStores: stores({ notes, cores }), distillPick, categoryFallbackEnabled: true }).assess()).snap.coresCategoryFrozen, 0, '開啟時不列')
+        assert.ok(a.issues.some((x) => /^提煉積壓 20 篇（>12＝六輪名目容量）且近 3 輪無淨消化（100→110→120）；實際消化平均 5\.0 篇／輪/.test(x)), a.issues.join('\n'))
+        assert.ok(a.info.some((x) => /^提煉連續失敗 ≥3 次之核心 1 個/.test(x)))
+        assert.ok(a.info.some((x) => /^尚未遷移（仍為 1\.x 散文、無狀態檔）之核心 1 個/.test(x)))
+        // 正在消化(積壓下降)者不報
+        resetLogs()
+        for (const backlog of [120, 110, 100]) {
+            const s = writeLog([])
+            writeRunSummary({ dir: `${TMP}/log`, stamp: s, summary: summaryFor(s, { distill: { backlog, notesUsed: 12 } }) })
+        }
+        assert.ok(!(await mk('r5b2').assess()).issues.some((x) => /提煉積壓/.test(x)))
+        fs.rmSync(`${TMP}/state/distill-attempts.json`, { force: true })
     })
 
     // ── 新判準 ⑫～⑰ ──

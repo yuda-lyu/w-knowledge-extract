@@ -7,7 +7,8 @@ import path from 'node:path'
 import { createTriageDomain } from '../src/domain/triageDomain.mjs'
 import { createExtractDomain } from '../src/domain/extractDomain.mjs'
 import { createRelateDomain } from '../src/domain/relateDomain.mjs'
-import { createDistillDomain, buildDistillPrompt, buildAuditPrompt, buildRevisePrompt, buildFinalPrompt, checkCore, checkIssues, renderCoreBody } from '../src/domain/distillDomain.mjs'
+import { createDistillDomain } from '../src/domain/distillDomain.mjs'
+import { renderRules, emptyState } from '../src/stores/coreState.mjs'
 import { VOCAB_DEFAULT, resolveVocab, kbLabelOf } from '../src/domain/vocabDefault.mjs'
 import { resolveSettings, SKIP_TITLE_PATTERNS_DEFAULT } from '../src/core/settingsDefault.mjs'
 
@@ -19,31 +20,29 @@ const target = { id: 'a-11111111', title: 'A', category: 'c', concepts: ['x'], s
 const cands = new Map([['a-11111111', [{ id: 'b-22222222', title: 'B', category: 'c', concepts: ['x'], summary: 's' }]]])
 const promptsOf = (vocab) => {
     const d = createDistillDomain({ vocab })
+    const rulesText = renderRules(d.rules)
     return {
         triage: createTriageDomain({ vocab }).buildPrompt(docs),
         extract: createExtractDomain({ vocab }).buildPrompt(docs, ['概念(2)']),
         relate: createRelateDomain({ vocab }).buildPrompt([target], cands),
-        distill: d.buildBasePrompt({ concept: '概念' }, [], ''),
-        audit: d.kinds.audit.build({ concept: '概念', basePrompt: 'BASE', draft: { essence: 'e' } }),
-        revise: d.kinds.revise.build({ draft: {}, issues: [] }),
-        accept: d.kinds.accept.build({ draft: {}, issues: [] }),
+        distillPropose: d.buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText }),
+        distillReview: d.buildReviewPrompt({ concept: '概念', mode: 'delta', ops: [], batch: [], rulesText }),
+        distillConsolidate: d.buildConsolidatePrompt({ concept: '概念', scope: 'concept', digest: '', live: 90, cap: 80, rulesText }),
     }
 }
 
 describe('unit-domain', function() {
 
-    it('預設七種角色 prompt 皆領域中立:不含原專案之領域用語,稱呼為「知識庫」', () => {
+    it('預設六種角色 prompt(預篩、萃取、關聯、提煉之提案／審查／整併)皆領域中立:不含原專案之領域用語,稱呼為「知識庫」', () => {
         for (const [name, p] of Object.entries(promptsOf(null))) {
             assert.doesNotMatch(p, LEGACY_DOMAIN, `${name} prompt 含領域用語`)
             assert.match(p, /^你是知識庫的/, `${name} prompt 稱呼`)
         }
-        // 直呼之提示詞建構函數(未給 opt)亦同
-        for (const p of [buildDistillPrompt('概念', [], ''), buildAuditPrompt('概念', {}, 'b'), buildRevisePrompt({}, []), buildFinalPrompt({}, [])]) {
-            assert.match(p, /^你是知識庫的/)
-        }
+        // 規則表(提案／審查／整併共用之資料)亦中立
+        assert.doesNotMatch(renderRules(createDistillDomain({}).rules), LEGACY_DOMAIN)
     })
 
-    it('vocab.domain 注入主題範圍:七種 prompt 之稱呼帶主題;預篩與萃取另加主題限定', () => {
+    it('vocab.domain 注入主題範圍:六種 prompt 之稱呼帶主題;預篩與萃取另加主題限定', () => {
         const ps = promptsOf({ domain: '機器學習' })
         for (const [name, p] of Object.entries(ps)) assert.match(p, /^你是「機器學習」知識庫的/, name)
         assert.match(ps.triage, /本知識庫之主題範圍為「機器學習」：與此主題無關者判 false/)
@@ -59,7 +58,10 @@ describe('unit-domain', function() {
         for (const f of ['key_points', 'concepts', 'claim_type', 'evidence_level', 'regime_dependency', 'counter_views', 'explore']) assert.ok(ps.extract.includes(`"${f}"`), f)
         assert.match(ps.relate, /type 從此清單擇一：前置概念、延伸深化、互補搭配、衝突或反例/)
         assert.match(ps.relate, /"type":"延伸深化"/)
-        assert.ok(ps.distill.includes('"essence"') && ps.distill.includes('"disputes"') && ps.distill.includes('"temporal"'))
+        // 提煉(2.0)之提案契約:差量操作(非整份重寫)、主張種類、略過理由
+        for (const f of ['"op":"add"', '"op":"confirm"', '"op":"supersede"', '"op":"dispute_add"', '"op":"essence"', 'principle|rule|pitfall|temporal', '"skipped"']) assert.ok(ps.distillPropose.includes(f), f)
+        assert.match(ps.distillReview, /"verdicts"/)
+        assert.match(ps.distillConsolidate, /"op":"merge"/)
     })
 
     it('預設詞彙中立;resolveVocab 整鍵替換(非物件視為未覆寫);kbLabelOf', () => {
@@ -102,18 +104,124 @@ describe('unit-domain', function() {
         assert.deepEqual(hits, [])
     })
 
-    it('checkCore/checkIssues/renderCoreBody:稿件驗證與核心版型', () => {
-        assert.equal(checkCore({ essence: '本質', principles: ['原理'], rules: [] }), true)
-        assert.equal(checkCore({ essence: '', principles: ['原理'], rules: [] }), false)
-        assert.equal(checkCore([]), false)
-        assert.equal(checkIssues({ issues: [] }), true)
-        assert.equal(checkIssues(null), false)
-        const body = renderCoreBody('概念A', { essence: '本質', principles: ['原理'], rules: ['若A則B'], parameters: [{ name: 'k', value: '1|2', note: '出處' }] }, [{ id: 'n1', title: '筆記', sourceName: '來源' }])
-        assert.match(body, /^# 核心知識：概念A\n\n## 本質\n\n本質/)
-        assert.match(body, /\| k \| 1／2 \| 出處 \|/, '名稱/值/說明三欄一律轉義 |(此前只轉義說明欄)')
+    it('renderState:核心版型(本質、主張〔編號〕、參數表轉義 |、提煉自)', () => {
+        const s = emptyState({ coreId: 'k', concept: '概念A', scope: 'concept' })
+        s.version = 1
+        s.essence = { text: '本質', claims: ['C1'], sources: ['n1'], at: '' }
+        s.claims = [{ id: 'C1', kind: 'rule', text: '若A則B', status: 'active', sources: ['n1'], evidence: { level: '中' } }]
+        s.parameters = [{ id: 'P1', name: 'k|x', value: '1|2', conditions: 'c|d', status: 'active', sources: ['n1'] }]
+        const { body } = createDistillDomain({}).renderState(s, { notesById: new Map([['n1', { title: '筆記', sourceName: '來源' }]]) })
+        assert.match(body, /^# 核心知識：概念A\n\n> v1｜/)
+        assert.match(body, /## 本質\n\n本質（依〔C1〕）/)
+        assert.match(body, /## 可操作規則\n\n- 〔C1〕若A則B（證據中）/)
+        assert.match(body, /\| P1 \| k／x \| 1／2 \| c／d \|/, '參數表之各欄一律轉義 |')
         const note = createExtractDomain({}).renderNoteBody({ title: 'T', key_points: ['k'], parameters: [{ name: 'a|b', value: '1|2', note: 'c|d' }] }, { title: 't', sourceName: 's', url: 'u' }, createExtractDomain({}).normalizeQuality({}))
         assert.match(note, /\| a／b \| 1／2 \| c／d \|/, '筆記版型之參數表同一規則')
         assert.match(body, /## 提煉自\n\n- \[\[n1\]\] 筆記（來源）/)
+    })
+
+    it('renderState:爭議各方出處＝直接出處 ∪ 所引主張之出處(只引主張之一方不再顯示「（無）」);待解問題章名不帶「供日後抓取」', () => {
+        const s = emptyState({ coreId: 'k', concept: '概念A', scope: 'concept' })
+        s.version = 2
+        s.claims = [
+            { id: 'C1', kind: 'rule', text: '甲', status: 'contested', sources: ['n1'], evidence: { level: '中' } },
+            { id: 'C2', kind: 'rule', text: '乙', status: 'contested', sources: ['n2', 'n3'], evidence: { level: '低' } },
+        ]
+        const sides = [
+            { position: '甲方', claims: ['C1'], sources: [] },
+            { position: '乙方', claims: ['C2'], sources: ['n3', 'n4'] },
+            { position: '丙方', claims: [], sources: [] },
+        ]
+        s.disputes = [{ id: 'D1', question: '問', status: 'open', sides }]
+        s.questions = [{ id: 'Q1', text: '待證之事', status: 'open', sources: ['n1'] }, { id: 'Q2', text: '已結', status: 'resolved', sources: ['n1'] }]
+        const { body } = createDistillDomain({}).renderState(s, { notesById: new Map() })
+        assert.match(body, /第1方：甲方｜證據[^｜]*｜依〔C1〕｜出處：\[\[n1\]\]/, '只引主張之一方取主張之出處')
+        assert.match(body, /第2方：乙方｜證據[^｜]*｜依〔C2〕｜出處：\[\[n3\]\]、\[\[n4\]\]、\[\[n2\]\]\n/, '直接出處在前、聯集去重(n3 不重複)')
+        assert.match(body, /第3方：丙方｜證據[^｜]*｜出處：（無）/, '無主張無出處者仍照實顯示')
+        assert.match(body, /\n## 待解問題\n\n- 〔Q1〕待證之事\n/)
+        assert.doesNotMatch(body, /供日後抓取/, '章名去承諾')
+        assert.doesNotMatch(body.split('## 沿革')[0], /〔Q2〕/, '已結案者不列於待解問題')
+        assert.match(body, /## 沿革\n\n(- .*\n)*- 〔Q2〕已結案：已結｜/, '已結案者留痕於沿革:文字中之〔Q〕引用在本文可找到(安裝方 §3 #6)')
+    })
+
+    it('拆解之爭議(非對立)於沿革列「已拆解」與各方所在之主張;待審行之動詞依操作(拆解／撤回／取代);提案、整併、審查三種提示詞皆說明拆解與「非對立」', () => {
+        const s = emptyState({ coreId: 'k', concept: '概念A', scope: 'concept' })
+        s.version = 3
+        s.claims = [{ id: 'C1', kind: 'rule', text: '甲', status: 'active', sources: ['n1'] }, { id: 'C2', kind: 'principle', text: '乙', status: 'active', sources: ['n2'] }]
+        s.disputes = [{ id: 'D1', question: '硬配之問', status: 'retracted', retractReason: '非對立', statusNote: '兩方回答不同問題', sides: [{ position: '甲方', claims: ['C1'] }, { position: '乙方', claims: ['C2'] }] }]
+        s.pendingReview = [{ op: { op: 'dispute_dissolve', id: 'D9', reason: '待審之拆解' } }, { op: { op: 'retract', id: 'C5', reason: '離題' } }]
+        const d = createDistillDomain({})
+        const { body } = d.renderState(s, { notesById: new Map() })
+        assert.match(body, /- 〔D1〕已拆解（非對立：兩方回答不同問題；各方見〔C1〕〔C2〕）：硬配之問/)
+        assert.doesNotMatch(body, /## 爭議與未定論/, '拆解後不再列為爭議')
+        assert.match(body, /- 待審：〔D9〕擬拆解：待審之拆解/)
+        assert.match(body, /- 待審：〔C5〕擬撤回：離題/)
+        const rulesText = renderRules(d.rules)
+        assert.match(d.buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText }), /"op":"dispute_dissolve","id":"D2","reason":"為何不是對立","kinds":\["principle"\]/)
+        assert.match(d.buildConsolidatePrompt({ concept: '概念', scope: 'concept', digest: '', live: 90, cap: 80, rulesText }), /dispute_dissolve 拆解硬配之爭議/)
+        const rv = d.buildReviewPrompt({ concept: '概念', mode: 'delta', ops: [], batch: [], rulesText })
+        assert.match(rv, /只能以「離題」或「同篇」或「非對立」剔除/)
+        assert.match(rv, /以「對立成立」剔除/)
+        assert.match(rv, /拆解（dispute_dissolve）不可逆/)
+        assert.match(rulesText, /硬配之對立.*dispute_dissolve 拆解（內容全留）/)
+        assert.match(createDistillDomain({ vocab: {} }).buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText }), /"kinds":\["principle"\]/)
+    })
+
+    it('toneOf:絕對語氣片語(只計數不擋);前兩字含「不未非無」或為「難以」者不計;不收裸詞以免「一定程度／絕對值／保證金」誤計;absolutePhrases 可換或給 [] 停用', () => {
+        const { toneOf } = createDistillDomain({})
+        assert.equal(toneOf('預熱一定會提升效果'), '一定會')
+        assert.equal(toneOf('此法總是有效'), '總是')
+        for (const t of ['預熱不一定會提升效果', '並非總是有效', '難以保證會收斂', '未必總是如此', '在一定程度上有效', '取梯度絕對值', '保證金比率', '']) assert.equal(toneOf(t), '', t)
+        assert.equal(toneOf('不一定會，但此法總是有效'), '總是', '同句之否定只豁免該處')
+        assert.equal(createDistillDomain({ vocab: { absolutePhrases: ['必勝'] } }).toneOf('此法必勝'), '必勝')
+        assert.equal(createDistillDomain({ vocab: { absolutePhrases: [] } }).toneOf('此法總是有效'), '')
+    })
+
+    it('規則表:question 規則排在爭議之後、不可把對立改列問題;evidence 規則之 basis 選項取自 vocab.basisCaps 之鍵(不含 *)', () => {
+        const rules = createDistillDomain({}).rules
+        const ids = rules.map((r) => r.id)
+        assert.ok(ids.indexOf('dispute') < ids.indexOf('question') && ids.indexOf('question') < ids.indexOf('kind'))
+        assert.deepEqual(rules.map((r) => r.priority), rules.map((r, k) => k + 1), 'priority 連號 1..N')
+        const q = rules.find((r) => r.id === 'question').text
+        assert.match(q, /question_add/)
+        assert.match(q, /不可改列為問題/)
+        assert.match(q, /question_resolve/)
+        const ev = (vocab) => createDistillDomain({ vocab }).rules.find((r) => r.id === 'evidence').text
+        assert.match(ev(null), /basis 寫證據性質，擇自（可並列）：樣本外、樣本內、理論、模擬、案例、實務、教學、觀點、廠商、轉述；/)
+        // 預設短詞以子字串比對同時涵蓋長寫法(安裝方 v5 之九個短標記與模型常用之長寫法皆命中;待議 2)
+        const ev0 = createDistillDomain({}).evidence
+        for (const [b, rank] of [['實務', 2], ['實務經驗', 2], ['教學示範', 2], ['廠商內容', 2], ['觀點', 2], ['轉述', 2], ['樣本外', 0], ['樣本外實證', 0], ['樣本內實證', 1], ['理論', 1], ['模擬', 1], ['實證研究', 1]]) assert.equal(ev0.basisRank(b).rank, rank, b)
+        assert.doesNotMatch(ev(null), /[、：]\*[、；]/, '「*」不列為選項')
+        assert.match(ev({ basisCaps: { '實驗': 0, '*': 1 } }), /擇自（可並列）：實驗；/, '安裝方改表即改提示詞')
+        assert.match(ev({ basisCaps: {} }), /在 basis 寫證據性質；/, '空表時不列選項')
+        assert.match(ev(null), /限制（如單一研究、未經獨立驗證）照實寫在 conditions 或 critique/)
+    })
+
+    it('resolveVocab:basisCaps／selfLimitPhrases 之預設、null 回預設、{}／[] 停用、形狀錯誤於建構期拋錯', () => {
+        assert.deepEqual(resolveVocab({}).basisCaps, VOCAB_DEFAULT.basisCaps)
+        assert.deepEqual(resolveVocab({}).selfLimitPhrases, VOCAB_DEFAULT.selfLimitPhrases)
+        assert.deepEqual(resolveVocab({ basisCaps: null, selfLimitPhrases: null }).basisCaps, VOCAB_DEFAULT.basisCaps)
+        assert.deepEqual(resolveVocab({ basisCaps: null, selfLimitPhrases: null }).selfLimitPhrases, VOCAB_DEFAULT.selfLimitPhrases)
+        assert.deepEqual(resolveVocab({ basisCaps: {}, selfLimitPhrases: [] }).basisCaps, {})
+        assert.deepEqual(resolveVocab({ basisCaps: {}, selfLimitPhrases: [] }).selfLimitPhrases, [])
+        assert.deepEqual(resolveVocab({ basisCaps: { '實驗': '高', '*': -1 } }).basisCaps, { '實驗': '高', '*': -1 }, '等級名與位置整數皆可')
+        assert.throws(() => resolveVocab({ basisCaps: ['x'] }), /vocab\.basisCaps 須為物件/)
+        assert.throws(() => resolveVocab({ basisCaps: { '實驗': '極高' } }), /vocab\.basisCaps\.實驗 須為 evidenceLevels 之等級名/)
+        assert.throws(() => resolveVocab({ basisCaps: { '實驗': 0.5 } }), /vocab\.basisCaps\.實驗/)
+        assert.throws(() => resolveVocab({ basisCaps: { ' ': 0 } }), /vocab\.basisCaps 之鍵不可為空字串/)
+        assert.throws(() => resolveVocab({ selfLimitPhrases: '單一研究' }), /vocab\.selfLimitPhrases 須為非空字串陣列/)
+        assert.throws(() => resolveVocab({ selfLimitPhrases: ['單一研究', ''] }), /vocab\.selfLimitPhrases 須為非空字串陣列/)
+        assert.deepEqual(resolveVocab({}).absolutePhrases, VOCAB_DEFAULT.absolutePhrases)
+        assert.deepEqual(resolveVocab({ absolutePhrases: null }).absolutePhrases, VOCAB_DEFAULT.absolutePhrases)
+        assert.deepEqual(resolveVocab({ absolutePhrases: [] }).absolutePhrases, [])
+        assert.throws(() => resolveVocab({ absolutePhrases: '總是' }), /vocab\.absolutePhrases 須為非空字串陣列（\[\] 即不計）/)
+        assert.throws(() => resolveVocab({ absolutePhrases: ['總是', 1] }), /vocab\.absolutePhrases 須為非空字串陣列/)
+        // 換了 evidenceLevels 時,basisCaps 之等級名須對得上新等級(位置整數不受影響)
+        assert.throws(() => resolveVocab({ evidenceLevels: ['強', '弱'], basisCaps: { '實驗': '高' } }), /等級名（強、弱）/)
+        assert.doesNotThrow(() => resolveVocab({ evidenceLevels: ['強', '弱'] }), '預設表以位置表達,換等級名不失效')
+        // resolveVocab 可重複套用(冪等)
+        const once = resolveVocab({ basisCaps: { '實驗': 0 } })
+        assert.deepEqual(resolveVocab(once).basisCaps, once.basisCaps)
     })
 
 })

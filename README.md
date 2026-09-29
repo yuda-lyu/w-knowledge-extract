@@ -51,7 +51,7 @@ let test = async () => {
         '混合精度訓練之記憶體與速度取捨': { title: '混合精度訓練之取捨', category: '方法與技術', summary: '半精度計算搭配單精度主權重與損失縮放。', key_points: ['損失縮放可避免梯度下溢'], concepts: ['訓練記憶體優化', '混合精度'], claim_type: '實務經驗', evidence_level: '中' },
     }
 
-    //answer, 模擬 AI 回應: 依 prompt 種類(預篩/萃取/關聯)回傳固定之 JSON, 實務上為內建 AI 調度層(w-dispatch-ai, 金鑰放 workDir/.env)
+    //answer, 模擬 AI 回應: 依 prompt 種類(預篩/萃取/關聯/提煉之提案與審查)回傳固定之 JSON, 實務上為內建 AI 調度層(w-dispatch-ai, 金鑰放 workDir/.env)
     let answer = (prompt) => {
         if (prompt.includes('的預篩器')) {
             let n = Number((prompt.match(/以下 (\d+) 篇/) || [])[1]) || 0
@@ -66,6 +66,22 @@ let test = async () => {
                 return { index: i + 1, relations: to ? [{ to, type: '互補搭配', reason: '兩者皆為降低訓練記憶體之手段，可併用' }] : [] }
             })
         }
+        if (prompt.includes('的提煉器')) {
+            //提煉之提案: 只回差量操作(新增/確認/取代…), 出處寫本批代號 N1、N2…, 由程式逐條套用並檢查
+            let codes = [...prompt.matchAll(/^### (N\d+) /gm)].map((m) => m[1])
+            return {
+                ops: [
+                    { op: 'add', ref: 'a', kind: 'principle', text: '訓練記憶體可用重算或降精度換取', basis: '實務經驗', sources: codes },
+                    { op: 'add', ref: 'b', kind: 'rule', text: '若激活記憶體不足則先開梯度檢查點', basis: '實務經驗', sources: [codes[0]] },
+                    { op: 'essence', text: '訓練記憶體主要耗在激活值與權重精度，可用重算或降精度換取', claims: ['@a', '@b'], reason: '首版' },
+                ],
+                skipped: [],
+            }
+        }
+        if (prompt.includes('的審查員')) {
+            //提煉之審查: 逐條裁決 keep/drop/fix(取代/撤回/合併須明列), 此處全數保留
+            return { verdicts: [...prompt.matchAll(/^i=(\d+) /gm)].map((m) => ({ i: Number(m[1]), action: 'keep' })) }
+        }
         return null
     }
 
@@ -78,18 +94,6 @@ let test = async () => {
             }
             return { ok: false, data: null, error: '無對應回應', skipped: false, attempts: 1, preview: '' }
         },
-        //提煉工作流(fanout 起草 → 整合 → 審計鏈)之替身: 直接回傳定稿
-        getWkf: () => ({
-            runFanoutPipeline: async ({ callOpt }) => {
-                callOpt.onEvent({ type: 'try' }) //真實工作流每次呼叫供應商皆發 try 事件, 提煉據此計 AI 次數
-                return {
-                    ok: true,
-                    totalMs: 1,
-                    result: { essence: '訓練記憶體主要耗在激活值與權重精度，可用重算或降精度換取。', principles: ['以計算換記憶體', '以精度換記憶體'], rules: ['若激活記憶體不足則先開梯度檢查點'] },
-                }
-            },
-        }),
-        withBudget: (seat) => seat,
         recordCall: () => {},
         drainStats: () => '',
         aiUsageToday: () => ({ today: '', used: 0, byKey: {}, chain: '', providers: [], skipped: [] }),
@@ -104,6 +108,7 @@ let test = async () => {
             vocab: { domain: '機器學習' }, //主題範圍(選填), 預篩/萃取/關聯/提煉之 prompt 據此限定, 未給即不限主題
         },
         fetch: { minSourceIntervalMs: 0 }, //設定覆寫(逐鍵): 同一來源最短重抓間隔預設 6 小時, 此處設 0 使第二輪即重抓以展示去重
+        knowledge: { distillMinNotes: 2 }, //新核心門檻(主標籤可提煉篇數)預設 6, 此處設 2 使兩篇即可展示提煉
         fetchers: [
             { id: 'rss', kinds: ['rss'], fetch: () => items }, //同 id 置換內建 rss 抓取器
             { id: 'article', role: 'detail', match: () => true, fetch: (doc) => ({ ok: true, text: pages[doc.url] }) }, //置換內建正文抓取器
@@ -128,6 +133,10 @@ let test = async () => {
     let index = fs.readFileSync(`${workDir}/knowledge/index.md`, 'utf8')
     ms.push({ index: index.split('\n').find((l) => l.startsWith('- 知識筆記')) })
 
+    //core, 核心知識 md 為狀態檔(同目錄 .state.json)之投影: 主張帶編號〔C1〕、證據等級與逐條出處
+    let core = fs.readFileSync(`${workDir}/knowledge/core/${cores[0]}`, 'utf8')
+    ms.push({ core: core.split('\n').filter((l) => l.startsWith('- 〔') || l.startsWith('  - 出處')) })
+
     //run, 第二輪: 重抓同一來源但文章皆已抓過(去重不入庫), 筆記已關聯(relatedAt 持久化), 核心無新筆記(不重提煉)
     let r2 = await flow.run()
     ms.push({ round2: r2.stages.slice(0, 4).map((s) => `${s.name}: ${s.result.summary}`) })
@@ -147,16 +156,24 @@ await test()
 //   { '抓取': '來源 1 個、新文件 2、素材 2、轉錄 0、放棄 0｜線索消化 0、新來源 0' },
 //   { '彙整': '處理 2、新知識 2、略過 0、線索 0（AI 1 次）｜預篩 2 篇放行 2（AI 1 次）' },
 //   { '關聯': '處理 2、關聯 2 條、衝突 0 組（AI 1 次）' },
-//   { '提煉': '概念 1、更新 1 則核心（AI 1 次）' },
+//   { '提煉': '概念 1、更新 1 則核心、消化 2 篇（AI 2 次）' },
 //   { '索引': '筆記 2、核心 1、關聯 2' },
 //   { files: '筆記 2 篇, 核心 1 則, 關聯總覽 true' },
 //   { index: '- 知識筆記 2 篇｜核心知識 1 則｜關聯 2 條' },
+//   {
+//     core: [
+//       '- 〔C1〕有一說：訓練記憶體可用重算或降精度換取（證據低）',
+//       '  - 出處：[[梯度檢查點以重算換記憶體-8c408b65]]、[[混合精度訓練之取捨-1b729654]]',
+//       '- 〔C2〕有一說：若激活記憶體不足則先開梯度檢查點（證據低）',
+//       '  - 出處：[[梯度檢查點以重算換記憶體-8c408b65]]'
+//     ]
+//   },
 //   {
 //     round2: [
 //       '抓取: 來源 1 個、新文件 0、素材 0、轉錄 0、放棄 0｜線索消化 0、新來源 0',
 //       '彙整: 處理 0、新知識 0、略過 0、線索 0（AI 0 次）',
 //       '關聯: 處理 0、關聯 0 條、衝突 0 組（AI 0 次）',
-//       '提煉: 概念 0、更新 0 則核心（AI 0 次）'
+//       '提煉: 概念 0、更新 0 則核心、消化 0 篇（AI 0 次）'
 //     ]
 //   }
 // ]

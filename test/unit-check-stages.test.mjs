@@ -19,7 +19,8 @@ import {
     pickCandidates, makeSlugResolver, applyRelationsToNote, markConflict, rebuildRelationIndex,
     mwBuildEdges, mwRebuildRelationIndex, stageRelate, stageRelationIndex
 } from '../src/stages/relateStage.mjs'
-import { buildWorkflowStages, mwBuildBase, mwRunWorkflow, stageDistill } from '../src/stages/distillStage.mjs'
+import { mwLoadState, mwSelectNotes, mwPropose, mwReview, mwApplyDelta, mwRenderState, mwPersistState, stageDistill } from '../src/stages/distillStage.mjs'
+import { createDistillDomain } from '../src/domain/distillDomain.mjs'
 import { rebuildKnowledgeIndex, mwRebuildKnowledgeIndex, stageKnowledgeIndex } from '../src/stages/indexStage.mjs'
 
 const TMP = path.resolve(`test/_tmp/check-stages-${process.pid}`).replace(/\\/g, '/') // cwd 相對(自套件根執行);帶 pid 後綴使並行之多個 mocha 行程互不干擾;after 清除
@@ -289,36 +290,27 @@ describe('unit-check-stages', function() {
     // ────────────────────────────── distillStage ──────────────────────────────
     describe('distillStage', function() {
 
-        const KINDS = { audit: { produces: 'issues', check: () => true, build: ({ draft, issues }) => `A|${draft}|${issues}` } }
-
-        it('buildWorkflowStages:kinds 非物件 → 拋錯;bind 非物件視為{},不拋錯;有效輸入行為不變', () => {
-            assert.throws(() => buildWorkflowStages([{ stage: 'audit' }], 'not-object', {}), /buildWorkflowStages 需要 kinds/)
-            assert.throws(() => buildWorkflowStages([{ stage: 'audit' }], null, {}), /buildWorkflowStages 需要 kinds/)
-            // pipeline 之既有檢查訊息不因新增 kinds/bind 檢查而改變
-            assert.throws(() => buildWorkflowStages([], KINDS, {}), /distill pipeline 未設定或為空/)
-
-            const stages = buildWorkflowStages([{ stage: 'audit' }], KINDS, 'not-object')
-            assert.equal(stages.length, 1)
-            const ctx = { input: 'D0', results: {} }
-            assert.equal(stages[0].prompt(ctx), 'A|D0|null', 'bind 非物件視為{}:build 仍正常接住 draft/issues')
-        })
-
-        it('mwBuildBase/mwRunWorkflow:opt 非物件皆視為{},不拋錯', () => {
-            assert.equal(mwBuildBase('not-object').name, 'buildBase')
-            assert.equal(mwRunWorkflow('not-object').name, 'runWorkflow')
-        })
-
-        it('stageDistill:opt 非物件視為{},不拋錯;有效輸入(無合格概念/類別)行為不變', async () => {
+        it('stageDistill:opt 非物件視為{},不拋錯;1.x 之 opt.workflow 拋錯;缺提案席位拋錯;有效輸入(無合格概念/類別)行為不變', async () => {
             const bad = stageDistill('not-object')
             assert.equal(typeof bad.run, 'function')
+            assert.throws(() => stageDistill({ workflow: { wkf: {} } }), /opt\.workflow 已於 2\.0 移除/)
 
-            const stage = stageDistill({ minNotes: 100, domain: {}, workflow: { wkf: {} } })
+            const dirs = { state: `${TMP}/distill/state`, core: `${TMP}/distill/core`, coreState: `${TMP}/distill/core-state` }
             const deps = {
-                stores: { notes: memStore([]), cores: memStore([]) },
-                settings: { knowledge: { distillPerRun: 2, distillMinNotes: 100 } },
+                stores: { notes: memStore([]), cores: memStore([]), relations: memStore([]), docs: memStore([]) },
+                settings: { knowledge: { distillPerRun: 2, distillMinNotes: 100 }, ai: { distill: { propose: { use: 'x' } } } },
+                dirs,
+                clock,
+                domains: { distill: createDistillDomain({}) },
             }
-            const r = await stage.run({ deps, log })
+            const r = await stageDistill({ minNotes: 100 }).run({ deps, log })
             assert.equal(r.detail.concepts, 0)
+            await assert.rejects(() => stageDistill({}).run({ deps: { ...deps, settings: { knowledge: {}, ai: {} } }, log }), /提煉需要 settings\.ai\.distill\.propose 席位/)
+        })
+
+        it('逐核心動作環:opt 非物件皆視為{},不拋錯;名稱即 hook 錨點', () => {
+            const mws = [mwLoadState('x'), mwSelectNotes('x'), mwPropose('x'), mwReview('x'), mwApplyDelta('x'), mwRenderState('x'), mwPersistState('x')]
+            assert.deepEqual(mws.map((m) => m.name), ['loadState', 'selectNotes', 'propose', 'review', 'applyDelta', 'renderState', 'persistState'])
         })
     })
 

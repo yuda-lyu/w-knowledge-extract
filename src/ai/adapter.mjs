@@ -1,9 +1,12 @@
-// adapter.mjs — 內建 AI 調度層(建構於 w-dispatch-ai):鏈組裝、冷卻、健康、計帳、工作流
+// adapter.mjs — 內建 AI 調度層(建構於 w-dispatch-ai):鏈組裝、冷卻、健康、計帳
 //
 // 【套件內建、設定執行端給】供應商宣告(providerPick/providerTimeouts/名額)與金鑰
 //   (envFile)是安裝方資產;鏈組裝/冷卻偵測/健康降序/用量計帳/JSON 搶救是套件能力。
-//   工廠化:所有狀態(resolved/store/usage/health/tally/wkf)收在 createAiAdapter 閉包內,
+//   工廠化:所有狀態(resolved/store/usage/health/tally)收在 createAiAdapter 閉包內,
 //   同進程可開多個互不相踩的 adapter(測試/多庫)。
+// 【2.0 移除工作流入口】getWkf／withBudget(1.x 提煉工作流用)移除:提煉改走 callJson,套件內已無使用者;
+//   保留等於保留一條不經能力預篩(fitChain)、不套席位層逾時覆寫、帶舊預設值之 AI 路徑(2026-09-29 三獨立判識與安裝方同意)。
+//   需要多家工作流者直接用 w-dispatch-ai 之 dispatchAiWkf;對單一選題跑提煉請用 stages/distillStage 之 distillTarget。
 //
 // 【w-dispatch-ai 件的使用對照】
 //   readEnvFile／resolveProviders  經 ai/resolve 單一入口(與 ai/caller 共用):extraProviders 合併、逾時三層取值
@@ -16,8 +19,8 @@
 //   buildValidator／safeValidate 條目自帶 validate 與本層驗證取交集(同工作流層 1.0.37 起之作法)
 //   budgetFor            遞補鏈預算＝timeout 總和(手寫數字會在改 fallback 時失準)
 //
-// 【事件單一入口】本層之 onEvent 同時做計帳(usage)與健康(providerHealth),單次呼叫與工作流
-//   皆掛它;呼叫端要自有回呼(如提煉逐次事件寫日誌)時須轉呼叫 ai.onEvent,否則健康層看不到事件。
+// 【事件單一入口】本層之 onEvent 同時做計帳(usage)與健康(providerHealth),callJson 掛它;
+//   呼叫端要自有逐次回呼(如提煉逐次事件寫日誌)時經 callOpt.onEvent,排在本層之後。
 // 【狀態檔為行程內單一共享物件】套件文件明載 store「假定單行程序列調用,並行請自行加鎖」
 //   (createFileStore.mjs:24、dispatchAiFallback.mjs:241),而本套件 aiParallel 3 批並行、提煉多席位並行:
 //   各呼叫各自 get() 取副本再整份 set() 寫回,游標與冷卻互相覆蓋(後寫者勝)。改為 get() 恆回同一物件、
@@ -25,10 +28,21 @@
 //   仍為後寫者勝,與套件同一假定。
 // 【時間預算】callOpt.budgetMs 與鏈預算取較小者;callOpt.shouldStop 於嘗試之間中止——
 //   兩者由階段以 ctx.remainingMs()/ctx.expired() 餵入,使整輪軟性截止對每次 AI 呼叫生效。
+// 【席位層覆寫】席位規格 { use, fallback, timeoutMs?, minAttemptMs?, budgetMs? }:timeoutMs 覆寫該席位鏈內各條目之值
+//   (預算 budgetFor 隨之)——此前席位層逾時在兩條路徑皆無效:遞補層以條目值優先(dispatchAiFallback 之
+//   { ...共用, ...條目 }),條目又帶 providerTimeouts 之值;要讓某席位(如提煉,單次可達 442 秒)放寬只能改全域逾時,
+//   連帶放大萃取／關聯之遞補預算。席位未知鍵於啟動期拋錯(打錯鍵名不可靜默無效)。
+// 【逐次選項】callOpt.onEvent 接在本層計帳／健康之後(呼叫端自有逐次日誌用);callOpt.minAttemptMs 為開工門檻
+//   (未給則上游預設 20 秒);callOpt.acceptTruncated:false 使截斷一律換家(全有全無之輸出用,如提煉差量——
+//   外包物件被截斷時搶救只救回內層陣列,見 parseJson)。
 // 【啟動期席位檢核】validateSeats:所有名額之 use/fallback 皆須可解析。缺金鑰之條目被 resolveProviders
 //   列入 skipped 而不進 table、不拋(resolveProviders.mjs:14),此前要到第一次呼叫 chainFor 才拋——
 //   而批次層把拋錯當單批異常,整段每輪靜默不做事;設定錯誤須在啟動期爆。
+// 【工作目錄於每次派送前確保存在】子進程 cwd 不存在時 spawn 回 ENOENT(報的是執行檔路徑,極易誤判為 CLI 未安裝),
+//   命令列型供應商全數失敗;預設工作目錄(<workDir>/tmp/ai-workspace)此前無人建立——新知識庫首輪、或 tmp 被清後之每一輪
+//   皆如此(2026-09-29 真實模型驗收實測:claude 與 codex 同時 ENOENT;w-dispatch-ai 不建立 cwd)。
 
+import fs from 'fs'
 import path from 'path'
 import isobj from 'wsemi/src/isobj.mjs'
 import isstr from 'wsemi/src/isstr.mjs'
@@ -37,7 +51,6 @@ import budgetFor from 'w-dispatch-ai/src/budgetFor.mjs'
 import buildValidator from 'w-dispatch-ai/src/buildValidator.mjs'
 import { safeValidate } from 'w-dispatch-ai/src/checkTruncation.mjs'
 import dispatchAiFallback from 'w-dispatch-ai/src/dispatchAiFallback.mjs'
-import dispatchAiWkf from 'w-dispatch-ai/src/dispatchAiWkf.mjs'
 import createFileStore from 'w-dispatch-ai/src/wkf/createFileStore.mjs'
 import createUsageCounter from 'w-dispatch-ai/src/wkf/createUsageCounter.mjs'
 import NO_SIDE_EFFECT from 'w-dispatch-ai/src/wkf/noSideEffectPrefix.mjs'
@@ -53,6 +66,28 @@ import { resolveCatalogue } from './resolve.mjs'
  * @type {Set}
  */
 const CONTENT_FAIL_TYPES = new Set(['validation', 'incomplete', 'tool-unsupported', 'invalid-response'])
+
+/**
+ * 席位規格之許可鍵(見檔頭【席位層覆寫】);其餘鍵於啟動期檢核拋錯
+ *
+ * @type {Set}
+ */
+const SEAT_KEYS = new Set(['use', 'fallback', 'timeoutMs', 'minAttemptMs', 'budgetMs'])
+
+/**
+ * 席位規格之數值鍵(給了須為正數)
+ *
+ * @type {Array}
+ */
+const SEAT_NUM_KEYS = ['timeoutMs', 'minAttemptMs', 'budgetMs']
+
+/**
+ * 取正數值(非正數或非有限數回 null)
+ *
+ * @param {*} v 輸入任意值
+ * @returns {Number|null} 回傳正數或 null
+ */
+const posNum = (v) => (Number.isFinite(v) && v > 0 ? v : null)
 
 /**
  * 預設冷卻偵測:由結果之 stderr／stdout 判斷是否命中限流字樣
@@ -148,7 +183,7 @@ function intersectEntryValidate(entry, validate) {
 }
 
 /**
- * 建立內建 AI 調度層(鏈組裝、冷卻、健康、計帳、工作流),工廠化:所有狀態收在閉包內,同進程可開多個互不相踩的 adapter
+ * 建立內建 AI 調度層(鏈組裝、冷卻、健康、計帳),工廠化:所有狀態收在閉包內,同進程可開多個互不相踩的 adapter
  *
  * @param {Object} opt 輸入設定物件，非物件視為 {} 後由必填檢查拋錯
  * @param {Object} [opt.ai] 輸入 settings.ai 形狀，{ providerPick, providerTimeouts, cooldownMs, maxRetries, healthStreak?, extraProviders?, exes?, providerLimits? }
@@ -161,7 +196,7 @@ function intersectEntryValidate(entry, validate) {
  * @param {Function} [opt.coolDetect] 輸入冷卻偵測函數覆寫，預設 COOL_DETECT(內容型失敗與截斷不掃)
  * @param {Function} [opt.onHealth] 輸入健康層觸發冷卻時之回呼，格式 ({ providerId, streak, errorType, error, keys? }) => void，keys 僅於觸發之組為多金鑰條目且每把皆試過而敗時附上(見 providerHealth)
  * @param {Function} [opt.onOversize] 輸入 prompt 逾長剔除時之回呼，格式 ({ providerId, promptLen, limit }) => void
- * @returns {Object} 回傳 { callJson, getWkf, withBudget, recordCall, drainStats, aiUsageToday, usage, store, chainFor, validateSeats, onEvent, health }
+ * @returns {Object} 回傳 { callJson, recordCall, drainStats, aiUsageToday, usage, store, chainFor, validateSeats, onEvent, health }
  * @throws {Error} opt 缺 ai／(envFile 或 env)／stateDir／workspace／clock 任一者時拋出;ai.providerPick 含未知 id 時拋出
  */
 export function createAiAdapter(opt) {
@@ -176,6 +211,18 @@ export function createAiAdapter(opt) {
         throw new Error('createAiAdapter 需要 { ai, envFile 或 env, stateDir, workspace, clock }')
     }
     const coolDetect = opt.coolDetect || COOL_DETECT
+
+    /**
+     * 確保子進程工作目錄存在(見檔頭【工作目錄】);建立失敗不拋,由派送回報實際錯誤
+     *
+     * @returns {undefined} 無回傳值
+     */
+    const ensureWorkspace = () => {
+        try {
+            fs.mkdirSync(workspace, { recursive: true })
+        }
+        catch { /* 交由 spawn 回報 */ }
+    }
 
     // ── 展開供應商(ai/resolve 單一入口,與 ai/caller 共用:extraProviders 合併、逾時三層取值寫進 patch 使陣列與 table 同源、
     //    env/envFile 二擇一、exes 逐 kind 注入;理由與殷鑑見該檔檔頭)──
@@ -242,10 +289,10 @@ export function createAiAdapter(opt) {
     }
 
     /**
-     * 名額規格 { use, fallback } → 條目陣列;引用不存在的 id 拋錯(靜默略過會讓鏈莫名變短)
+     * 名額規格 { use, fallback, timeoutMs? } → 條目陣列;引用不存在的 id 拋錯(靜默略過會讓鏈莫名變短)
      *
-     * @param {Object} spec 輸入名額規格物件，{ use:String, fallback:Array }
-     * @returns {Array} 回傳條目陣列(依序:use 於前,fallback 依序在後)，各項為 { id, ...resolved.table[id] }
+     * @param {Object} spec 輸入名額規格物件，{ use:String, fallback:Array, timeoutMs?:Number }；timeoutMs 為正數時覆寫鏈內各條目之逾時(見檔頭【席位層覆寫】)
+     * @returns {Array} 回傳條目陣列(依序:use 於前,fallback 依序在後)，各項為 { id, ...resolved.table[id] }(席位給 timeoutMs 者其 timeoutMs 為席位值)
      * @throws {Error} spec 缺 use、或引用了不可用(未知或缺金鑰)的 id 時拋出
      */
     function chainFor(spec) {
@@ -257,7 +304,8 @@ export function createAiAdapter(opt) {
             const why = bad.map((n) => (sk.has(n) ? `${n}(缺金鑰 ${sk.get(n)})` : n)).join('、')
             throw new Error(`名額引用了不可用的條目:${why}(可用:${Object.keys(resolved.table).join('、')})`)
         }
-        return names.map((n) => ({ id: n, ...resolved.table[n] }))
+        const seatTimeout = posNum(spec?.timeoutMs)
+        return names.map((n) => ({ id: n, ...resolved.table[n], ...(seatTimeout ? { timeoutMs: seatTimeout } : {}) }))
     }
 
     /**
@@ -268,15 +316,19 @@ export function createAiAdapter(opt) {
    *   由 callJson 依實際長度剔除(見 ai/capability.mjs)。此前以席位名稱是否含 distill 猜測,
    *   關聯席位同樣派給 agy(實測 prompt 4.3 萬字元、每輪 9 次全數 params 失敗)卻查不出來。
    *
-   * @param {Object} seats 輸入席位規格物件，{ 席位名: { use, fallback } }
+   * @param {Object} seats 輸入席位規格物件，{ 席位名: { use, fallback, timeoutMs?, minAttemptMs?, budgetMs? } }
    * @returns {Object} 回傳 { ok:true, warnings:Array }，warnings 為全鏈皆有長度上限之席位提示
-   * @throws {Error} 任一席位無法解析(見 chainFor)時拋出，訊息彙整全部問題席位
+   * @throws {Error} 任一席位無法解析(見 chainFor)、含不認得之鍵、或數值鍵非正數時拋出，訊息彙整全部問題席位
    */
     function validateSeats(seats) {
         const problems = []
         const warnings = []
         for (const [name, spec] of Object.entries(seats || {})) {
             try {
+                const unknown = Object.keys(spec || {}).filter((k) => !SEAT_KEYS.has(k))
+                if (unknown.length) throw new Error(`不認得的鍵「${unknown.join('、')}」（可用：${[...SEAT_KEYS].join('、')}）`)
+                const badNum = SEAT_NUM_KEYS.filter((k) => spec[k] !== undefined && posNum(spec[k]) === null)
+                if (badNum.length) throw new Error(`${badNum.join('、')} 須為正數（毫秒）`)
                 const chain = chainFor(spec)
                 const limits = chain.map((e) => maxPromptCharsOf(e, providerLimits))
                 if (limits.every((n) => Number.isFinite(n))) {
@@ -333,11 +385,16 @@ export function createAiAdapter(opt) {
    * @param {String} prompt 輸入提示詞字串，非字串時回傳失敗形狀不呼叫 AI
    * @param {Function} check 輸入驗證函數 (data) => Boolean，判斷解析後之 JSON 是否合格；非函數時回傳失敗形狀不呼叫 AI
    * @param {Object} [callOpt={}] 輸入逐次設定物件，非物件視為 {}
-   * @param {Object} [callOpt.spec] 輸入名額規格 { use, fallback }，省略則用建構時之預設鏈(resolved.providers)
-   * @param {Number} [callOpt.budgetMs] 輸入本次時間預算毫秒數，與鏈預算(budgetFor)取較小者
+   * @param {Object} [callOpt.spec] 輸入名額規格 { use, fallback, timeoutMs?, minAttemptMs?, budgetMs? }，省略則用建構時之預設鏈(resolved.providers)；
+   *   timeoutMs 覆寫鏈內各條目之逾時，minAttemptMs／budgetMs 為本席位之預設(callOpt 同名鍵優先)
+   * @param {Number} [callOpt.budgetMs] 輸入本次時間預算毫秒數，與席位 budgetMs、鏈預算(budgetFor)取最小者
+   * @param {Number} [callOpt.minAttemptMs] 輸入單次嘗試之最低剩餘預算毫秒數，剩餘低於此值即停止遞補；未給依序取席位值、上游預設(20000)
+   * @param {Boolean} [callOpt.acceptTruncated=true] 輸入是否接受 REST 截斷內容交搶救裁決，false 即截斷一律判失敗換家(全有全無之輸出用)
+   * @param {Function} [callOpt.onEvent] 輸入逐次事件回呼 (ev) => void，於本層計帳／健康之後呼叫，拋錯不影響呼叫
    * @param {Function} [callOpt.shouldStop] 輸入中止判斷函數，嘗試之間呼叫以決定是否停止遞補
    * @returns {Promise} 回傳 Promise，resolve 回傳 { ok, data, error, skipped, attempts, preview }；attempts 為實際嘗試次數(含遞補)；
-   *   失敗時另帶 errors(各次失敗嘗試之「金鑰:錯誤型別(耗時)」依序陣列，未送出即失敗者為空陣列)；截斷放行之成功另帶 truncated:true
+   *   失敗時另帶 errors(各次失敗嘗試之「金鑰:錯誤型別(耗時)」依序陣列，未送出即失敗者為空陣列)；截斷放行之成功另帶 truncated:true；
+   *   成功時另帶 providerId(成交之條目 id)
    */
     async function callJson(prompt, check, callOpt = {}) {
 
@@ -369,21 +426,35 @@ export function createAiAdapter(opt) {
             }
         }
         const providers = fit.kept.map((e) => intersectEntryValidate(e, validate))
-        const cap = Number.isFinite(callOpt.budgetMs) && callOpt.budgetMs > 0 ? callOpt.budgetMs : Infinity
+        ensureWorkspace()
+        const cap = Math.min(posNum(callOpt.budgetMs) ?? Infinity, posNum(callOpt.spec?.budgetMs) ?? Infinity)
+        const minAttemptMs = posNum(callOpt.minAttemptMs) ?? posNum(callOpt.spec?.minAttemptMs)
+        const userOnEvent = typeof callOpt.onEvent === 'function' ? callOpt.onEvent : null
         const r = await dispatchAiFallback(text, {
             providers,
             cwd: workspace,
             validate,
             // 截斷放行:w-dispatch-ai 1.0.37 起 REST 截斷於 validate 之前即判失敗,須明示同意才交 validate 裁決;
             // 本層 validate 內之 parseJson(salvageTruncatedArray)即搶救策略——收前段完整項目,未涵蓋者由批次層記 tries(部分接受)。
-            // content_filter 與可見輸出為空者上游仍一律判失敗(checkTruncation.judgeTruncated)
-            acceptTruncated: true,
+            // content_filter 與可見輸出為空者上游仍一律判失敗(checkTruncation.judgeTruncated)。
+            // 呼叫端明給 false(全有全無之輸出)即不放行:截斷一律換家(同工作流 callAi 只給 check 之語意,見 R11 裁示)
+            acceptTruncated: callOpt.acceptTruncated !== false,
             budgetMs: Math.min(budgetFor(providers), cap),
+            ...(minAttemptMs ? { minAttemptMs } : {}),
             maxRetries: ai.maxRetries ?? 0,
             cooldownMs,
             coolDetect,
             store,
-            onEvent,
+            // 逐次事件:本層計帳＋健康必先執行(檔頭【事件單一入口】),呼叫端回呼在後且拋錯不外洩
+            onEvent: userOnEvent
+                ? (ev) => {
+                    onEvent(ev)
+                    try {
+                        userOnEvent(ev)
+                    }
+                    catch { /* 呼叫端回呼失敗不影響呼叫 */ }
+                }
+                : onEvent,
             ...(typeof callOpt.shouldStop === 'function' ? { shouldStop: callOpt.shouldStop } : {}),
         })
         recordCall(r)
@@ -391,7 +462,7 @@ export function createAiAdapter(opt) {
             const skipped = r.errorType === 'budget' || r.errorType === 'aborted'
             return { ok: false, data: null, error: r.error, skipped, attempts: attemptsOf(r.tried), preview: String(r.stdout || '').slice(0, 120), errors: errorsOf(r.tried) }
         }
-        return { ok: true, data: parseJson(r.stdout), error: '', skipped: false, attempts: attemptsOf(r.tried), preview: '', ...(r.truncated === true ? { truncated: true } : {}) }
+        return { ok: true, data: parseJson(r.stdout), error: '', skipped: false, attempts: attemptsOf(r.tried), preview: '', providerId: String(r.providerId || ''), ...(r.truncated === true ? { truncated: true } : {}) }
     }
 
     /**
@@ -407,48 +478,7 @@ export function createAiAdapter(opt) {
         return { today: t.today || '', used, byKey, chain, providers: resolved.providers, skipped: resolved.skipped || [] }
     }
 
-    // ── 工作流(distill 用):與單次呼叫共用 store/計帳/冷卻/健康 ──
-    let cachedWkf = null
-    /**
-     * 取得(並快取)工作流物件(distill 用),與單次呼叫共用 store／計帳／冷卻／健康
-     *
-     * @returns {Object} 回傳 dispatchAiWkf 之產出，同一 adapter 實例內重複呼叫回傳同一份快取
-     */
-    function getWkf() {
-        if (cachedWkf) return cachedWkf
-        cachedWkf = dispatchAiWkf({
-            providers: resolved.table,
-            defaults: {
-                cwd: workspace,
-                store,
-                minAttemptMs: 90_000,
-                budgetMs: 420_000, // 保底值;各名額由 withBudget 明給(＝鏈 timeout 總和)
-                cooldownMs,
-                coolDetect,
-                onEvent,
-            },
-        })
-        return cachedWkf
-    }
-
-    /**
-     * 名額補預算:未給 budgetMs 者以其鏈之 timeout 總和補上(改 fallback 不再需要手動同步)
-     *
-     * @param {Object} seat 輸入席位規格物件 { use, fallback, budgetMs? }
-     * @returns {Object} 回傳補上 budgetMs 後之席位物件(已給 budgetMs 者原樣回傳)
-     * @throws {Error} seat 非物件時拋出
-     */
-    function withBudget(seat) {
-
-        //check
-        if (!isobj(seat)) {
-            throw new Error('withBudget 需要席位物件 { use, fallback }')
-        }
-
-        return seat.budgetMs ? seat : { ...seat, budgetMs: budgetFor(chainFor(seat)) }
-    }
-
-    return { callJson, getWkf, withBudget, recordCall, drainStats, aiUsageToday, usage, store, chainFor, validateSeats, onEvent, health }
+    return { callJson, recordCall, drainStats, aiUsageToday, usage, store, chainFor, validateSeats, onEvent, health }
 }
 
 export default createAiAdapter

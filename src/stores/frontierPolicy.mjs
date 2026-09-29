@@ -8,6 +8,8 @@
 //   與概念分群同一份折疊；site 型以 normalizeUrl 折疊。既有記錄仍為舊鍵：寫入時先查新鍵、查不到再查舊鍵，
 //   命中舊鍵即累加其 hits——不需遷移資料（2026-09-12 複審 P4/S3）。對真庫唯讀重算：折疊只合併 0.1%，
 //   線索的問題本質是產生量（每輪 ~100）≫ 消化量，故另設上限（下）。
+// 【線索鍵與概念分群鍵脫鉤（2.0）】分群折疊改向 tw→cn 並可疊別名，若線索鍵跟著變，既有線索記錄會全部換鍵（去重失效、
+//   hits 歸零）。線索鍵改走 normalizeClue：凍結 1.x 之正規化（總組裝注入 1.x 之折疊），不套改名與別名、不加查詢鏈。
 // 【上限與淘汰（可復活）】pending 超過 maxPending 即淘汰優先序最低者（hits 低、來自 skip 文件、最舊）：
 //   狀態 evicted、記錄保留（去重憑證）；日後再被提及即累加 hits 並復活為 pending——
 //   淘汰的是「至今只被提過一次的冷門線索」，不是資訊本身。
@@ -16,11 +18,11 @@ import isobj from 'wsemi/src/isobj.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import isp0int from 'wsemi/src/isp0int.mjs'
 import cint from 'wsemi/src/cint.mjs'
-import { sha1, normalizeConcept } from '../util/text.mjs'
+import { sha1, normalizeClue } from '../util/text.mjs'
 import { normalizeUrl } from '../util/web.mjs'
 
 /**
- * 線索去重鍵（折疊後）：keyword/topic 走 normalizeConcept，site 走 normalizeUrl
+ * 線索去重鍵（折疊後）：keyword/topic 走 normalizeClue（凍結 1.x 之正規化，與概念分群脫鉤），site 走 normalizeUrl
  *
  * @param {String} type 輸入線索型別，'keyword'／'topic'／'site'
  * @param {String} value 輸入線索原始值
@@ -30,7 +32,7 @@ import { normalizeUrl } from '../util/web.mjs'
  * // => true
  */
 export function clueKey(type, value) {
-    const v = type === 'site' ? normalizeUrl(String(value || '')).toLowerCase() : normalizeConcept(value)
+    const v = type === 'site' ? normalizeUrl(String(value || '')).toLowerCase() : normalizeClue(value)
     return sha1(`${type}|${v}`)
 }
 

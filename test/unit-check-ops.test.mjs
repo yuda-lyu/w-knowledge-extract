@@ -15,6 +15,7 @@ import { reviveDeadDocs, deadMatcher } from '../src/ops/reviveDocs.mjs'
 import { buildRunSummary, writeRunSummary, readRunSummary, RUN_SUMMARY_VERSION } from '../src/ops/runSummary.mjs'
 import { runTask } from '../src/ops/runTask.mjs'
 import { createClock } from '../src/util/clock.mjs'
+import { normalizeConcept } from '../src/util/text.mjs'
 import { memStore } from './tools/memStore.mjs'
 
 const TMP = path.resolve(`test/_tmp/check-ops-${process.pid}`).replace(/\\/g, '/') // cwd 相對(自套件根執行);帶 pid 後綴使並行之多個 mocha 行程互不干擾;after 清除
@@ -116,35 +117,50 @@ describe('unit-check-ops', function() {
             assert.deepEqual(list.map((c) => c.id), ['b', 'a'])
         })
 
-        it('regenCore：conceptArg 非有效字串回同形失敗物件(不拋錯)；stores 缺本函數實際用到之集合方法即拋錯(cores.select／cores.raw.del／notes.select／notes.patch)', async () => {
-            // 完整之集合替身(regenCore 實際用到 cores.select、cores.raw.del、notes.select、notes.patch)
+        it('regenCore：stores 缺本函數實際用到之集合方法、或缺 opt.dirs(2.0)即拋錯;conceptArg 非有效字串回同形失敗物件(不拋錯)', async () => {
+            // 完整之集合替身(regenCore 實際用到 cores.select、cores.raw.del、notes.select)
             const full = () => ({ cores: { select: async () => [], raw: { del: async () => {} } }, notes: memStore() })
-            const r = await regenCore(full(), undefined)
-            assert.deepEqual(r, { ok: false, notFound: true, messages: ['找不到概念「undefined」的核心知識'] })
-            const r2 = await regenCore(full(), 123)
+            const dirs = { core: `${TMP}/regen0/core`, state: `${TMP}/regen0/state` }
+            const r = await regenCore(full(), undefined, { dirs })
+            assert.deepEqual(r, { ok: false, notFound: true, archived: [], messages: ['找不到概念「undefined」的核心知識'] })
+            const r2 = await regenCore(full(), 123, { dirs })
             assert.equal(r2.notFound, true)
-            await assert.rejects(() => regenCore(undefined, 'x'), /regenCore 需要 stores\.cores\.select（cores 集合）/)
-            await assert.rejects(() => regenCore({}, 'x'), /regenCore 需要 stores\.cores\.select（cores 集合）/)
+            await assert.rejects(() => regenCore(undefined, 'x', { dirs }), /regenCore 需要 stores\.cores\.select（cores 集合）/)
+            await assert.rejects(() => regenCore({}, 'x', { dirs }), /regenCore 需要 stores\.cores\.select（cores 集合）/)
             // 缺 raw.del 或 notes 方法者開頭即拋錯(此前要到刪完 md 檔之後才拋原生 TypeError,留下半套狀態)
-            await assert.rejects(() => regenCore({ cores: { select: async () => [] }, notes: memStore() }, 'x'), /regenCore 需要 stores\.cores\.raw\.del/)
-            await assert.rejects(() => regenCore({ cores: { select: async () => [], raw: { del: async () => {} } } }, 'x'), /regenCore 需要 stores\.notes\.select／stores\.notes\.patch/)
+            await assert.rejects(() => regenCore({ cores: { select: async () => [] }, notes: memStore() }, 'x', { dirs }), /regenCore 需要 stores\.cores\.raw\.del/)
+            await assert.rejects(() => regenCore({ cores: { select: async () => [], raw: { del: async () => {} } } }, 'x', { dirs }), /regenCore 需要 stores\.notes\.select（notes 集合）/)
+            // 2.0:狀態檔與封存目錄取自 opt.dirs,缺者開頭即拋錯
+            await assert.rejects(() => regenCore(full(), 'x'), /regenCore 於 2\.0 起需要 opt\.dirs/)
+            await assert.rejects(() => regenCore(full(), 'x', { dirs: { core: dirs.core } }), /regenCore 於 2\.0 起需要 opt\.dirs/)
         })
 
-        it('regenCore：有效輸入行為不變(刪核心記錄與 md 檔、相關筆記 distilledAt 清空、不相關筆記不受影響)', async () => {
-            const coreFile = `${TMP}/regen-core1.md`
+        it('regenCore：有效輸入(刪核心記錄、狀態檔與 md 改名封存、清該核心之失敗帳;筆記與其 distilledAt 不動)', async () => {
+            const dirs = { core: `${TMP}/regen1/core`, state: `${TMP}/regen1/state` }
+            fs.mkdirSync(dirs.core, { recursive: true })
+            fs.mkdirSync(dirs.state, { recursive: true })
+            const coreFile = `${dirs.core}/core1.md`
             fs.writeFileSync(coreFile, '# x', 'utf8')
-            const cores = memStore([{ id: 'core1', concept: '風險', version: 2, noteCount: 5, file: coreFile }])
-            cores.raw = { del: async () => {} } // memStore 無 raw.del，補最小替身(regenCore 本身不再查驗刪除結果)
+            fs.writeFileSync(`${dirs.core}/core1.state.json`, '{"v":1,"rev":3}', 'utf8')
+            // 失敗帳之鍵為「scope|分群鍵」(分群鍵經 normalizeConcept,依當下之折疊)
+            fs.writeFileSync(`${dirs.state}/distill-attempts.json`, JSON.stringify({ [`concept|${normalizeConcept('風險')}`]: { tries: 2, noteTries: { n1: 1 } }, 'concept|其他': { tries: 1 } }), 'utf8')
+            const deleted = []
+            const cores = memStore([{ id: 'core1', concept: '風險', scope: 'concept', version: 2, noteCount: 5, file: coreFile }])
+            cores.raw = { del: async (q) => deleted.push(q.id) } // memStore 無 raw.del，補最小替身
             const notes = memStore([
                 { id: 'n1', concepts: ['風險'], distilledAt: '2026-09-01' },
                 { id: 'n2', concepts: ['其他'], distilledAt: '2026-09-01' },
             ])
-            const r = await regenCore({ cores, notes }, '風險')
+            const r = await regenCore({ cores, notes }, '風險', { dirs, stamp: 'T1' })
             assert.equal(r.ok, true)
             assert.equal(r.availableNotes, 1)
-            assert.equal((await notes.get('n1')).distilledAt, '', '相關筆記須清空 distilledAt')
-            assert.equal((await notes.get('n2')).distilledAt, '2026-09-01', '不相關筆記不受影響')
-            assert.ok(!fs.existsSync(coreFile), 'md 檔須刪除')
+            assert.deepEqual(deleted, ['core1'], '核心記錄已刪')
+            assert.ok(!fs.existsSync(coreFile) && !fs.existsSync(`${dirs.core}/core1.state.json`), '原位置不再有 md 與狀態檔')
+            assert.ok(fs.existsSync(`${dirs.state}/core/archive/core1.md.regen-T1.md`), 'md 改名封存(不刪)')
+            assert.ok(fs.existsSync(`${dirs.state}/core/archive/core1.state.json.regen-T1`), '狀態檔改名封存(不刪)')
+            assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(`${dirs.state}/distill-attempts.json`, 'utf8'))), ['concept|其他'], '只清該核心之失敗帳')
+            assert.equal((await notes.get('n1')).distilledAt, '2026-09-01', '2.0 不清 distilledAt(已用過改為逐核心之 consumed)')
+            assert.equal((await notes.get('n2')).distilledAt, '2026-09-01')
         })
     })
 

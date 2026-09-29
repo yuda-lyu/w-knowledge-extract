@@ -20,7 +20,7 @@ import { stageExpand, mwProbe, mwSettleClue, probeSiteFeed, probeSearchEndpoints
 import { stageTriage, mwSettleTriage } from './stages/triageStage.mjs'
 import { stageExtract, mwSaveClues, mwSkipGate, mwRenderNote, mwPersistNote, mwMarkDoc } from './stages/extractStage.mjs'
 import { stageRelate, stageRelationIndex, mwBuildEdges, mwPersistEdges, mwApplyToNote, mwConflictDualWrite, mwMarkRelated, mwRebuildRelationIndex, pickCandidates, makeSlugResolver, applyRelationsToNote, markConflict, rebuildRelationIndex } from './stages/relateStage.mjs'
-import { stageDistill, mwBuildBase, mwRunWorkflow, mwAdoptResult, mwRenderCore, mwPersistCore, buildWorkflowStages } from './stages/distillStage.mjs'
+import { stageDistill, distillTarget, mwLoadState, mwSelectNotes, mwPropose, mwReview, mwApplyDelta, mwRenderState, mwPersistState, coreAuxDirs, createDistillLedger, newCoreIdOf } from './stages/distillStage.mjs'
 import { stageKnowledgeIndex, mwRebuildKnowledgeIndex, rebuildKnowledgeIndex } from './stages/indexStage.mjs'
 import { runAiBatchStage } from './stages/aiBatchStage.mjs'
 import { judgeFromDocs } from './stages/collectHelpers.mjs'
@@ -29,13 +29,21 @@ import { ensureSeedSources, isLowYield, pickDueSources, recordSourceOutcome, cul
 import { slimTerminalDocs, byRetryTierFifo } from './stores/docPolicy.mjs'
 import { clueKey, legacyClueKey, cluePriority, saveClues, pickClues, enforceFrontierCap, settleClue } from './stores/frontierPolicy.mjs'
 import { normalizeFeedItems, filterFeedItems, admitFeedItems, ingestFeedItems } from './stores/ingestGate.mjs'
-import { conceptVocabulary, pickConcepts, pickCategories } from './stores/conceptGroups.mjs'
+import { conceptVocabulary, pickConcepts, pickCategories, orphanNotes, coreForKey, twinsOf, isReady, groupByConcept, suggestConceptRenames } from './stores/conceptGroups.mjs'
+import {
+    emptyState, upgradeState, findItem, deriveStatus, applyDelta, applyVerdicts, coverageOf, commitBatch, checkInvariants, stateDigest, renderRules,
+    queuePendingReview, pendingReviewOps, STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, TERMINAL_OPS, RETRACT_REASONS, DROP_REASONS,
+    DISPUTE_DROP_REASONS, DISSOLVE_DROP_REASONS, SKIP_REASONS, PENDING_REVIEW_CAP, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS
+} from './stores/coreState.mjs'
+import { makeEvidence, UNASSESSED } from './stores/evidence.mjs'
+import { createCoreStore, mdHashOf } from './stores/coreStore.mjs'
+import { selectNotes, yearOf } from './stores/noteSelection.mjs'
 // ── 內建領域預設 ──
 import { createExtractDomain } from './domain/extractDomain.mjs'
 import { createTriageDomain } from './domain/triageDomain.mjs'
 import { createRelateDomain } from './domain/relateDomain.mjs'
-import { createDistillDomain, buildDistillPrompt, buildAuditPrompt, buildRevisePrompt, buildFinalPrompt, renderCoreBody, checkCore, checkIssues, CORE_SCHEMA } from './domain/distillDomain.mjs'
-import { VOCAB_DEFAULT, GUIDE_FIELDS, guideDefaultOf, resolveVocab, kbLabelOf } from './domain/vocabDefault.mjs'
+import { createDistillDomain, defaultRules, KIND_LABELS, NOTE_SECTIONS } from './domain/distillDomain.mjs'
+import { VOCAB_DEFAULT, GUIDE_FIELDS, guideDefaultOf, resolveVocab, kbLabelOf, evidenceCapsWarning } from './domain/vocabDefault.mjs'
 // ── 內建抓取器與端點 ──
 import { createDefaultFetchers, mergeFetchers } from './fetchers/defaultFetchers.mjs'
 import { DEFAULT_SITE_ADAPTERS, mergeSiteAdapters } from './fetchers/siteAdapters.mjs'
@@ -52,11 +60,11 @@ import { regenCore, listCores } from './ops/regenCore.mjs'
 import { ingestNotes } from './ops/ingestNotes.mjs'
 import { reviveDeadDocs, deadMatcher } from './ops/reviveDocs.mjs'
 // ── 工具 ──
-import { renderFrontmatter, parseFrontmatter, writeMd, readMd, section, sectionOf, dropSection } from './md/md.mjs'
+import { renderFrontmatter, parseFrontmatter, writeMd, mdText, readMd, section, sectionOf, dropSection } from './md/md.mjs'
 import { createClock } from './util/clock.mjs'
-import { sha1, normalizeConcept, slugify, setConceptFold } from './util/text.mjs'
+import { sha1, normalizeConcept, normalizeClue, checkNameMap, slugify, setConceptFold } from './util/text.mjs'
 import { normalizeUrl, unwrapNewsUrl } from './util/web.mjs'
-import { oneline, readJson, writeJson, queueAge } from './util/misc.mjs'
+import { oneline, readJson, writeJson, writeFileAtomic, queueAge } from './util/misc.mjs'
 import { sourceId, docRecord, defaultToRecord, defaultToLinkedRecord } from './util/records.mjs'
 import { normalizeWorkDir, expandDirs } from './core/dirs.mjs'
 import { budgetOf } from './core/budget.mjs'
@@ -116,6 +124,7 @@ let WKnowledgeExtract = {
     stageRelate,
     stageRelationIndex,
     stageDistill,
+    distillTarget,
     stageKnowledgeIndex,
 
     //mw 積木(動作鏈 chain 重排/tap 置換用;具名=hook 錨點)
@@ -149,11 +158,13 @@ let WKnowledgeExtract = {
     mwConflictDualWrite,
     mwMarkRelated,
     mwRebuildRelationIndex,
-    mwBuildBase,
-    mwRunWorkflow,
-    mwAdoptResult,
-    mwRenderCore,
-    mwPersistCore,
+    mwLoadState,
+    mwSelectNotes,
+    mwPropose,
+    mwReview,
+    mwApplyDelta,
+    mwRenderState,
+    mwPersistState,
     mwRebuildKnowledgeIndex,
 
     //middleware 核心(自寫單元/插件用)
@@ -174,19 +185,15 @@ let WKnowledgeExtract = {
     createExtractDomain,
     createRelateDomain,
     createDistillDomain,
-    buildDistillPrompt,
-    buildAuditPrompt,
-    buildRevisePrompt,
-    buildFinalPrompt,
-    renderCoreBody,
-    checkCore,
-    checkIssues,
-    CORE_SCHEMA,
+    defaultRules,
+    KIND_LABELS,
+    NOTE_SECTIONS,
     VOCAB_DEFAULT,
     GUIDE_FIELDS,
     guideDefaultOf,
     resolveVocab,
     kbLabelOf,
+    evidenceCapsWarning,
     resolveSettings,
     FETCH_DEFAULT,
     KNOWLEDGE_DEFAULT,
@@ -232,7 +239,6 @@ let WKnowledgeExtract = {
 
     //機制(生命週期政策/批次 AI harness/關聯與提煉機制/入庫閘門/時間預算)
     runAiBatchStage,
-    buildWorkflowStages,
     judgeFromDocs,
     budgetOf,
     ensureSeedSources,
@@ -256,6 +262,47 @@ let WKnowledgeExtract = {
     conceptVocabulary,
     pickConcepts,
     pickCategories,
+    orphanNotes,
+    coreForKey,
+    twinsOf,
+    isReady,
+    groupByConcept,
+    suggestConceptRenames,
+    //提煉之主張庫(2.0:狀態＋差量＋程式套用;純函數)與其 IO
+    emptyState,
+    upgradeState,
+    findItem,
+    deriveStatus,
+    applyDelta,
+    applyVerdicts,
+    coverageOf,
+    commitBatch,
+    checkInvariants,
+    stateDigest,
+    renderRules,
+    queuePendingReview,
+    pendingReviewOps,
+    STATE_VERSION,
+    DELTA_OPS,
+    CONSOLIDATE_OPS,
+    TERMINAL_OPS,
+    RETRACT_REASONS,
+    DROP_REASONS,
+    DISPUTE_DROP_REASONS,
+    DISSOLVE_DROP_REASONS,
+    SKIP_REASONS,
+    PENDING_REVIEW_CAP,
+    DEFAULT_CLAIM_KINDS,
+    DEFAULT_LIMITS,
+    makeEvidence,
+    UNASSESSED,
+    createCoreStore,
+    mdHashOf,
+    selectNotes,
+    yearOf,
+    coreAuxDirs,
+    createDistillLedger,
+    newCoreIdOf,
     pickCandidates,
     makeSlugResolver,
     applyRelationsToNote,
@@ -269,6 +316,7 @@ let WKnowledgeExtract = {
     renderFrontmatter,
     parseFrontmatter,
     writeMd,
+    mdText,
     readMd,
     section,
     sectionOf,
@@ -276,6 +324,8 @@ let WKnowledgeExtract = {
     createClock,
     sha1,
     normalizeConcept,
+    normalizeClue,
+    checkNameMap,
     slugify,
     setConceptFold,
     normalizeUrl,
@@ -283,6 +333,7 @@ let WKnowledgeExtract = {
     oneline,
     readJson,
     writeJson,
+    writeFileAtomic,
     queueAge,
     sourceId,
     docRecord,

@@ -12,6 +12,7 @@ import { reviveDeadDocs, deadMatcher } from '../src/ops/reviveDocs.mjs'
 import { createExtractDomain } from '../src/domain/extractDomain.mjs'
 import { parseFrontmatter, readMd, writeMd } from '../src/md/md.mjs'
 import { createClock } from '../src/util/clock.mjs'
+import { acquireLock } from '../src/core/lock.mjs'
 import { memStore } from './tools/memStore.mjs'
 
 const TMP = path.resolve(`test/_tmp/maint-${process.pid}`).replace(/\\/g, '/') // cwd 相對(自套件根執行);帶 pid 後綴使並行之多個 mocha 行程互不干擾;after 清除
@@ -92,11 +93,16 @@ describe('unit-maint', function() {
         assert.match(r3.messages[0], /筆記檔已存在（.+\.md），略過：人工筆記/)
     })
 
-    it('regenCore:刪核心 md 與索引記錄、清相關筆記 distilledAt;找不到回 notFound;listCores 依篇數降冪', async () => {
-        const file = `${TMP}/core/k1.md`
+    it('regenCore(2.0):刪核心記錄、md 改名封存;以 normalizeConcept 比對;找不到回 notFound;管線持鎖中拒絕;listCores 依版本降冪且排除已併入之分身', async () => {
+        const dirs = { core: `${TMP}/core`, state: `${TMP}/state` }
+        const file = `${dirs.core}/k1.md`
         writeMd(file, { title: 'x' }, 'body')
         const deleted = []
-        const cores = memStore([{ id: 'k1', concept: 'Transformer 架構', version: 3, noteCount: 5, file }, { id: 'k2', concept: '其他', version: 1, noteCount: 9, file: `${TMP}/core/none.md` }])
+        const cores = memStore([
+            { id: 'k1', concept: 'Transformer 架構', version: 3, noteCount: 5, file },
+            { id: 'k2', concept: '其他', version: 1, noteCount: 9, file: `${dirs.core}/none.md` },
+            { id: 'k3', concept: 'transformer架構', version: 1, noteCount: 1, status: 'merged', mergedInto: 'k1' },
+        ])
         cores.raw = {
             del: async (find) => {
                 deleted.push(find.id)
@@ -104,15 +110,22 @@ describe('unit-maint', function() {
         }
         const notes = memStore([{ id: 'n1', concepts: ['transformer架構'], distilledAt: 'x' }, { id: 'n2', concepts: ['別的'], distilledAt: 'y' }])
         const stores = { cores, notes }
-        assert.deepEqual((await listCores(stores)).map((c) => c.id), ['k2', 'k1'])
-        const r = await regenCore(stores, 'TRANSFORMER架構')
+        assert.deepEqual((await listCores(stores)).map((c) => c.id), ['k1', 'k2'], '依版本降冪;merged 分身不列')
+        // 管線持鎖中:拒絕、不動任何東西
+        const lockFile = `${TMP}/run.lock`
+        const held = acquireLock(lockFile)
+        const locked = await regenCore(stores, 'TRANSFORMER架構', { dirs, lockFile })
+        assert.deepEqual([locked.ok, locked.locked], [false, true])
+        assert.ok(fs.existsSync(file) && deleted.length === 0)
+        held.release()
+        const r = await regenCore(stores, 'TRANSFORMER架構', { dirs, lockFile, stamp: 'T1' })
         assert.equal(r.ok, true)
-        assert.deepEqual([r.concept, r.version, r.availableNotes], ['Transformer 架構', 3, 1], '以 normalizeConcept 比對(大小寫/空白不敏感)')
-        assert.ok(!fs.existsSync(file), '核心 md 已刪')
+        assert.deepEqual([r.concept, r.version, r.availableNotes], ['Transformer 架構', 3, 1], '以 normalizeConcept 比對(大小寫/空白不敏感);同鍵以主核心(非 merged)為準')
+        assert.ok(!fs.existsSync(file) && fs.existsSync(`${dirs.state}/core/archive/k1.md.regen-T1.md`), '核心 md 改名封存')
         assert.deepEqual(deleted, ['k1'], '核心索引記錄已刪')
-        assert.equal((await notes.get('n1')).distilledAt, '', '相關筆記 distilledAt 清空(重練後統計正確)')
-        assert.equal((await notes.get('n2')).distilledAt, 'y')
-        const nf = await regenCore(stores, '不存在的概念')
+        assert.equal((await notes.get('n1')).distilledAt, 'x', '2.0 不清 distilledAt')
+        assert.ok(!fs.existsSync(lockFile), '執行鎖已釋放')
+        const nf = await regenCore(stores, '不存在的概念', { dirs })
         assert.deepEqual([nf.ok, nf.notFound], [false, true])
     })
 

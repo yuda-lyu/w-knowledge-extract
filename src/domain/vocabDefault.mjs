@@ -19,10 +19,24 @@
 //   evidenceLevels  證據等級名稱(prompt 之擇一清單與產出驗證同據此;各級定義見 guide.extract.evidenceLevelDefs)
 //   relationTypes   關聯型別白名單;conflictType 觸發衝突雙寫;fallbackType 非法型別之落點
 //   guide           prompt 之領域句(欄位見 GUIDE_FIELDS;值原樣插入,可含換行,續行請自帶三格縮排)
+//   conceptRenames  概念標籤之折疊前精確改名 { 原寫法: 新寫法 }(拆開折疊誤合、把「名稱(743)」類改回基名;見 util/text)
+//   conceptAliases  概念標籤之折疊後同義合併 { 別名: 正名 }(兩岸用語、同義詞;見 util/text)
+//   evidenceCaps    核心主張證據等級之內容類型封頂 { 內容類型: 等級名｜位置整數 }(0＝最高、1＝次高、-1＝最低;見 stores/evidence)。
+//                   預設表之鍵取自預設 claimTypes、值以位置表達(等級改名仍生效);依據為安裝方實測:觀點評論／實務經驗／教學示範／
+//                   廠商內容之主張封頂最低、理論與模擬封頂次高(〈建議…優化〉§2.4、§3 驗收 3;r3「錯在保守方向」受評審肯定)。
+//                   不給封頂表即「取出處最高」——正是 r2 灌水之規則(評審最重之扣分)。內容類型「未標注」(萃取之落點)封頂次高
+//   basisCaps       核心主張之證據性質封頂 { basis 關鍵詞: 等級名｜位置整數, '*': 皆不含時 }——basis 含該詞即封頂,多詞取最嚴;
+//                   鍵同時是提煉規則表中「證據性質擇自」之清單(單一來源)。預設依安裝方驗收條件 §3 #3:樣本外可達最高;樣本內、
+//                   理論、模擬、案例次高;實務、教學、觀點、廠商、轉述最低;未寫或不在表內者次高。鍵取短詞(子字串比對亦涵蓋長寫法)。給 {} 即不封頂
+//   selfLimitPhrases 核心主張之自承限制片語(critique／conditions／basis 含之即封頂次高;安裝方 §3 #3)。預設為領域中立之片語;
+//                   領域片語(如「單一市場」)由安裝方增列。給 [] 即不封頂
+//   absolutePhrases 絕對語氣片語:本次新寫入或改寫之主張文字含之(前兩字有「不未非無」或為「難以」者不計)即計入指標「絕對語氣」,
+//                   只計數、不擋(安裝方驗收 §3 #4:否定句會誤判,不做硬擋;2026-09-29 定稿版)。給 [] 即不計
 
 import isobj from 'wsemi/src/isobj.mjs'
 import isarr from 'wsemi/src/isarr.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
+import { checkNameMap } from '../util/text.mjs'
 
 
 /**
@@ -205,6 +219,16 @@ export const VOCAB_DEFAULT = {
     conflictType: '衝突或反例',
     fallbackType: '互補搭配',
     guide: guideDefaultOf(''),
+    conceptRenames: {},
+    conceptAliases: {},
+    evidenceCaps: { '理論模型': 1, '實務經驗': -1, '教學示範': -1, '觀點評論': -1, '廠商內容': -1, '未標注': 1 },
+    // 鍵用短詞:basis 以子字串比對,短詞同時涵蓋長短寫法(「實務」命中「實務經驗」、「樣本外」命中「樣本外實證」)——模型之用詞
+    //   有長有短,長鍵會漏接短寫法而把應封頂最低者抬成次高(灌水方向之錯);短鍵之誤差只往保守方向。實例:安裝方模型以九個短標記
+    //   標注(標記率 1.0),長鍵下全數漏接(2026-09-29)。領域另有慣用詞者以 vocab.basisCaps 增列
+    basisCaps: { '樣本外': 0, '樣本內': 1, '理論': 1, '模擬': 1, '案例': 1, '實務': -1, '教學': -1, '觀點': -1, '廠商': -1, '轉述': -1, '*': 1 },
+    selfLimitPhrases: ['僅樣本內', '單一研究', '同一研究', '僅摘要', '未經獨立驗證', '未經驗證'],
+    // 不收裸詞「一定／絕對／保證」:「一定程度」「絕對值」「保證金」等常見詞會被誤計
+    absolutePhrases: ['一定會', '一定能', '一定是', '必然', '必定', '總是', '永遠', '絕對會', '絕對是', '保證會', '保證能', '毫無例外', '無一例外', '無疑', '百分之百'],
 }
 
 
@@ -214,8 +238,10 @@ export const VOCAB_DEFAULT = {
  * 可重複套用:resolveVocab(resolveVocab(x)) 與 resolveVocab(x) 相同
  *
  * @param {Object} [override] 輸入覆寫物件，給定之鍵整鍵替換內建值，未給或非物件代表全用內建預設
- * @returns {Object} 回傳合併後詞彙表物件，含 domain、kbLabel、categories、claimTypes、evidenceLevels、relationTypes、conflictType、fallbackType、guide
- * @throws {Error} kbLabel 非字串，或 guide 不合 GUIDE_FIELDS(不認得之段或欄位、型別不符、證據等級鍵不在 evidenceLevels)時拋出
+ * @returns {Object} 回傳合併後詞彙表物件，含 domain、kbLabel、categories、claimTypes、evidenceLevels、relationTypes、conflictType、fallbackType、guide、conceptRenames、conceptAliases、evidenceCaps、basisCaps、selfLimitPhrases、absolutePhrases
+ * @throws {Error} kbLabel 非字串，guide 不合 GUIDE_FIELDS(不認得之段或欄位、型別不符、證據等級鍵不在 evidenceLevels)，
+ *   conceptRenames／conceptAliases 非 { 原寫法: 新寫法 } 字串對照，evidenceCaps 之鍵不在 claimTypes／值非等級名或位置整數，
+ *   basisCaps 非物件／值非等級名或位置整數，或 selfLimitPhrases／absolutePhrases 非非空字串陣列時拋出
  * @example
  * let v = resolveVocab({ domain: '機器學習', categories: ['模型', '資料', '其他'] })
  * console.log(v.domain, v.categories, v.evidenceLevels)
@@ -238,7 +264,53 @@ export function resolveVocab(override) {
     const v = { ...VOCAB_DEFAULT, ...override }
     const levels = isarr(v.evidenceLevels) ? v.evidenceLevels : []
     v.guide = mergeGuide(guideDefaultOf(v.domain), override.guide, levels)
+    // 概念別名:形狀錯誤於建構期拋錯(不可讓打錯的別名表靜默不生效);null 視為空對照
+    checkNameMap(v.conceptRenames, 'vocab.conceptRenames')
+    checkNameMap(v.conceptAliases, 'vocab.conceptAliases')
+    v.conceptRenames = v.conceptRenames || {}
+    v.conceptAliases = v.conceptAliases || {}
+    // 證據封頂:安裝方明給者嚴格檢查(鍵打錯即該內容類型靜默不封頂——等於退回灌水規則);
+    // 未給者沿用預設表並只留現行 claimTypes 之鍵(先例同 evidenceLevelDefs 之過濾;亦使本函數可重複套用)
+    const types = [...(isarr(v.claimTypes) ? v.claimTypes : []), '未標注']
+    if (override.evidenceCaps !== undefined && override.evidenceCaps !== null) {
+        const caps = override.evidenceCaps
+        if (!isobj(caps)) throw new Error('vocab.evidenceCaps 須為物件 { 內容類型: 等級名｜位置整數 }')
+        for (const [k, val] of Object.entries(caps)) {
+            if (!types.includes(k)) throw new Error(`vocab.evidenceCaps 之「${k}」不在 claimTypes（${types.join('、')}）`)
+            if (!(Number.isInteger(val) || levels.includes(val))) throw new Error(`vocab.evidenceCaps.${k} 須為 evidenceLevels 之等級名（${levels.join('、')}）或位置整數（-1＝最低）`)
+        }
+    }
+    else v.evidenceCaps = Object.fromEntries(Object.entries(VOCAB_DEFAULT.evidenceCaps).filter(([k]) => types.includes(k)))
+    // 證據性質封頂與自承限制片語:形狀錯誤於建構期拋錯;null 視為未給(用預設)
+    if (v.basisCaps === null) v.basisCaps = VOCAB_DEFAULT.basisCaps
+    if (!isobj(v.basisCaps)) throw new Error('vocab.basisCaps 須為物件 { basis 關鍵詞: 等級名｜位置整數, "*": 皆不含時 }')
+    for (const [k, val] of Object.entries(v.basisCaps)) {
+        if (!String(k).trim()) throw new Error('vocab.basisCaps 之鍵不可為空字串')
+        if (!(Number.isInteger(val) || levels.includes(val))) throw new Error(`vocab.basisCaps.${k} 須為 evidenceLevels 之等級名（${levels.join('、')}）或位置整數（0＝最高、-1＝最低）`)
+    }
+    if (v.selfLimitPhrases === null) v.selfLimitPhrases = VOCAB_DEFAULT.selfLimitPhrases
+    if (!isarr(v.selfLimitPhrases) || v.selfLimitPhrases.some((p) => !isestr(p))) throw new Error('vocab.selfLimitPhrases 須為非空字串陣列（[] 即不封頂）')
+    if (v.absolutePhrases === null) v.absolutePhrases = VOCAB_DEFAULT.absolutePhrases
+    if (!isarr(v.absolutePhrases) || v.absolutePhrases.some((p) => !isestr(p))) throw new Error('vocab.absolutePhrases 須為非空字串陣列（[] 即不計）')
     return v
+}
+
+
+/**
+ * 證據封頂之啟動期警告:安裝方換了 claimTypes 而未給 evidenceCaps,使預設封頂表之鍵全數對不上 → 主張證據等級退回「取出處最高」
+ *
+ * @param {Object} [override] 輸入安裝方之詞彙覆寫(cfg.data.vocab)
+ * @returns {String} 回傳警告字串；無需警告回''
+ * @example
+ * console.log(evidenceCapsWarning({ claimTypes: ['論文', '部落格'] }) !== '')
+ * // => true
+ */
+export function evidenceCapsWarning(override) {
+    if (!isobj(override) || !isarr(override.claimTypes)) return ''
+    if (override.evidenceCaps !== undefined && override.evidenceCaps !== null) return ''
+    const hit = Object.keys(VOCAB_DEFAULT.evidenceCaps).filter((k) => k !== '未標注' && override.claimTypes.includes(k))
+    if (hit.length) return ''
+    return 'vocab.claimTypes 已自訂而未給 vocab.evidenceCaps：預設之內容類型封頂表無一鍵對得上，核心主張之證據等級只依出處筆記之等級與「最高級須 2 份文件」判定（觀點、廠商等內容不再封頂）；請依自訂之內容類型給 evidenceCaps'
 }
 
 

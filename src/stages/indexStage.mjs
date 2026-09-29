@@ -1,8 +1,9 @@
 // indexStage.mjs — 知識庫入口索引重建（泛用：吃正準欄位，不認識領域內容）
 //
 // 【正準欄位】notes: {id,title,category,concepts,evidenceLevel,caveats,createdAt}
-//   cores: {id,concept,version,noteCount,essence}(正準 schema,套件契約欄位)。
+//   cores: {id,concept,version,noteCount,essence,status}(正準 schema,套件契約欄位)。
 //   品質標注上索引：讓翻索引就看得到證據強弱與品質警示，不必逐篇點開。
+// 【2.0】已併入他核心之分身(status 'merged')不列;noteCount＝被核心引用之筆記數(「依據 N 篇」,1.x 為群組篇數)。
 
 import fs from 'fs'
 import path from 'path'
@@ -36,7 +37,7 @@ export async function rebuildKnowledgeIndex(cfg) {
 
     const { stores } = cfg
     const notes = await stores.notes.select()
-    const cores = await stores.cores.select()
+    const cores = (await stores.cores.select()).filter((c) => c.status !== 'merged')
     const edges = await stores.relations.select()
 
     const byCategory = new Map()

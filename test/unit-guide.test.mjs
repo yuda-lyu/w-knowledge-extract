@@ -1,7 +1,8 @@
 // unit-guide.test.mjs — prompt 領域句欄位化(vocab.guide／kbLabel)、頂層 domains 注入、標題推導、網格 arXiv 類別拆分
 //
 // 規格來源:安裝方提議〈建議 w-knowledge-extract 調整〉§3.2～§3.5 與主代理評估之修正(2026-09-23):
-//   ①未設定任何欄位時 prompt 與 1.0.0 逐字相同(唯一刻意變更:時效相依之稱呼改回與 md 章節同名「時效與機制相依」)
+//   ①未設定任何欄位時 prompt 與 1.0.0 逐字相同(刻意變更逐條列於 intended():時效相依之稱呼、萃取之主概念句與概念清單格式;
+//     提煉 2.0 改為主張庫＋差量,1.x 五鍵退役、標準檔不重產,新鍵以結構斷言驗證)
 //   ②每個欄位各有唯一落點(填入標記字串,只出現在對應 prompt 一次)③輸出格式說明與驗證函數不受欄位影響
 //   ④欄位逐欄回退預設、空字串照填、null 視為未給 ⑤欄位名／型別錯誤於啟動期拋錯
 //   ⑥證據等級清單依 vocab.evidenceLevels 產生 ⑦索引／巡檢推送標題由知識庫稱呼推導 ⑧cfg.domains 同時作用於管線與 info()
@@ -26,9 +27,18 @@ import { stubAi } from './tools/stubAi.mjs'
 
 const TMP = path.resolve(`test/_tmp/guide-${process.pid}`).replace(/\\/g, '/')
 const GOLDEN = JSON.parse(fs.readFileSync(path.resolve('test/golden/prompts-1.0.0.json'), 'utf8'))
-// 刻意變更(規格①之唯一例外):regime_dependency／temporal 之稱呼改回與 md 章節同名
+// 刻意變更(規格①之例外,逐條列明,其餘須逐字相同):
+//   ①regime_dependency／temporal 之稱呼改回與 md 章節同名(2026-09-23)
+//   ②萃取 concepts 規則加「第一個為本篇主概念」:提煉之選題與門檻只計主標籤(2.0;安裝方〈建議…優化〉§2.3)
+//   ③萃取之既有概念清單只列名稱:1.x 之「名稱(篇數)」被模型照抄成「名稱(743)」分身概念(2.0;同上 §1.6)
 const intended = (s) => s.split('時效與條件相依').join('時效與機制相依')
+    .split('2 到 6 個，**必須使用繁體字形').join('2 到 6 個，依與本篇之核心程度排序、第一個為本篇主概念，**必須使用繁體字形')
+    .split('下列是知識庫既有的概念標籤（括號內為使用篇數）').join('下列是知識庫既有的概念標籤（依使用篇數由多到少排列）')
+    .split('概念甲(3)、概念乙(2)').join('概念甲、概念乙')
 const count = (s, m) => s.split(m).length - 1
+// 提煉 2.0(主張庫＋差量):1.x 五鍵退役、標準檔不重產;新鍵不在 1.0.0 標準檔內,以結構斷言驗證
+const RETIRED = ['distillBase', 'distillBasePrior', 'audit', 'revise', 'final']
+const DISTILL = ['distillPropose', 'distillProposePrior', 'distillReview', 'distillConsolidate']
 
 /** 各段欄位之標記值(字串/陣列/證據等級物件依型別給) */
 function markerGuide() {
@@ -48,7 +58,7 @@ function targetsOf(sec, k) {
     if (sec === 'triage') return k === 'fallbackReason' ? ['triageReason'] : ['triage']
     if (sec === 'extract') return ['extract', 'extractNoVocab']
     if (sec === 'relate') return ['relate']
-    return ['distillBase', 'distillBasePrior']
+    return DISTILL // 提煉之領域句在規則表:提案、審查、整併共用同一份
 }
 
 describe('unit-guide', function() {
@@ -64,21 +74,27 @@ describe('unit-guide', function() {
     })
 
     // ── ①預設不變 ──
-    it('①未設定任何欄位:七類 prompt(含預篩預設理由)與 1.0.0 逐字相同,唯一例外為時效相依之稱呼(無 domain 與有 domain 兩組)', () => {
+    it('①未設定任何欄位:預篩／萃取／關聯之 prompt(含預篩預設理由)與 1.0.0 逐字相同,例外只有 intended() 列明之刻意變更;提煉 1.x 五鍵退役(無 domain 與有 domain 兩組)', () => {
         for (const [variant, vocab] of [['noDomain', null], ['domain', { domain: '機器學習' }]]) {
             const now = renderAllPrompts(vocab)
-            assert.deepEqual(Object.keys(now), Object.keys(GOLDEN[variant]))
-            for (const [k, exp] of Object.entries(GOLDEN[variant])) {
-                assert.equal(now[k], intended(exp), `${variant}.${k} 須與 1.0.0 相同`)
+            const kept = Object.keys(GOLDEN[variant]).filter((k) => !RETIRED.includes(k))
+            assert.deepEqual(Object.keys(GOLDEN[variant]).filter((k) => RETIRED.includes(k)), RETIRED, '標準檔保留原樣(不重產)')
+            assert.deepEqual(Object.keys(now), [...kept, ...DISTILL])
+            for (const k of kept) {
+                assert.equal(now[k], intended(GOLDEN[variant][k]), `${variant}.${k} 須與 1.0.0 相同`)
             }
             assert.ok(now.extract.includes('regime_dependency：時效與機制相依（0-3 條）'), 'prompt 稱呼與 md 章節名一致')
-            assert.ok(now.distillBase.includes('**temporal（時效與機制相依）**'))
             assert.ok(!Object.values(now).some((s) => s.includes('時效與條件相依')))
+            // 提煉之領域句預設值(1.0.0 之 distillBase 同義句)落在共用規則表
+            const g = guideDefaultOf(vocab?.domain || '').distill
+            for (const k of DISTILL) {
+                assert.ok(now[k].includes(`rule＝${g.ruleTarget}`) && now[k].includes(`「${g.weakEvidence}」的參數`) && now[k].includes(`temporal＝${g.temporal}`), `${variant}.${k} 帶提煉領域句`)
+            }
         }
     })
 
     // ── ②欄位覆蓋 ──
-    it('②每個欄位各有唯一落點:標記只出現在對應 prompt 一次、不出現在其他 prompt;kbLabel 出現在七類 prompt 首句各一次', () => {
+    it('②每個欄位各有唯一落點:標記只出現在對應 prompt 一次、不出現在其他 prompt;kbLabel 出現在各類 prompt 首句各一次', () => {
         const now = renderAllPrompts({ kbLabel: '⟦kbLabel⟧', guide: markerGuide() })
         let n = 0
         for (const [sec, fields] of Object.entries(GUIDE_FIELDS)) {
@@ -107,7 +123,7 @@ describe('unit-guide', function() {
         const base = renderAllPrompts(null)
         const now = renderAllPrompts({ guide: markerGuide() })
         const tail = (s, mark) => s.slice(s.indexOf(mark))
-        for (const [key, mark] of [['triage', '只回覆 JSON 陣列'], ['extract', '只回覆 JSON 陣列'], ['relate', '只回覆 JSON 陣列'], ['distillBase', '只回覆 JSON 物件'], ['audit', '只回覆 JSON：'], ['revise', '只回覆修訂後'], ['final', '只回覆定稿']]) {
+        for (const [key, mark] of [['triage', '只回覆 JSON 陣列'], ['extract', '只回覆 JSON 陣列'], ['relate', '只回覆 JSON 陣列'], ...DISTILL.map((k) => [k, '【輸出格式】'])]) {
             assert.ok(base[key].includes(mark))
             assert.equal(tail(now[key], mark), tail(base[key], mark), `${key} 之輸出格式段不變`)
         }
@@ -183,12 +199,12 @@ describe('unit-guide', function() {
     })
 
     // ── 知識庫稱呼 ──
-    it('kbLabel 明給者優先,空字串與未給由 domain 推導;七類 prompt 首句皆用之', () => {
+    it('kbLabel 明給者優先,空字串與未給由 domain 推導;各類 prompt 首句皆用之', () => {
         assert.equal(kbLabelOf({ domain: '機器學習', kbLabel: 'ML知識庫' }), 'ML知識庫')
         assert.equal(kbLabelOf({ domain: '機器學習', kbLabel: '' }), '「機器學習」知識庫')
         assert.equal(kbLabelOf({ domain: '', kbLabel: '  ' }), '知識庫')
         const now = renderAllPrompts({ kbLabel: 'ML知識庫' })
-        for (const k of ['triage', 'extract', 'relate', 'distillBase', 'audit', 'revise', 'final']) assert.ok(now[k].startsWith('你是ML知識庫的'), k)
+        for (const k of ['triage', 'extract', 'relate', ...DISTILL]) assert.ok(now[k].startsWith('你是ML知識庫的'), k)
         assert.equal(createRelateDomain({ vocab: { kbLabel: 'ML知識庫' } }).conflictType, '衝突或反例')
     })
 

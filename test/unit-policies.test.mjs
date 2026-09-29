@@ -213,15 +213,15 @@ describe('unit-policies', function() {
     })
 
     // ── conceptGroups ──
-    it('概念分群：normalizeConcept 歸群、gain 選題、類別後備', async () => {
-        const mk = (id, c, cat = '方法與技術', created = '2026-08-01') => ({ id, concepts: [c], category: cat, createdAt: created })
+    it('概念分群：normalizeConcept 歸群、pending 選題(已用者不重跑)、類別後備', async () => {
+        const mk = (id, c, cat = '方法與技術', created = '2026-08-01') => ({ id, concepts: [c], category: cat, createdAt: created, relatedAt: created })
         const notes = [mk('1', 'Transformer 架構'), mk('2', 'transformer架構'), mk('3', 'Ｔransformer架構')] // 全形Ｔ
         let t = pickConcepts(notes, [], { minNotes: 3 })
         assert.equal(t.length, 1, '三種寫法須歸同一群')
-        assert.equal(t[0].notes.length, 3)
+        assert.equal(t[0].pending.length, 3)
 
-        t = pickConcepts(notes, [{ concept: 'Transformer 架構', noteCount: 3 }], { minNotes: 3 })
-        assert.equal(t.length, 0, '沒有新筆記不重跑——重跑只燒額度並讓核心檔抖動')
+        t = pickConcepts(notes, [{ id: 'k', concept: 'Transformer 架構', noteIds: ['1', '2', '3'], version: 1, stateFormat: 2 }], { minNotes: 3, minPending: 1, maxWaitDays: 0 })
+        assert.equal(t.length, 0, '沒有未用過之筆記不重跑——重跑只燒額度並讓核心檔抖動')
 
         const catNotes = Array.from({ length: 6 }, (_, i) => mk(`c${i}`, `各自為政${i}`, '模型評估'))
         const cats = pickCategories(catNotes, [], { minNotes: 6, minGain: 4 })
@@ -230,29 +230,32 @@ describe('unit-policies', function() {
 
         const vocabStore = memStore(notes.map((n) => ({ ...n })))
         const vocab = await conceptVocabulary(vocabStore)
-        assert.match(vocab[0], /\(3\)$/, '詞彙表帶使用篇數供 prompt 收斂')
+        assert.deepEqual(vocab, ['Transformer 架構'], '預設只回名稱(篇數會被模型照抄成「名稱(3)」分身標籤,2.0 起不餵回 prompt)')
+        assert.deepEqual(await conceptVocabulary(vocabStore, 60, { counts: true }), ['Transformer 架構(3)'], '維運顯示可附篇數')
     })
 
-    it('提煉選題 aging：score＝gain×等待天數——久候者優先、剛提煉的大概念不再壟斷、無核心者自最早筆記起算', () => {
+    it('提煉選題 aging：score＝min(pending, 每批)×等待天數——久候者優先、剛提煉的大概念不再壟斷、無核心者自最早筆記起算', () => {
         const now = Date.parse('2026-09-06T12:00:00+08:00')
         const day = 86400_000
-        const mk = (id, c, created) => ({ id, concepts: [c], category: '方法與技術', createdAt: new Date(created).toISOString() })
+        const mk = (id, c, created) => ({ id, concepts: [c], category: '方法與技術', createdAt: new Date(created).toISOString(), relatedAt: 'x' })
         const many = (n, p, c, created) => Array.from({ length: n }, (_, i) => mk(`${p}${i}`, c, created))
         const notes = [
-            ...many(10, 'a', '過擬合', now - 40 * day), // 有核心、gain 5、0.05 天前才提煉
-            ...many(3, 'b', '梯度下降', now - 40 * day), // 有核心、gain 1、等了 20 天
+            ...many(10, 'a', '過擬合', now - 40 * day), // 有核心、pending 5、0.05 天前才提煉
+            ...many(3, 'b', '梯度下降', now - 40 * day), // 有核心、pending 1、等了 20 天
             ...many(2, 'c', '正則化', now - 30 * day), // 無核心、素材等了 30 天
             ...many(2, 'd', '新概念', now), // 無核心、剛出現（等待 0 天）
         ]
         const cores = [
-            { concept: '過擬合', noteCount: 5, updatedAt: new Date(now - 0.05 * day).toISOString() },
-            { concept: '梯度下降', noteCount: 2, updatedAt: new Date(now - 20 * day).toISOString() },
+            { id: 'k1', concept: '過擬合', noteIds: ['a0', 'a1', 'a2', 'a3', 'a4'], version: 3, updatedAt: new Date(now - 0.05 * day).toISOString(), stateFormat: 2 },
+            { id: 'k2', concept: '梯度下降', noteIds: ['b0', 'b1'], version: 2, updatedAt: new Date(now - 20 * day).toISOString(), stateFormat: 2 },
         ]
-        const t = pickConcepts(notes, cores, { minNotes: 2, now })
+        const t = pickConcepts(notes, cores, { minNotes: 2, minPending: 1, maxWaitDays: 0, now })
         assert.deepEqual(t.map((x) => x.concept), ['正則化', '梯度下降', '過擬合', '新概念'],
-            '正則化(2×30)＞梯度下降(1×20)＞過擬合(5×0.05)＞新概念(2×0)；純 gain 排序會讓過擬合永遠第一（生產實測 194 個概念從未提煉）')
+            '正則化(2×30)＞梯度下降(1×20)＞過擬合(5×0.05)＞新概念(2×0)；純增量排序會讓過擬合永遠第一（生產實測 194 個概念從未提煉）')
         assert.ok(t[0].score > t[1].score && t[1].score > t[2].score && t[2].score > t[3].score)
-        assert.equal(t[2].gain, 5, 'gain 語意不變（只是排序加權）')
+        assert.equal(t[2].gain, 5, 'gain＝pending(主標籤、未用過)')
+        const capped = pickConcepts([...notes, ...many(40, 'e', '過擬合', now - 40 * day)], cores, { minNotes: 2, minPending: 1, maxWaitDays: 0, notesPerTarget: 12, now })
+        assert.equal(capped.find((x) => x.concept === '過擬合').score, 12 * 0.05, 'pending 45 以每批 12 上限化(遷移後大 pending 不壟斷)')
     })
 
     // ── 字形折疊（繁簡分裂修正，2026-08-19）──
@@ -260,24 +263,24 @@ describe('unit-policies', function() {
         const FOLD = { '机': '機' }
         setConceptFold((s) => [...s].map((ch) => FOLD[ch] || ch).join(''))
         try {
-            const mk = (id, c) => ({ id, concepts: [c], category: '方法與技術', createdAt: '2026-08-01' })
+            const mk = (id, c) => ({ id, concepts: [c], category: '方法與技術', createdAt: '2026-08-01', relatedAt: 'x' })
             const notes = [mk('1', '注意力機制'), mk('2', '注意力機制'), mk('3', '注意力机制')]
             const t = pickConcepts(notes, [], { minNotes: 3 })
             assert.equal(t.length, 1, '繁簡兩種寫法必須歸同一群（分裂即重複核心檔之根源）')
             assert.equal(t[0].concept, '注意力機制', 'display 取多數寫法，不可被少數簡體帶偏')
-            // 既有 core 為繁體時，簡體筆記的累積要算進同一 gain（不可另起爐灶）
-            const t2 = pickConcepts(notes, [{ concept: '注意力機制', noteCount: 2 }], { minNotes: 3 })
+            // 既有 core 為繁體時，簡體筆記要算進同一核心之 pending（不可另起爐灶）
+            const t2 = pickConcepts(notes, [{ id: 'k', concept: '注意力機制', noteIds: ['1', '2'], version: 1, stateFormat: 2 }], { minNotes: 3, minPending: 1, maxWaitDays: 0 })
             assert.equal(t2.length, 1)
-            assert.equal(t2[0].gain, 1, '簡體筆記須計入既有繁體 core 之增量')
+            assert.deepEqual(t2[0].pending.map((n) => n.id), ['3'], '簡體筆記須計入既有繁體 core 之 pending')
             // 詞彙表 display 同理
-            const vocab = await conceptVocabulary(memStore(notes.map((n) => ({ ...n }))))
+            const vocab = await conceptVocabulary(memStore(notes.map((n) => ({ ...n }))), 60, { counts: true })
             assert.match(vocab[0], /^注意力機制\(3\)$/, '詞彙表回饋 prompt 的寫法必須是多數（繁體）形')
         }
         finally {
             setConceptFold(null)
         }
         // 清除後行為復原：無折疊時繁簡仍是兩鍵（既有測試依賴此預設）
-        const notes2 = [{ id: '1', concepts: ['注意力機制'], category: '方法與技術' }, { id: '2', concepts: ['注意力机制'], category: '方法與技術' }]
+        const notes2 = [{ id: '1', concepts: ['注意力機制'], category: '方法與技術', relatedAt: 'x' }, { id: '2', concepts: ['注意力机制'], category: '方法與技術', relatedAt: 'x' }]
         assert.equal(pickConcepts(notes2, [], { minNotes: 2 }).length, 0, '未注入折疊時不可偷偷合併')
     })
 
@@ -464,15 +467,15 @@ describe('unit-policies', function() {
     // ── 2026-09-23 修正之回歸 ──
     it('概念分群:同一篇筆記之多個標籤折疊成同一鍵時只入群一次(此前重複計入:增量與 noteCount 虛增、同篇重複進提煉 prompt)', async () => {
         const notes = [
-            { id: '1', concepts: ['Transformer 架構', 'transformer架構'], category: 'c', createdAt: '2026-08-01' }, // 同篇兩種寫法,折疊後同鍵
-            { id: '2', concepts: ['Transformer 架構'], category: 'c', createdAt: '2026-08-01' },
+            { id: '1', concepts: ['Transformer 架構', 'transformer架構'], category: 'c', createdAt: '2026-08-01', relatedAt: 'x' }, // 同篇兩種寫法,折疊後同鍵
+            { id: '2', concepts: ['Transformer 架構'], category: 'c', createdAt: '2026-08-01', relatedAt: 'x' },
         ]
         const t = pickConcepts(notes, [], { minNotes: 2 })
         assert.equal(t.length, 1)
-        assert.deepEqual(t[0].notes.map((n) => n.id), ['1', '2'], '同篇只出現一次')
+        assert.deepEqual(t[0].candidates.map((c) => c.note.id), ['1', '2'], '同篇只出現一次')
         assert.equal(t[0].gain, 2)
         assert.equal(pickConcepts(notes, [], { minNotes: 3 }).length, 0, '實際只有 2 篇,不得因重複標籤湊滿門檻 3')
-        const vocab = await conceptVocabulary(memStore(notes.map((n) => ({ ...n }))))
+        const vocab = await conceptVocabulary(memStore(notes.map((n) => ({ ...n }))), 60, { counts: true })
         assert.match(vocab[0], /\(2\)$/, '詞彙表之使用篇數亦只計一次')
     })
 

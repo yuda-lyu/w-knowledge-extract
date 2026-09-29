@@ -150,8 +150,9 @@ function sortByEnforce(list) {
  * @param {Object} taps 輸入掛載規格，格式為 { [錨點名]: { before?, after?, replace?, add? } }；before／after／add 給了須為陣列，replace 須為 defineMw 產物
  * @param {Object} [opt={}] 輸入設定物件，非物件時視為{}
  * @param {String} [opt.chainName='(未名鏈)'] 輸入鏈名稱字串，供錯誤訊息使用
+ * @param {Object} [opt.retired={}] 輸入已退役(或本鏈刻意不含)之錨點對照 { 錨點名: 改掛何處之說明 }，對其掛載時拋錯並附此說明(改版後舊 tap 不可只得到「無錨點」)
  * @returns {Array} 回傳套用 taps 後之新鏈
- * @throws {MwContractError} 錨點不存在、掛載鍵不認得、before/after/add 給了但非陣列、replace 非 defineMw 產物、對非 first 錨點 add 候選時拋出
+ * @throws {MwContractError} 錨點不存在(退役者附對照)、掛載鍵不認得、before/after/add 給了但非陣列、replace 非 defineMw 產物、對非 first 錨點 add 候選時拋出
  * @example
  * let mw = defineMw({ name: 'b', handle: (m, c, n) => n(m) })
  * let chain = applyTaps([mw], { b: { after: [defineMw({ name: 'log', handle: (m, c, n) => n(m) })] } })
@@ -166,13 +167,15 @@ export function applyTaps(chain, taps, opt = {}) {
     }
 
     const chainName = opt.chainName || '(未名鏈)'
+    const retired = isobj(opt.retired) ? opt.retired : {}
     checkChain(chain, chainName)
     if (!taps) return chain.slice()
     const byName = new Map(chain.map((m) => [m.name, m]))
     const KNOWN = new Set(['before', 'after', 'replace', 'add'])
     for (const [anchor, t] of Object.entries(taps)) {
         if (!byName.has(anchor)) {
-            throw new MwContractError(`鏈[${chainName}] 無錨點「${anchor}」(可用:${[...byName.keys()].join('/')})`)
+            const hint = Object.prototype.hasOwnProperty.call(retired, anchor) ? `${retired[anchor]}；` : ''
+            throw new MwContractError(`鏈[${chainName}] 無錨點「${anchor}」(${hint}可用:${[...byName.keys()].join('/')})`)
         }
         for (const k of Object.keys(t || {})) {
             if (!KNOWN.has(k)) throw new MwContractError(`鏈[${chainName}] 錨點[${anchor}] 不認得的掛載鍵「${k}」(可用:before/after/replace/add)`)

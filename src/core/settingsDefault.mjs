@@ -51,10 +51,28 @@ export const KNOWLEDGE_DEFAULT = {
     frontierMaxPending: 2000,
     relateBatch: 6,
     relateCandidates: 25, // 候選再多會稀釋模型判斷力;實測 6 篇×25 候選之關聯 prompt 為 4.0～4.4 萬字元(2026-09-12),超過命令列型供應商上限者由 ai/capability 於呼叫前剔除
-    distillMinNotes: 2,
-    distillPerRun: 2,
-    distillNotesPerConcept: 8,
-    categoryFallback: { minNotes: 6, minGain: 4 },
+    // ── 提煉(2.0:主張庫＋差量;見 stages/distillStage)──
+    // 新核心門檻:主標籤可提煉篇數。1.x 為 2(全標籤計):安裝方實測 v1 核心 377 份中 184 份只根據 2 篇、實為兩篇摘要(〈建議…優化〉§1.4)
+    distillMinNotes: 6,
+    // 每輪容量＝distillPerRun×distillNotesPerConcept 篇(追趕另計),須 ≥ 筆記進料上界(萃取容量×產出率,預設 27):已用過改為逐核心累積後,
+    // 提煉成為真正的佇列,容量不足即無界積壓(1.x 之 2×8＝16 < 27;2026-09-29 雙審實測)。靜態檢核只是必要條件——
+    // 實際消化受部分批與輪流影響(第二輪判識 B 模擬:原案之實際消化只有名目 1/3),由巡檢量「實際消化／進料」
+    distillPerRun: 4,
+    distillNotesPerConcept: 12,
+    distillMinPending: 4, // 既有核心未滿一批時之入選下限(須同時等待 ≥ distillMaxWaitDays):每次入選約 2 次 AI 呼叫,為 1～3 篇開工會吃掉名額
+    distillMaxWaitDays: 30, // 未滿一批者須等待之天數(少量新料終會併入,但不以部分批占名額)
+    distillCatchupBatches: 3, // 積壓核心同輪至多連續幾批(每批一般差量;以剩餘時間守門);樞紐概念只靠輪流追不上其進料
+    distillRelateGraceDays: 3, // 未關聯之筆記延後入選之寬限天數(衝突章由關聯段寫入;先提煉即錯過爭議材料)
+    distillSourceCap: 2, // 同一來源每批上限(不足一批時放寬)
+    distillNoteTries: 2, // 批內未被涵蓋(未被引用、未列略過)之筆記至多再送幾次,逾限即標已用並記原因
+    distillClaimsCap: 80, // 有效主張數逾此值即排入整併(每 distillConsolidateEvery 版至多一次)
+    distillConsolidateEvery: 5,
+    distillMinRemainingMs: 600_000, // 開工與每一步(待審／整併／每批)之門檻:本輪剩餘時間不足即不再開始下一步(提案＋審查兩次呼叫,各自另受席位逾時與預算封頂)
+    // 類別後備(2.0 預設停用;給物件 { minNotes, minGain } 才開啟):概念層無目標之閒置輪,以「久候孤兒」(主概念無核心、
+    //   主標籤篇數未達 distillMinNotes、建立逾 distillMaxWaitDays)建／更新類別核心,每輪 1 批。預設停用之理由:安裝方規格
+    //   「不足者不建核心」;2.0 之類別核心材料異質、只增不減;概念層於新庫數小時～數天內即有目標(2026-09-29 三獨立判識＋安裝方)。
+    //   未達門檻之概念要收斂,請以 vocab.conceptAliases 併入上位概念
+    categoryFallback: null,
 }
 
 /** 來源品質政策 */
@@ -107,20 +125,14 @@ export const AI_DEFAULT = {
     extract: { executor: { use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] } },
     triage: { executor: null }, // 預篩席位;null＝沿用 extract.executor(prompt 短、輸出短,任何一家皆可勝任)
     relate: { executor: { use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] } },
+    // 提煉(2.0):提案(輸出差量)→ 審查(逐操作裁決;null 關閉)→ 程式套用;整併為逾主張上限時之同一機制。
+    // 皆為單次呼叫(ai.callJson:能力預篩、JSON 驗證、遞補、預算封頂);1.x 之多家起草＋整合＋審計鏈(fanout/pipeline)已移除。
+    // sonnet 為安裝方唯一實測差量可行之席位(拒收 0、單次 218～442 秒,〈建議…優化〉§4.4.1)——逾時放寬到 600 秒;
+    // 審查用不同家族以取得多樣性;agy 不入預設(提示詞必逾其 3 萬字命令列上限);agnes／laguna 整份起草曾因輸出過長全敗,差量未實測。
     distill: {
-        fanout: {
-            indeps: [
-                { use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
-                { use: 'poolside:laguna-s-2.1', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
-                { use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
-            ],
-            integrate: { use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
-        },
-        pipeline: [
-            { stage: 'audit', use: 'poolside:laguna-s-2.1', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
-            { stage: 'revise', use: 'agnes:agnes-3.0-flash', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
-            { stage: 'accept', use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet', 'codex:gpt-5.6-luna'] },
-        ],
+        propose: { use: 'claude:sonnet', fallback: ['codex:gpt-5.6-luna'], timeoutMs: 600_000, minAttemptMs: 90_000 },
+        review: { use: 'codex:gpt-5.6-luna', fallback: ['claude:sonnet'], timeoutMs: 600_000, minAttemptMs: 90_000 },
+        consolidate: { use: 'claude:sonnet', fallback: ['codex:gpt-5.6-luna'], timeoutMs: 600_000, minAttemptMs: 90_000 },
     },
 }
 
@@ -150,7 +162,8 @@ const asObj = (v) => (isobj(v) ? v : {})
  * @param {String} [cfg.indexTitle] 輸入知識庫索引標題，預設'知識庫索引'
  * @param {String} [cfg.relationIndexTitle] 輸入知識關聯總覽標題，預設'知識關聯總覽'
  * @returns {Object} 回傳完整設定物件(fetch/knowledge/sourcePolicy/ai/indexTitle/relationIndexTitle，
- *   另含容量自洽推導出之 knowledge.extractCapacity／relateCapacity／triageCapacity 與 warnings 字串陣列)
+ *   另含容量自洽推導出之 knowledge.extractCapacity／relateCapacity／triageCapacity／distillCapacity 與 warnings 字串陣列)
+ * @throws {Error} cfg.ai.distill 含 1.x 之 fanout／pipeline 鍵(2.0 已移除)時拋出——不可讓安裝方之席位設定靜默失效
  * @example
  * let s = resolveSettings({ fetch: { sourcesPerRun: 9 } })
  * console.log(s.fetch.sourcesPerRun, s.fetch.itemsPerSource)
@@ -161,6 +174,10 @@ export function resolveSettings(cfg = {}) {
     //check
     if (!isobj(cfg)) {
         cfg = {}
+    }
+    const oldDistill = ['fanout', 'pipeline'].filter((k) => isobj(cfg.ai?.distill) && cfg.ai.distill[k] !== undefined)
+    if (oldDistill.length) {
+        throw new Error(`settings.ai.distill.${oldDistill.join('／')} 已於 2.0 移除：提煉改為「提案 → 審查 → 程式套用」之單次呼叫，請改用 ai.distill = { propose, review, consolidate }（各為席位 { use, fallback, timeoutMs?, minAttemptMs? }；review 給 null 即不審查）`)
     }
 
     const s = {
@@ -216,6 +233,12 @@ export function resolveSettings(cfg = {}) {
     const notesIn = Math.round(s.knowledge.extractCapacity * yieldRate)
     if (notesIn > s.knowledge.relateCapacity) {
         warnings.push(`筆記進料上界約 ${notesIn} 篇（萃取容量 ${s.knowledge.extractCapacity}×產出率 ${yieldRate}）大於關聯容量 ${s.knowledge.relateCapacity}（organizeRounds×aiParallel×relateBatch）：新筆記串不進知識網而堆積；調高 organizeRounds 或降萃取容量`)
+    }
+    // 提煉關(2.0):已用過改為逐核心累積出處後,每篇筆記都待其主標籤之核心提煉——提煉成為真正的佇列,容量亦須 ≥ 進料上界
+    //(只計主標籤:每篇恰落一個概念之 pending;次標籤只補位)。1.x 之 2×8＝16 < 27 會使待提煉無界成長(2026-09-29 雙審實測)
+    s.knowledge.distillCapacity = s.knowledge.distillPerRun * s.knowledge.distillNotesPerConcept
+    if (notesIn > s.knowledge.distillCapacity) {
+        warnings.push(`筆記進料上界約 ${notesIn} 篇（萃取容量 ${s.knowledge.extractCapacity}×產出率 ${yieldRate}）大於提煉容量 ${s.knowledge.distillCapacity}（distillPerRun×distillNotesPerConcept）：待提煉之筆記會逐輪堆積；調高 distillPerRun 或 distillNotesPerConcept`)
     }
     s.warnings = warnings
     return s

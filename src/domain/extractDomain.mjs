@@ -73,7 +73,7 @@ export function createExtractDomain(opt = {}) {
      * 組單批萃取 prompt
      *
      * @param {Array} docs 輸入本批文件陣列，各項需含 title、sourceName、url、text
-     * @param {Array} [conceptVocab=[]] 輸入既有概念標籤陣列(含使用篇數，如 '概念(3)')，令模型沿用既有寫法
+     * @param {Array} [conceptVocab=[]] 輸入既有概念標籤陣列(名稱，依使用篇數降冪；conceptVocabulary 之預設產出)，令模型沿用既有寫法
      * @returns {String} 回傳 prompt 字串
      */
     function buildPrompt(docs, conceptVocab = []) {
@@ -97,10 +97,10 @@ export function createExtractDomain(opt = {}) {
    這類匯流貼文雖不成筆記，但它列出的題目很有價值，請務必在 explore 給出對應的關鍵字線索。
 2. relevant 為 true 時，須以繁體中文萃取下列欄位；原文為英文時翻譯成繁體中文，專有名詞保留英文於括號內。
 3. 只寫原文確實提到的內容，不可自行補充原文沒有的數字、參數或結論。原文沒提到的欄位請給空陣列。
-4. concepts 是用於跨篇關聯與提煉的概念標籤，2 到 6 個，**必須使用繁體字形（不可寫${quoted(g.simplifiedExamples)}這類簡體）**，${g.conceptExamples}。
+4. concepts 是用於跨篇關聯與提煉的概念標籤，2 到 6 個，依與本篇之核心程度排序、第一個為本篇主概念，**必須使用繁體字形（不可寫${quoted(g.simplifiedExamples)}這類簡體）**，${g.conceptExamples}。
    標籤要「可跨篇共用」：優先用該領域的通用概念名稱，不要用只有這一篇才成立的長描述或論文專屬模型名。${conceptVocab.length
         ? `
-   下列是知識庫既有的概念標籤（括號內為使用篇數）。若本篇的概念與其中某個語意相同，請「直接沿用既有寫法」，不要另創同義詞：
+   下列是知識庫既有的概念標籤（依使用篇數由多到少排列）。若本篇的概念與其中某個語意相同，請「直接沿用既有寫法」，不要另創同義詞：
    ${conceptVocab.join('、')}`
         : ''}
 5. explore 是你從本篇看出「值得日後再深入抓取」的線索：type 為 keyword（關鍵字）、topic（主題）或 site（具體網站首頁網址）。site 只能填原文中確實出現過的網址，不可自行想像；沒有就不要給 site。每篇最多 4 項，只給真正值得追的，不要為湊數而列泛泛題目。

@@ -52,7 +52,7 @@ import { createTriageDomain } from '../domain/triageDomain.mjs'
 import { createExtractDomain } from '../domain/extractDomain.mjs'
 import { createRelateDomain } from '../domain/relateDomain.mjs'
 import { createDistillDomain } from '../domain/distillDomain.mjs'
-import { resolveVocab, kbLabelOf } from '../domain/vocabDefault.mjs'
+import { resolveVocab, kbLabelOf, evidenceCapsWarning } from '../domain/vocabDefault.mjs'
 import { createAiAdapter } from '../ai/adapter.mjs'
 import { createLogger } from '../ops/logger.mjs'
 import { createPatrol } from '../ops/patrol.mjs'
@@ -72,24 +72,36 @@ const OBJECT_STAGES = {
 }
 
 /**
- * 由 settings.ai 列出全部席位(名稱 → {use,fallback}),供啟動期檢核
+ * 由 settings.ai 列出全部席位(名稱 → {use,fallback,…}),供啟動期檢核與主力供應商計算
  *
  * @param {Object} ai 輸入 settings.ai(resolveSettings 之產物,含 extract/triage/relate/distill 各名額)
- * @returns {Object} 回傳席位對照物件 { <席位路徑字串>: {use, fallback} }，如 'ai.extract.executor'／'ai.distill.pipeline[0](audit)'
+ * @returns {Object} 回傳席位對照物件 { <席位路徑字串>: {use, fallback} }，如 'ai.extract.executor'／'ai.distill.propose'
  */
 function listSeats(ai) {
     const seats = {}
     if (ai.extract?.executor) seats['ai.extract.executor'] = ai.extract.executor
     if (ai.triage?.executor) seats['ai.triage.executor'] = ai.triage.executor
-    if (ai.relate?.executor) seats['ai.relate.executor'] = ai.relate.executor;
-    (ai.distill?.fanout?.indeps || []).forEach((s, i) => {
-        seats[`ai.distill.fanout.indeps[${i}]`] = s
-    })
-    if (ai.distill?.fanout?.integrate) seats['ai.distill.fanout.integrate'] = ai.distill.fanout.integrate;
-    (ai.distill?.pipeline || []).forEach((s, i) => {
-        seats[`ai.distill.pipeline[${i}](${s?.stage || '?'})`] = s
-    })
+    if (ai.relate?.executor) seats['ai.relate.executor'] = ai.relate.executor
+    // 提煉三席(2.0);review 給 null 即不審查
+    for (const k of ['propose', 'review', 'consolidate']) {
+        if (ai.distill?.[k]) seats[`ai.distill.${k}`] = ai.distill[k]
+    }
     return seats
+}
+
+/**
+ * 已退役之 domain 成員(2.0):注入者仍帶這些成員＝照 1.x 契約寫的 domain,其函數永遠不會被呼叫——建構期拋錯,不靜默忽略
+ *
+ * @type {Object}
+ */
+const RETIRED_MEMBERS = {
+    distill: {
+        buildBasePrompt: '提案提示詞改由 buildProposePrompt(ctx) 產生(輸出差量操作)',
+        kinds: '審計／修訂／終審鏈已改為單一審查 buildReviewPrompt(ctx)(逐操作裁決)',
+        checkCore: '整份稿件之驗證已改為差量結構驗證(機制所有)與 checkDeltaExtra(選填加嚴)',
+        coreSchema: '整份稿件格式已退役(差量操作格式由提示詞之輸出段定義)',
+        renderCore: '版型改由 renderState(state, ctx) 自狀態渲染',
+    },
 }
 
 /**
@@ -136,6 +148,10 @@ function mergeDomains(builtin, injected) {
         if (!isobj(d)) {
             throw new Error(`cfg.domains.${k} 須為 domain 物件`)
         }
+        const retired = Object.keys(RETIRED_MEMBERS[k] || {}).filter((m) => d[m] !== undefined)
+        if (retired.length) {
+            throw new Error(`cfg.domains.${k} 含 2.0 已退役之成員「${retired.join('、')}」：${retired.map((m) => `${m}→${RETIRED_MEMBERS[k][m]}`).join('；')}（建議以 create${k[0].toUpperCase()}${k.slice(1)}Domain() 之產物展開後覆寫新成員）`)
+        }
         const missing = Object.keys(builtin[k]).filter((m) => (typeof builtin[k][m] === 'function' ? typeof d[m] !== 'function' : d[m] === undefined))
         if (missing.length) {
             throw new Error(`cfg.domains.${k} 缺成員「${missing.join('、')}」（須具備內建 domain 之全部成員；建議以 create${k[0].toUpperCase()}${k.slice(1)}Domain() 之產物展開後覆寫）`)
@@ -161,8 +177,9 @@ function mergeDomains(builtin, injected) {
  * @param {Object} [cfg.monitor] 輸入巡檢設定(逐鍵覆寫 createPatrol 之 cfg)，其中 pushTitle 未給則為「<知識庫稱呼>巡檢」；
  *   scheduleLimitMin 不在此覆寫(巡檢判界一律取執行期生效值，見 cfg.scheduleLimitMin)
  * @returns {Object} 回傳 { run:Function, openStores:Function, closeStores:Function, info:Function }
- * @throws {Error} cfg.workDir 非有效字串、cfg.data.vocab 之 kbLabel／guide 不合規格、cfg.domains 不合規格、
- *   settings.fetch.arxivCategories／gridArxivCategories 型別不符、cfg.lock／envFile／aiWorkspace 型別不符，或 AI 席位無法解析時拋出
+ * @throws {Error} cfg.workDir 非有效字串、cfg.data.vocab 之 kbLabel／guide／概念別名不合規格、cfg.domains 不合規格(含 2.0 退役成員)、
+ *   settings.fetch.arxivCategories／gridArxivCategories 型別不符、settings.ai.distill 含 1.x 之 fanout／pipeline、cfg.distillWorkflow 給了(2.0 已移除)、
+ *   cfg.lock／envFile／aiWorkspace 型別不符，或 AI 席位無法解析(含席位未知鍵)時拋出
  */
 export function createKnowledgeExtract(cfg = {}) {
 
@@ -172,6 +189,10 @@ export function createKnowledgeExtract(cfg = {}) {
     }
     if (!isestr(cfg.workDir)) {
         throw new Error('createKnowledgeExtract 需要 workDir(唯一必填:所有輸出的路徑錨點)')
+    }
+    // 1.x 之提煉工作流注入(整組置換 fanout／pipeline)已隨工作流退役:給了即拋錯,不讓安裝方之注入靜默失效
+    if (cfg.distillWorkflow !== undefined) {
+        throw new Error('cfg.distillWorkflow 已於 2.0 移除：提煉改走單次呼叫(提案 → 審查 → 程式套用)，席位由 settings.ai.distill = { propose, review, consolidate } 設定；整組置換 AI 調度請用 cfg.aiAdapter')
     }
 
     const workDir = normalizeWorkDir(cfg.workDir)
@@ -204,20 +225,25 @@ export function createKnowledgeExtract(cfg = {}) {
     }
     checkArxivCategories(settings.fetch)
 
-    // 知識庫稱呼(prompt 首句、索引標題、巡檢推送標題共用):詞彙表於此先解析一次,kbLabel／guide 設定錯誤在建構期即爆
-    const kbLabel = kbLabelOf(resolveVocab(data.vocab))
+    // 知識庫稱呼(prompt 首句、索引標題、巡檢推送標題共用):詞彙表於此先解析一次,kbLabel／guide／概念別名設定錯誤在建構期即爆
+    const vocabResolved = resolveVocab(data.vocab)
+    const kbLabel = kbLabelOf(vocabResolved)
     // 索引標題預設由稱呼推導(無 domain 且無 kbLabel 時仍為「知識庫索引」);cfg.indexTitle 明給者優先
     if (!isestr(cfg.indexTitle)) settings.indexTitle = `${kbLabel}索引`
 
-    // 繁簡折疊(分群鍵用):內建 opencc cn→tw;cfg.conceptFold=false 可停用,給函數即自訂,其餘值(含 true)一律用內建。
+    // 繁簡折疊(分群鍵用):內建 opencc tw→cn(2.0 起;1.x 為 cn→tw);cfg.conceptFold=false 可停用,給函數即自訂,其餘值(含 true)一律用內建。
     // why:模型偶爾無視「一律繁體」輸出簡體,NFKC 不做繁簡轉換,不折疊會讓同一概念
-    // 分裂兩群、產出重複核心檔(實例:同一概念繁體版 v47 ⇄ 簡體版 v1)
+    // 分裂兩群、產出重複核心檔(實例:同一概念繁體版 v47 ⇄ 簡體版 v1);cn→tw 收斂不了繁體字形變體(回歸／迴歸),
+    // 折向簡體才收斂(方向之取捨與別名見 util/text 檔頭)
+    // 【線索鍵凍結】待探索線索之去重鍵持久化,改向會使既有線索全部換鍵——線索折疊沿用 1.x 之內建(cn→tw)或安裝方自訂者
     // 【true 曾被當成停用】舊寫法 setConceptFold(cfg.conceptFold || 內建) 於 conceptFold:true 時把 true 傳入,
     //   setConceptFold 視非函數為清除——字面上「開啟」反而關閉折疊(2026-09-23 修)
     // 【false 須明確清除】折疊為模組級單例(同行程多個實例以最後建構者為準):false 若只是「不設定」,
     //   同行程先前實例注入之折疊會殘留,與「以最後建構者為準」不一致(2026-09-23 修)
-    if (cfg.conceptFold === false) setConceptFold(null)
-    else setConceptFold(typeof cfg.conceptFold === 'function' ? cfg.conceptFold : OpenCC.Converter({ from: 'cn', to: 'tw' }))
+    const foldOpt = { renames: vocabResolved.conceptRenames, aliases: vocabResolved.conceptAliases }
+    if (cfg.conceptFold === false) setConceptFold(null, { ...foldOpt, clueFold: null })
+    else if (typeof cfg.conceptFold === 'function') setConceptFold(cfg.conceptFold, { ...foldOpt, clueFold: cfg.conceptFold })
+    else setConceptFold(OpenCC.Converter({ from: 'tw', to: 'cn' }), { ...foldOpt, clueFold: OpenCC.Converter({ from: 'cn', to: 'tw' }) })
 
     // ── pipeline 形狀(先於 AI 組裝檢核:設定形狀錯誤的訊息不該被席位檢核搶先)──
     if (cfg.pipeline) {
@@ -258,7 +284,7 @@ export function createKnowledgeExtract(cfg = {}) {
         triage: createTriageDomain({ vocab: data.vocab, triageCharsPerDoc: settings.knowledge.triageCharsPerDoc }),
         extract: createExtractDomain({ vocab: data.vocab, extractCharsPerDoc: settings.knowledge.extractCharsPerDoc }),
         relate: createRelateDomain({ vocab: data.vocab }),
-        distill: createDistillDomain({ vocab: data.vocab, notesPerTarget: settings.knowledge.distillNotesPerConcept }),
+        distill: createDistillDomain({ vocab: data.vocab }),
     }, cfg.domains)
 
     // ── 執行期生效值(core/runtime:排程上限/時間預算/鎖/路徑之單一來源;管線、巡檢與 info() 同取此份)──
@@ -288,30 +314,9 @@ export function createKnowledgeExtract(cfg = {}) {
     }
     // 執行期生效值之警告(無效值、新舊名不一致、未給上限):每輪記入日誌,巡檢以 ⑰ 揭露
     for (const w of runtime.warnings) startupWarnings.push(w)
-
-    // 提煉工作流:惰性建構(名額 id 驗證與 wkf 建立延後到提煉真的要跑;
-    // 金鑰全缺的環境(測試/純抓取端)不因此在啟動期爆)
-    let distillWorkflowMemo = null
-    /**
-     * 惰性建構並快取提煉工作流(cfg.distillWorkflow 給了即整組置換;否則由 settings.ai.distill 組裝)
-     *
-     * @returns {Object} 回傳工作流物件 { wkf, fanout:{indeps, integrate}, pipeline }(indeps/integrate/pipeline 各項皆經 ai.withBudget 包裝)
-     */
-    const getDistillWorkflow = () => {
-        if (distillWorkflowMemo) return distillWorkflowMemo
-        if (cfg.distillWorkflow) {
-            distillWorkflowMemo = cfg.distillWorkflow; return distillWorkflowMemo
-        }
-        distillWorkflowMemo = {
-            wkf: ai.getWkf(),
-            fanout: {
-                indeps: settings.ai.distill.fanout.indeps.map(ai.withBudget),
-                integrate: ai.withBudget(settings.ai.distill.fanout.integrate),
-            },
-            pipeline: settings.ai.distill.pipeline.map(ai.withBudget),
-        }
-        return distillWorkflowMemo
-    }
+    // 證據封頂表因自訂 claimTypes 而全數對不上 → 主張證據等級退回「取出處最高」(r2 灌水之規則),須被看見
+    const capsWarn = evidenceCapsWarning(data.vocab)
+    if (capsWarn) startupWarnings.push(capsWarn)
 
     // ── pipeline(預設四物件＋插件;自組 pipeline 時插件拋錯——無從注入,不默默失效)──
     let pipeline
@@ -381,16 +386,13 @@ export function createKnowledgeExtract(cfg = {}) {
     /**
      * 每輪依賴(deps):套件子階段與執行端自寫單元同一條注入通道。
      *
-     * 【工作流以函數而非 getter 交付】w-data-pipeline 的 createContext 以 spread
-     *   複製 deps({...parentCtx.deps});Object.defineProperty 預設 enumerable:false,
-     *   getter 屬性在 spread 時直接消失 → 子階段拿到 undefined、每輪靜默失敗
-     *   (2026-08-20 實彈輪實測:提煉段每輪拋「需要 workflow.wkf」被隔離)。
-     *   改為普通函數屬性:可列舉故能跨脈絡傳遞,且仍保持惰性
-     *   (金鑰全缺的環境不因建 wkf 而在啟動期爆)。
+     * 【只放可列舉之普通屬性】w-data-pipeline 的 createContext 以 spread 複製 deps({...parentCtx.deps});
+     *   getter(Object.defineProperty 預設 enumerable:false)在 spread 時直接消失 → 子階段拿到 undefined、每輪靜默失敗
+     *   (2026-08-20 實彈輪實測:1.x 之提煉工作流 getter 即此)。
      *
      * @param {Object} stores 輸入 openStores 之產物
      * @param {Object} seen 輸入 W.createSeenStore 之產物(去重身分查詢)
-     * @returns {Object} 回傳依賴物件 { stores, seen, registry, clock, dirs, data, settings, ai, domains, getDistillWorkflow }
+     * @returns {Object} 回傳依賴物件 { stores, seen, registry, clock, dirs, data, settings, ai, domains }
      */
     const buildDeps = (stores, seen) => ({
         stores,
@@ -402,20 +404,13 @@ export function createKnowledgeExtract(cfg = {}) {
         settings,
         ai,
         domains,
-        getDistillWorkflow,
     })
 
     const mkLog = cfg.logFactory || (() => createLogger('run', { dir: dirs.log, clock }))
 
-    // 巡檢之「主力供應商」＝各名額(extract/relate/distill 各席)之 use;用量占比判定據此計算。
-    // 曾以 providerPick[0] 當主力:主力換家後每小時誤報一次(2026-08-13 起累計 257 筆)
-    /** 取席位規格之 use(供應商 id);席位不存在時回 undefined */
-    const seatUse = (s) => s?.use
-    const primaryProviderIds = [...new Set([
-        seatUse(settings.ai.extract?.executor), seatUse(settings.ai.relate?.executor),
-        ...(settings.ai.distill?.fanout?.indeps || []).map(seatUse), seatUse(settings.ai.distill?.fanout?.integrate),
-        ...(settings.ai.distill?.pipeline || []).map(seatUse),
-    ].filter(Boolean))]
+    // 巡檢之「主力供應商」＝各名額(extract/triage/relate/distill 各席)之 use;用量占比判定據此計算——與啟動期檢核同一份席位清單,
+    // 新增席位不必兩處同步。曾以 providerPick[0] 當主力:主力換家後每小時誤報一次(2026-08-13 起累計 257 筆)
+    const primaryProviderIds = [...new Set(Object.values(listSeats(settings.ai)).map((s) => s?.use).filter(Boolean))]
 
     // 收尾鉤子:預設=內建巡檢(每輪寫監控紀錄 md);cfg.afterRun=false 停用,函數則自訂
     let patrolMemo = null
@@ -437,15 +432,23 @@ export function createKnowledgeExtract(cfg = {}) {
                 primaryProviderIds,
                 // 狀態機全集(pending 兩態＋終態):多出來的狀態即「未判定即丟棄」類機制被重新引入之訊號
                 knownStatuses: ['new', 'raw', ...settings.fetch.terminalStatuses],
-                // 待辦表用:四關卡之每輪容量(由設定推導,與各階段實際取量同源)與提煉選題門檻
+                // 待辦表用:四關卡之每輪容量(由設定推導,與各階段實際取量同源)與提煉選題設定(與提煉段同一組參數)
                 maxFetchTries: settings.fetch.maxFetchTries,
                 distillMinNotes: settings.knowledge.distillMinNotes,
+                distillPick: {
+                    minNotes: settings.knowledge.distillMinNotes,
+                    minPending: settings.knowledge.distillMinPending,
+                    maxWaitDays: settings.knowledge.distillMaxWaitDays,
+                    notesPerTarget: settings.knowledge.distillNotesPerConcept,
+                    graceDays: settings.knowledge.distillRelateGraceDays,
+                },
+                categoryFallbackEnabled: isobj(settings.knowledge.categoryFallback),
                 capacity: {
                     fetch: settings.fetch.articlesPerRun,
                     triage: settings.knowledge.triageCapacity,
                     extract: settings.knowledge.extractCapacity,
                     relate: settings.knowledge.relateCapacity,
-                    distill: settings.knowledge.distillPerRun,
+                    distill: settings.knowledge.distillCapacity, // 2.0 起以篇計(1.x 為概念數)
                 },
                 // 設定自洽與啟動期檢核之警告:巡檢以獨立判準(⑰)揭露,不靠日誌 WARN 掃描
                 settingsWarnings: [...(settings.warnings || []), ...startupWarnings],

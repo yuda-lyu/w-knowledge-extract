@@ -35,7 +35,7 @@ import isestr from 'wsemi/src/isestr.mjs'
 import fsCreateFolder from 'wsemi/src/fsCreateFolder.mjs'
 import { acquireLock } from '../core/lock.mjs'
 import { positiveNumber, limitMinOfDeadline } from '../core/runtime.mjs'
-import { readJson, writeJson, queueAge, oneline } from '../util/misc.mjs'
+import { readJson, writeJson, writeFileAtomic, queueAge, oneline } from '../util/misc.mjs'
 import { pickConcepts } from '../stores/conceptGroups.mjs'
 import { sha1 } from '../util/text.mjs'
 import { readRunSummary, readRunStart, subReportOf } from './runSummary.mjs'
@@ -108,6 +108,8 @@ const fin = (v) => (Number.isFinite(v) ? v : null)
  * @param {Array} [cfg.knownStatuses] 輸入文件狀態機全集字串陣列，預設 ['new','raw','noted','skip','dead','aggregated','extract-failed']，多出來的狀態即告警
  * @param {Object} [cfg.capacity={}] 輸入四階段每輪容量物件 { fetch, extract, relate, distill }(待辦表之「每輪容量」欄與門檻推導)
  * @param {Number} [cfg.distillMinNotes] 輸入提煉選題門檻(算「可提煉概念數」用)，未給則不顯示該欄
+ * @param {Object} [cfg.distillPick] 輸入提煉選題參數(與提煉段同一組:minNotes、minPending、maxWaitDays、notesPerTarget、graceDays)，給了即優先於 distillMinNotes
+ * @param {Boolean} [cfg.categoryFallbackEnabled=false] 輸入類別後備是否開啟(停用時類別核心列為「不再更新」而非「未遷移」)
  * @param {Array} [cfg.settingsWarnings] 輸入設定自洽警告字串陣列(resolveSettings.warnings)，以獨立判準(⑰)揭露
  * @param {String} [cfg.envFile] 輸入 Telegram 推送金鑰來源之 .env 檔路徑(含 TELEGRAM_BOT_TOKEN／TELEGRAM_CHAT_ID)，無則靜默略過推送
  * @param {Function} [cfg.notify] 輸入自訂推送函數 (text) => any，給了就不走內建 Telegram；回傳 false 視為未送出，拋錯記入 result.pushError(不影響巡檢成敗)
@@ -241,6 +243,8 @@ export function createPatrol(cfg) {
         }
         if (ds) {
             r.cores = fin(ds.detail?.updated); r.distillFail = fin(ds.stats?.fail)
+            // 2.0:提煉積壓(主標籤待提煉篇數)與本輪實際消化——「進料 vs 實際消化」之視窗比(靜態容量檢核只是必要條件)
+            r.distillBacklog = fin(ds.detail?.backlog); r.distillUsed = fin(ds.detail?.notesUsed)
         }
         if (idx?.sub) r.totalNotes = fin(idx.sub.notes)
         // AI 欄:三段合計(此前只取彙整段,整日顯示 18 而實際 40,複審 A10)
@@ -340,9 +344,12 @@ export function createPatrol(cfg) {
             // 隊頭防阻塞機制在運作(不出隊會讓同一篇永遠擋住整條萃取線)。單筆屬正常;
             // 若真的大量發生,會由「知識產出停滯」與「待關聯積壓」等判定反映,不需在此重複告警。
             '未被模型完整涵蓋', '萃取批次失敗', '標為 extract-failed', '逐項鏈異常', '批次 AI 失敗', '批次異常',
-            // 提煉工作流之逐次事件(遞補/中止/冷卻)自 2026-09-06 起寫入日誌,失敗類為遞補機制之常態;
-            // 審計鏈失敗→降級採 A 稿是設計機制(見 stages/distillStage 之 adoptResult),曾漏列而連續誤報(2026-09-12 複審 A6)
+            // 提煉之逐次事件(遞補/中止/冷卻)自 2026-09-06 起寫入日誌,失敗類為遞補機制之常態;
+            // 審計鏈失敗→降級採 A 稿是設計機制(1.x),曾漏列而連續誤報(2026-09-12 複審 A6)——1.x 字樣保留供舊日誌
             '提煉事件', '不合契約', '審計鏈失敗', '降級採用 A 整合稿',
+            // 2.0:審查失敗之降級(終態操作存待審)、中斷後之投影補正、提案／整併全鏈失敗(已記失敗帳、回隊尾)、整併與待審之審查失敗(不套用)
+            // 皆為設計機制;分身合併、手改另存、狀態還原、不變式違反不在此列——須被看見
+            '提煉降級', '提煉投影補正', '提案失敗', '整併失敗', '之審查失敗',
             // 來源自動停用之兩種變體須成套列全:sourcePolicy 有「已判定 N 篇、產出 0，自動停用」
             // 與「連續失敗 N 次，停用」兩條路徑(後者見 sourcePolicy.mjs:89),原本只列了前者,
             // 導致同一則停用訊息連續 8 個時段被判為「未列入已知常態」而洗版(2026-08-25 修)。
@@ -481,6 +488,17 @@ export function createPatrol(cfg) {
         if (snap.pending > BACKLOG_WARN && pendingNotDraining) {
             issues.push(`待關聯筆記積壓 ${snap.pending} 篇（>${BACKLOG_WARN}＝六輪容量）${pendingRuns.length >= 3 ? `且近 ${pendingRuns.length} 輪無淨消化（${pendingRuns.map((r) => r.relatePending).join('→')}）` : ''}——關聯容量追不上筆記產出或關聯段持續失敗`)
         }
+
+        // ⑤b 提煉積壓(2.0,以篇計):超過六輪容量且視窗內無淨消化才報——靜態容量檢核會給出錯誤保證
+        //   (第二輪判識 B 模擬:部分批與輪流使實際消化只有名目 1/3),故量「實際消化／積壓走勢」
+        const distillRuns = todayRows.filter((r) => r.kind === 'run' && r.distillBacklog != null).slice(-QUEUE_WINDOW)
+        if (CAP.distill > 0 && snap.distillBacklog > CAP.distill * 6 && distillRuns.length >= 3 && distillRuns.at(-1).distillBacklog >= distillRuns[0].distillBacklog) {
+            const used = distillRuns.map((r) => r.distillUsed || 0)
+            issues.push(`提煉積壓 ${snap.distillBacklog} 篇（>${CAP.distill * 6}＝六輪名目容量）且近 ${distillRuns.length} 輪無淨消化（${distillRuns.map((r) => r.distillBacklog).join('→')}）；實際消化平均 ${(used.reduce((a, b) => a + b, 0) / used.length).toFixed(1)} 篇／輪——調高 distillPerRun 或 distillCatchupBatches，或查提煉失敗與審查降級`)
+        }
+        if (snap.distillStuck > 0) info.push(`提煉連續失敗 ≥3 次之核心 ${snap.distillStuck} 個（已回隊尾；見 dirs.state/distill-attempts.json 之 lastError）`)
+        if (snap.coresUnmigrated > 0) info.push(`尚未遷移（仍為 1.x 散文、無狀態檔）之核心 ${snap.coresUnmigrated} 個：首次被選中時自動封存匯入`)
+        if (snap.coresCategoryFrozen > 0) info.push(`類別核心 ${snap.coresCategoryFrozen} 個不再更新（類別後備預設停用）：要續用請給 knowledge.categoryFallback，否則可以 regenCore 移除`)
 
         // ⑥用量分布異常:主力供應商幾乎沒用量,流量都落到遞補鏈後段(主力可能持續失敗而一直在遞補)。
         //   主力＝各名額之 use 集合(cfg.primaryProviderIds);曾以 providerPick[0] 當主力,
@@ -654,9 +672,10 @@ export function createPatrol(cfg) {
             [`${cap.triage > 0 ? '④' : '③'} \`relate\` 關聯`, `**${snap.pending ?? '-'}** 篇`,
                 `全庫筆記 ${snap.notes ?? '-'}`,
                 cap.relate ?? '-', '`ai.relate`', est(snap.pending, cap.relate)],
-            [`${cap.triage > 0 ? '⑤' : '④'} \`distill\` 提煉`, `**${snap.conceptsPending ?? '-'}** 概念`,
-                `未提煉筆記 ${snap.undistilled ?? '-'}｜新建 ${snap.conceptsNew ?? '-'}、更新 ${snap.conceptsPending != null ? snap.conceptsPending - snap.conceptsNew : '-'}｜既有核心 ${snap.cores ?? '-'}`,
-                cap.distill ?? '-', '`ai.distill`', est(snap.conceptsPending, cap.distill)],
+            // 2.0 起以篇計(主標籤、該核心未用過者):已用過改為逐核心累積出處後,提煉是真正的佇列
+            [`${cap.triage > 0 ? '⑤' : '④'} \`distill\` 提煉`, `**${snap.distillBacklog ?? '-'}** 篇`,
+                `可提煉 ${snap.distillReady ?? '-'} 篇（${snap.conceptsPending ?? '-'} 核心：新建 ${snap.conceptsNew ?? '-'}）｜既有核心 ${snap.cores ?? '-'}${snap.coresUnmigrated ? `（未遷移 ${snap.coresUnmigrated}）` : ''}`,
+                cap.distill ?? '-', '`ai.distill`', est(snap.distillBacklog, cap.distill)],
         ]
         return [
             `## 尚未處理的任務（${rows.length} 類，單位不同不可相加）`,
@@ -810,26 +829,13 @@ export function createPatrol(cfg) {
     }
 
     /**
-     * 原子寫檔:先寫同目錄暫存檔再 rename(寫到一半中止不會留下半份檔案);rename 被拒(Windows 目標被他程式占用)時退回直接覆寫
+     * 原子寫檔(util/misc 之 writeFileAtomic):紀錄 md 為事件庫之投影(可重建),rename 被占用重試仍失敗時允許退回直接覆寫
      *
      * @param {String} file 輸入目標檔案路徑字串
      * @param {String} text 輸入檔案內容
      */
     function writeAtomic(file, text) {
-        fsCreateFolder(path.dirname(file))
-        const tmp = `${file}.${process.pid}-${Date.now().toString(36)}.tmp`
-        try {
-            fs.writeFileSync(tmp, text, 'utf8')
-            fs.renameSync(tmp, file)
-        }
-        catch (e) {
-            try {
-                fs.rmSync(tmp, { force: true })
-            }
-            catch { /* 暫存檔清不掉不影響本次結果 */ }
-            if (!['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) throw e
-            fs.writeFileSync(file, text, 'utf8')
-        }
+        writeFileAtomic(file, text, { fallbackOverwrite: true })
     }
 
     /**
@@ -952,16 +958,22 @@ export function createPatrol(cfg) {
             // 預篩接縫:raw 分「待預篩(無 triage 欄)」與「已放行待萃取(triage==='relevant')」——兩關容量不同,合計會誤判
             const rawReady = rawDocs.reduce((n, d) => n + (d.triage === 'relevant' ? 1 : 0), 0)
             const rawUntriaged = rawDocs.reduce((n, d) => n + (d.triage ? 0 : 1), 0)
-            // 提煉待辦有兩種粒度:未提煉筆記(素材面)與可提煉概念(工作面,每輪取 distillPerRun 個)
+            // 提煉待辦(2.0,以篇計):與提煉段同一組選題參數(cfg.distillPick)與失敗帳——同一規則不手寫兩份,
+            //   否則「可提煉」與實際選題不一致(第二輪判識 A §2-8、B §4-4)。積壓＝主標籤、該核心未用過之篇數(含未達入選下限者)
             let concepts = null
-            if (Number.isFinite(cfg.distillMinNotes)) {
+            let backlogSets = null
+            const pick = isobj(cfg.distillPick) ? cfg.distillPick : (Number.isFinite(cfg.distillMinNotes) ? { minNotes: cfg.distillMinNotes } : null)
+            const ledger = readJson(path.join(dirs.state, 'distill-attempts.json'), {}) || {}
+            if (pick) {
                 try {
-                    concepts = pickConcepts(notes, cores, { minNotes: cfg.distillMinNotes })
+                    concepts = pickConcepts(notes, cores, { ...pick, attempts: ledger })
+                    backlogSets = pickConcepts(notes, cores, { ...pick, minPending: 0, maxWaitDays: 0, attempts: {} })
                 }
                 catch {
                     concepts = null
                 }
             }
+            const live = cores.filter((c) => c.status !== 'merged')
             snap = {
                 docs: docs.length,
                 raw: rawAge.count,
@@ -971,16 +983,21 @@ export function createPatrol(cfg) {
                 newCount: newAge.count,
                 newOldestDays: newAge.oldestDays,
                 newUntried: newDocs.reduce((n, d) => n + ((d.fetchTries || 0) === 0 ? 1 : 0), 0),
-                undistilled: notes.reduce((n, x) => n + (x.distilledAt ? 0 : 1), 0),
+                distillBacklog: backlogSets ? backlogSets.reduce((n, t) => n + t.pending.length, 0) : null,
+                distillReady: concepts ? concepts.reduce((n, t) => n + t.pending.length, 0) : null,
                 conceptsPending: concepts ? concepts.length : null,
                 conceptsNew: concepts ? concepts.filter((c) => !c.core).length : null,
+                // 未遷移只計概念層(類別核心僅在類別後備開啟時才會再被選中);類別後備停用時,類別核心另列「不再更新」
+                coresUnmigrated: live.filter((c) => (c.scope || 'concept') === 'concept' && !(Number(c.stateFormat) >= 2)).length,
+                coresCategoryFrozen: cfg.categoryFallbackEnabled === true ? 0 : live.filter((c) => c.scope === 'category').length,
+                distillStuck: Object.values(ledger).filter((v) => (v?.tries || 0) >= 3).length,
                 unknownStatuses: docs.reduce((a, d) => {
                     if (!KNOWN_STATUSES.has(d.status)) a[d.status] = (a[d.status] || 0) + 1; return a
                 }, {}),
                 notes: notes.length,
                 pending: notes.filter((n) => !n.relatedAt).length,
                 edges: edges.length,
-                cores: cores.length,
+                cores: live.length,
                 sources: sources.filter((x) => x.enabled !== false).length,
                 frontier: frontier.filter((x) => x.status === 'pending').length,
             }

@@ -144,8 +144,24 @@ export function writeMd(file, front, body) {
     }
 
     fsCreateFolder(path.dirname(file))
-    fs.writeFileSync(file, `${renderFrontmatter(front)}\n\n${body.trim()}\n`, 'utf8')
+    fs.writeFileSync(file, mdText(front, body), 'utf8')
     return file
+}
+
+/**
+ * 組 md 全文(frontmatter＋本文),與 writeMd 寫出者逐字相同(供寫前計算雜湊,如核心 md 之手改偵測)
+ *
+ * @param {Object} front 輸入 frontmatter 物件，非物件視為{}
+ * @param {*} body 輸入本文，非字串視為''
+ * @returns {String} 回傳 md 全文字串
+ * @example
+ * console.log(JSON.stringify(mdText({ title: 'T' }, '# 內容')))
+ * // => "---\ntitle: \"T\"\n---\n\n# 內容\n"
+ */
+export function mdText(front, body) {
+    if (!isobj(front)) front = {}
+    if (!isstr(body)) body = ''
+    return `${renderFrontmatter(front)}\n\n${body.trim()}\n`
 }
 
 /**
@@ -253,4 +269,4 @@ export function dropSection(body, title) {
     return [head, tail].filter(Boolean).join('\n\n')
 }
 
-export default { renderFrontmatter, parseFrontmatter, writeMd, readMd, section, sectionOf, dropSection }
+export default { renderFrontmatter, parseFrontmatter, writeMd, mdText, readMd, section, sectionOf, dropSection }

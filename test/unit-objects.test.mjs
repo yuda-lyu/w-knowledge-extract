@@ -10,6 +10,7 @@ import { resolvePlugins, mergeTaps } from '../src/core/plugins.mjs'
 import { defineMw, MwContractError } from '../src/core/kernel.mjs'
 import { resolveSettings } from '../src/core/settingsDefault.mjs'
 import { stageDetailFetch } from '../src/stages/detailFetchStage.mjs'
+import { stageDistill, distillTarget } from '../src/stages/distillStage.mjs'
 import { createExtractDomain } from '../src/domain/extractDomain.mjs'
 import { createClock } from '../src/util/clock.mjs'
 import { setConceptFold, normalizeConcept } from '../src/util/text.mjs'
@@ -84,6 +85,17 @@ describe('unit-objects', function() {
         assert.match(r.summary, /2\/3 段完成/)
         assert.equal(r.stats.in, 3)
         assert.equal(r.stats.fail, 1)
+    })
+
+    it('提煉物件摘要:「更新 N 則核心」(巡檢契約)＋消化篇數;審查降級、超長欄數／受檢欄數、絕對語氣條數 > 0 時才附', async () => {
+        const run = async (detail) => {
+            const obj = createDistillObject({ stages: [{ name: 'distill', run: async () => ({ ok: true, stats: { aiCalls: 4 }, detail }) }] })
+            return (await obj.run({ deps: {}, log: nullLogger() })).summary
+        }
+        const base = { concepts: 2, updated: 1, notesUsed: 5, notesSkipped: 1, degraded: 0, overLimit: 0, lengthChecked: 40, absoluteTone: 0 }
+        assert.equal(await run(base), '概念 2、更新 1 則核心、消化 6 篇（AI 4 次）')
+        assert.equal(await run({ ...base, degraded: 1, overLimit: 3, absoluteTone: 2 }), '概念 2、更新 1 則核心、消化 6 篇、審查降級 1、超長 3／40 欄、絕對語氣 2 條（AI 4 次）')
+        assert.match(await run({ ...base, overLimit: 2 }), /更新 (\d+) 則核心/, '巡檢正則仍取得到')
     })
 
     it('自寫子階段宣告 onError:abort → 物件外拋(可被 pipeline 隔離)', async () => {
@@ -224,6 +236,36 @@ describe('unit-objects', function() {
         // 錨點不存在於預篩鏈 → 由預篩子階段之 applyTaps 拋錯:證明 organize.triage 之掛載確實送達預篩子階段
         assert.throws(() => createKnowledgeExtract({ ...base, plugins: [{ 'name': 'p', 'organize.triage.nope': { after: [a] } }] }), /organize\.triage.*無錨點「nope」/)
         assert.throws(() => createKnowledgeExtract({ ...base, plugins: [{ 'name': 'p', 'organize.extrct.persistNote': { after: [a] } }] }), /插件 hook 前綴不存在：organize\.extrct/)
+    })
+
+    it('提煉 1.x 之退役錨點:tap／插件掛上時組裝期拋錯並附對照(改掛何處),不只「無錨點」;distillTarget 另指出其鏈不含 loadState／persistState', async () => {
+        const a = defineMw({ name: 'a', handle: (m, c, n) => n(m) })
+        const map = {
+            buildBase: /無錨點「buildBase」\(1\.x 錨點已退役：選材與組稿拆為 loadState.*selectNotes.*；可用:loadState\/selectNotes\/propose\/review\/applyDelta\/renderState\/persistState\)/,
+            runWorkflow: /無錨點「runWorkflow」\(1\.x 錨點已退役：工作流改為單次呼叫之 propose.*review/,
+            adoptResult: /無錨點「adoptResult」\(1\.x 錨點已退役且無對應：.*applyDelta/,
+            renderCore: /無錨點「renderCore」\(1\.x 錨點已退役：改名 renderState/,
+            persistCore: /無錨點「persistCore」\(1\.x 錨點已退役：改名 persistState/,
+        }
+        for (const [anchor, re] of Object.entries(map)) {
+            // 入口一:子階段之 opt.tap(執行端直接給)
+            assert.throws(() => stageDistill({ tap: { [anchor]: { after: [a] } } }), (e) => e instanceof MwContractError && re.test(e.message), `tap ${anchor}`)
+            // 入口二:插件(經 resolvePlugins → mergeTaps 送達同一 applyTaps)
+            const base = { workDir: TMP_O, afterRun: false, aiAdapter: stubAi }
+            assert.throws(() => createKnowledgeExtract({ ...base, plugins: [{ 'name': 'p', [`distill.distill.${anchor}`]: { before: [a] } }] }), (e) => /distill\.distill/.test(e.message) && re.test(e.message), `插件 ${anchor}`)
+        }
+        // 未退役之錯名維持原訊息(不附對照)
+        assert.throws(() => stageDistill({ tap: { nope: { after: [a] } } }), (e) => /無錨點「nope」\(可用:/.test(e.message))
+        // 現行錨點照常可掛
+        const b = defineMw({ name: 'b', handle: (m, c, n) => n(m) })
+        assert.doesNotThrow(() => stageDistill({ tap: { propose: { before: [a] }, persistState: { after: [b] } } }))
+        // 入口三:distillTarget(單一目標、不讀寫磁碟)——退役錨點同樣附對照;loadState／persistState 指出本入口之替代
+        const settings = resolveSettings({})
+        const ai = { callJson: async () => ({ ok: false, error: 'stub' }) }
+        const run = (tap) => distillTarget({ concept: '概念', notes: [], settings, ai, tap })
+        await assert.rejects(run({ runWorkflow: { after: [a] } }), /無錨點「runWorkflow」\(1\.x 錨點已退役/)
+        await assert.rejects(run({ loadState: { after: [a] } }), /無錨點「loadState」\(distillTarget 不讀磁碟：既有狀態由 opt\.state 給；可用:selectNotes\//)
+        await assert.rejects(run({ persistState: { after: [a] } }), /無錨點「persistState」\(distillTarget 不落盤：結果見回傳之 state 與 render；/)
     })
 
     it('彙整物件:平鋪之萃取專屬 opts(tap/domain/docsPerBatch)不灌進預篩;預篩只吃 opt.triage＋通用鍵(callAI/parallel/statuses)', async () => {

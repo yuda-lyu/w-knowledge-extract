@@ -24,6 +24,7 @@ describe('unit-check-util', function() {
     before(function() {
         fs.rmSync(TMP, { recursive: true, force: true })
         fs.mkdirSync(TMP, { recursive: true })
+        setConceptFold(null) // 折疊為模組級單例:本檔之「未注入折疊」案例不依賴他檔是否清乾淨
     })
 
     after(function() {

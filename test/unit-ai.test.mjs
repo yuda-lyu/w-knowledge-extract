@@ -7,6 +7,7 @@ import path from 'node:path'
 import { createProviderHealth } from '../src/ai/providerHealth.mjs'
 import { createAiAdapter } from '../src/ai/adapter.mjs'
 import { createClock } from '../src/util/clock.mjs'
+import budgetFor from 'w-dispatch-ai/src/budgetFor.mjs'
 
 const TMP = path.resolve(`test/_tmp/ai-${process.pid}`).replace(/\\/g, '/') // cwd 相對(自套件根執行);帶 pid 後綴使並行之多個 mocha 行程互不干擾;after 清除
 
@@ -359,11 +360,11 @@ describe('unit-ai', function() {
         )
     })
 
-    it('adapter：withBudget 由鏈 timeout 總和補預算;chainFor 引用不存在條目拋錯', () => {
+    it('adapter：鏈預算＝chainFor 各條目 timeout 總和(budgetFor);chainFor 引用不存在條目拋錯;1.x 工作流入口 getWkf／withBudget 已移除', () => {
         const ai = mkAdapter()
-        const seat = ai.withBudget({ use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet'] })
-        assert.equal(seat.budgetMs, 3000, '1000＋2000')
+        assert.equal(budgetFor(ai.chainFor({ use: 'agy:gemini-3.8-flash-high', fallback: ['claude:sonnet'] })), 3000, '1000＋2000')
         assert.throws(() => ai.chainFor({ use: 'nope' }), /不可用的條目:nope/)
+        assert.deepEqual([ai.getWkf, ai.withBudget], [undefined, undefined])
     })
 
 })

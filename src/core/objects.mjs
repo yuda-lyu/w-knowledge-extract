@@ -300,7 +300,13 @@ export function createDistillObject(opt = {}) {
             const reports = await runSubStages(stages, ctx)
             const summary = summaryOf(reports, () => {
                 const d = reports.distill?.detail
-                return d ? `概念 ${d.concepts}、更新 ${d.updated} 則核心（AI ${reports.distill.stats.aiCalls} 次）` : ''
+                // 「更新 N 則核心」為巡檢日誌正則之契約(ops/patrol);其後附本輪消化篇數(引用＋略過)、審查降級數、
+                //   超長欄數／受檢欄數(超過篇幅上限而未達兩倍、仍收者;安裝方驗收 §3 #5「超長 ≤10%」之比率——2026-09-29 待決事項 D3e)、
+                //   絕對語氣條數(新寫主張;§3 #4 以指標呈現)。皆 > 0 才附
+                const digested = (d?.notesUsed || 0) + (d?.notesSkipped || 0)
+                const over = d?.overLimit ? `、超長 ${d.overLimit}／${d.lengthChecked || d.overLimit} 欄` : ''
+                const tone = d?.absoluteTone ? `、絕對語氣 ${d.absoluteTone} 條` : ''
+                return d ? `概念 ${d.concepts}、更新 ${d.updated} 則核心、消化 ${digested} 篇${d.degraded ? `、審查降級 ${d.degraded}` : ''}${over}${tone}（AI ${reports.distill.stats?.aiCalls ?? 0} 次）` : ''
             })
             return objectReport(reports, summary)
         },
