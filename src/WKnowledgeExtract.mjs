@@ -29,11 +29,11 @@ import { ensureSeedSources, isLowYield, pickDueSources, recordSourceOutcome, cul
 import { slimTerminalDocs, byRetryTierFifo } from './stores/docPolicy.mjs'
 import { clueKey, legacyClueKey, cluePriority, saveClues, pickClues, enforceFrontierCap, settleClue } from './stores/frontierPolicy.mjs'
 import { normalizeFeedItems, filterFeedItems, admitFeedItems, ingestFeedItems } from './stores/ingestGate.mjs'
-import { conceptVocabulary, pickConcepts, pickCategories, orphanNotes, coreForKey, twinsOf, isReady, groupByConcept, suggestConceptRenames } from './stores/conceptGroups.mjs'
+import { conceptVocabulary, pickConcepts, pickCategories, orphanNotes, coreForKey, twinsOf, isReady, groupByConcept, suggestConceptRenames, tagSuspects } from './stores/conceptGroups.mjs'
 import {
     emptyState, upgradeState, findItem, deriveStatus, applyDelta, applyVerdicts, coverageOf, commitBatch, checkInvariants, stateDigest, renderRules,
     queuePendingReview, pendingReviewOps, STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, TERMINAL_OPS, RETRACT_REASONS, DROP_REASONS,
-    DISPUTE_DROP_REASONS, DISSOLVE_DROP_REASONS, SKIP_REASONS, PENDING_REVIEW_CAP, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS
+    DISPUTE_DROP_REASONS, DOUBT_REASONS, DISSOLVE_DROP_REASONS, SKIP_REASONS, PENDING_REVIEW_CAP, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS
 } from './stores/coreState.mjs'
 import { makeEvidence, UNASSESSED } from './stores/evidence.mjs'
 import { createCoreStore, mdHashOf } from './stores/coreStore.mjs'
@@ -268,6 +268,7 @@ let WKnowledgeExtract = {
     isReady,
     groupByConcept,
     suggestConceptRenames,
+    tagSuspects,
     //提煉之主張庫(2.0:狀態＋差量＋程式套用;純函數)與其 IO
     emptyState,
     upgradeState,
@@ -289,6 +290,7 @@ let WKnowledgeExtract = {
     RETRACT_REASONS,
     DROP_REASONS,
     DISPUTE_DROP_REASONS,
+    DOUBT_REASONS,
     DISSOLVE_DROP_REASONS,
     SKIP_REASONS,
     PENDING_REVIEW_CAP,

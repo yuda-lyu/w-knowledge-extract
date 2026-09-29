@@ -189,6 +189,15 @@ describe('unit-selection', function() {
             assert.equal(selectNotes(cs, { limit: 3, sourceOf: () => 'same' }).length, 3)
         })
 
+        it('主標籤集中於同一來源:先放寬主標籤之來源上限,仍不足一批才輪到次標籤(1.0.5 三獨立審定案 P1;1.0.4 次標籤先於放寬之主標籤)', () => {
+            const prim = ['a', 'b', 'c', 'd'].map((id) => cand(id, { sourceName: 'X' }))
+            const sec = ['s1', 's2'].map((id) => cand(id, {}, false))
+            assert.deepEqual(selectNotes([...sec, ...prim], { limit: 4, newestShare: 0 }).map((x) => x.id), ['a', 'b', 'c', 'd'], '主標籤足量 → 全為主標籤(次標籤不擠掉同源之主標籤)')
+            assert.deepEqual(selectNotes([...sec, ...prim.slice(0, 3)], { limit: 5, newestShare: 0 }).map((x) => `${x.id}:${x.primary}`), ['a:true', 'b:true', 'c:true', 's1:false', 's2:false'], '主標籤不足一批 → 次標籤補位')
+            const secX = ['t1', 't2', 't3'].map((id) => cand(id, { sourceName: 'Z' }, false)).concat([cand('u1', { sourceName: 'W' }, false)])
+            assert.deepEqual(selectNotes([...secX, cand('a', { sourceName: 'X' })], { limit: 4, newestShare: 0 }).map((x) => x.id), ['a', 't1', 't2', 'u1'], '次標籤層內仍先求來源多樣')
+        })
+
         it('衝突另一端成對入批;同層內有衝突邊與證據高者優先', () => {
             const cs = [cand('a', { evidenceLevel: '低' }), cand('b', { evidenceLevel: '高' }), cand('c', {}), cand('z', {}, false)]
             const conflicts = new Map([['c', ['z']], ['z', ['c']]])

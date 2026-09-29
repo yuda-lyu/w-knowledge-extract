@@ -10,6 +10,7 @@ import path from 'node:path'
 import * as OpenCC from 'opencc-js'
 import { normalizeConcept, normalizeClue, setConceptFold, checkNameMap, sha1 } from '../src/util/text.mjs'
 import { clueKey } from '../src/stores/frontierPolicy.mjs'
+import { suggestConceptRenames, tagSuspects } from '../src/stores/conceptGroups.mjs'
 import { resolveVocab } from '../src/domain/vocabDefault.mjs'
 import { createKnowledgeExtract } from '../src/core/createKnowledgeExtract.mjs'
 import { stubAi } from './tools/stubAi.mjs'
@@ -67,6 +68,36 @@ describe('unit-concept-key', function() {
         createKnowledgeExtract({ workDir: `${TMP}/w7`, afterRun: false, aiAdapter: stubAi, data: { vocab: { conceptRenames: { '市場微結構(743)': '市場微結構' } } } })
         assert.ok(same('市場微結構(743)', '市場微結構', '市場微結構（743）', '市场微结构'))
         assert.ok(!same('AR(1)', 'AR(2)'), '改名只作用於列出之寫法')
+    })
+
+    it('suggestConceptRenames(只建議不改資料):「名稱(N)」分身 → renames(yearLike 標示看似年份者);括號說明／英文對照 → annotated(不入 renames);一個標籤擠多個概念 → multi(括號與引號內不切)', () => {
+        createKnowledgeExtract({ workDir: `${TMP}/w8`, afterRun: false, aiAdapter: stubAi })
+        const r = suggestConceptRenames([
+            { concepts: ['市場微結構', '價格發現'] },
+            { concepts: ['市場微結構(743)'] },
+            { concepts: ['金融危機', '金融危機(2008)'] },
+            { concepts: ['AR(1)', 'GARCH(1,1)'] },
+            { concepts: ['價格發現(未在清單中)', '動量(time-series momentum)'] },
+            { concepts: ['價格發現（未載入）'] },
+            { concepts: ['訂單流, 流動性', '波動率、風險溢酬', '「甲,乙」', 'GARCH(1,1)'] },
+        ])
+        assert.deepEqual(r.renames, { '市場微結構(743)': '市場微結構', '金融危機(2008)': '金融危機' })
+        assert.deepEqual(r.renameDetail.map((x) => [x.form, x.yearLike]), [['市場微結構(743)', false], ['金融危機(2008)', true]], '(2008) 看似年份,多為誤報,供人判讀')
+        const ann = Object.fromEntries(r.annotated.map((x) => [x.form, [x.base, x.inner, x.baseUsed]]))
+        assert.deepEqual(ann, {
+            '價格發現(未在清單中)': ['價格發現', '未在清單中', true],
+            '價格發現（未載入）': ['價格發現', '未載入', true],
+            '動量(time-series momentum)': ['動量', 'time-series momentum', false],
+        }, '括號內只有數字／分隔符者(743、2008、AR(1)、GARCH(1,1))不列')
+        assert.equal(r.annotated.at(-1).form, '動量(time-series momentum)', '基名已被使用者排前(較可能是同一概念)')
+        assert.deepEqual(r.multi.map((x) => [x.form, x.parts]).sort(), [['波動率、風險溢酬', ['波動率', '風險溢酬']], ['訂單流, 流動性', ['訂單流', '流動性']]].sort())
+        assert.deepEqual(Object.keys(suggestConceptRenames(null)), ['renames', 'renameDetail', 'foldGroups', 'annotated', 'multi'])
+    })
+
+    it('tagSuspects(萃取段計數用):判準同 annotated／multi;非陣列視為空', () => {
+        assert.deepEqual(tagSuspects(['GARCH(1,1)', '價格發現(未載入)', '甲, 乙', 'AR(1)', '甲；乙', '「甲,乙」', '甲(乙,丙)', '均值回歸']).map((x) => `${x.tag}:${x.kind}`),
+            ['價格發現(未載入):annotated', '甲, 乙:multi', '甲；乙:multi', '甲(乙,丙):annotated'])
+        assert.deepEqual(tagSuspects('x'), [])
     })
 
     it('別名單跳不遞移;改名與別名可串接(改名 → 折疊 → 別名)', () => {

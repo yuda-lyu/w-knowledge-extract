@@ -188,6 +188,7 @@ describe('unit-flow-smoke', function() {
         assert.deepEqual(summary.stages.map((s) => s.name), ['抓取', '彙整', '關聯', '提煉', '索引'])
         assert.equal(summary.stages[0].sub.listFetch.detail.newDocs, 2, '摘要須帶各子階段 report 之 detail')
         assert.equal(summary.stages[1].sub.extract.detail.notes, 2)
+        assert.equal(summary.stages[1].sub.extract.detail.tagSuspect, 0, '可疑標籤計數進子階段 detail(本冒煙之標籤皆正常)')
         assert.equal(summary.ok, true)
         assert.ok(Number.isFinite(summary.deadlineMs), '摘要帶本輪時間預算')
     })

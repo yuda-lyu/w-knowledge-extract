@@ -261,17 +261,21 @@ async function settleTwins(rec, env) {
  */
 function touchedDigest(s, ops) {
     const ids = new Set()
+    const sideClaims = (sides) => (isarr(sides) ? sides.flatMap((sd) => (isarr(sd?.claims) ? sd.claims : [])) : [])
     for (const o of isarr(ops) ? ops : []) {
         for (const v of [o?.id, o?.by, o?.into, o?.dispute, o?.claim, ...(isarr(o?.from) ? o.from : []), ...(isarr(o?.claims) ? o.claims : []),
-            ...(isarr(o?.sides) ? o.sides.flatMap((sd) => (isarr(sd?.claims) ? sd.claims : [])) : [])]) {
+            ...sideClaims(o?.sides), ...sideClaims(o?.sides_add)]) {
             if (typeof v === 'string' && findItem(s, v)) ids.add(v)
         }
     }
+    // 被觸及之爭議:其各方所引之主張一併列出文字——審查員據以判斷兩方是否回答同一問題、結論是否相反(存疑與拆解之依據)
+    for (const id of [...ids]) for (const cid of sideClaims(findItem(s, id)?.item?.sides)) if (findItem(s, cid)) ids.add(cid)
     const lines = [...ids].map((id) => {
         const x = findItem(s, id).item
-        // 爭議列出各方立場與所引主張:審查員據以判斷兩方是否回答同一問題、結論是否相反(拆解與「非對立」之依據)
-        const sides = isarr(x.sides) ? `｜${x.sides.map((sd, k) => `第${k + 1}方：${sd.position}${(sd.claims || []).length ? `〔${sd.claims.join('〕〔')}〕` : ''}`).join('；')}` : ''
-        return `〔${id}〕${x.text || x.question || `${x.name}＝${x.value}`}（${x.status}${x.evidence?.level ? `｜證據${x.evidence.level}` : ''}｜出處 ${(x.sources || []).length} 篇）${sides}`
+        // 各方以 side k 標示(k＝操作之 side 值,與提案所見之狀態摘要同一套);未解決爭議之審查存疑常駐
+        const sides = isarr(x.sides) ? `｜${x.sides.map((sd, k) => `side ${k}：${sd.position}${(sd.claims || []).length ? `〔${sd.claims.join('〕〔')}〕` : ''}`).join('；')}` : ''
+        const doubt = x.status === 'open' && isobj(x.doubt) ? `｜審查存疑（v${x.doubt.version}；${x.doubt.reason}）：${x.doubt.note}` : ''
+        return `〔${id}〕${x.text || x.question || `${x.name}＝${x.value}`}（${x.status}${x.evidence?.level ? `｜證據${x.evidence.level}` : ''}｜出處 ${(x.sources || []).length} 篇）${sides}${doubt}`
     })
     return lines.join('\n') || '（無）'
 }
@@ -489,12 +493,12 @@ export const mwReview = () => defineMw({
             }
             const n = delta.ops.filter((o) => TERMINAL_OPS.includes(o?.op)).length
             count(msg, 'degraded')
-            ctx.log.warn(`提煉降級[${t.concept}]：審查失敗（${oneline(r.error, 120)}），套用未審提案；終態操作 ${n} 項改存待審`)
+            ctx.log.warn(`提煉降級[${t.concept}]：審查失敗（${oneline(r.error, 120)}），套用未審提案；終態操作 ${n} 項擬存待審`)
             msg.data._review = { status: 'failed' }
             return next(msg)
         }
-        const v = applyVerdicts(delta, r.data.verdicts, { defaultKind: domain.claimKinds?.[0] })
-        // 不可逆操作(取代／撤回／合併)須明列裁決:漏列者不因審查漏列而未審即套——提案與待審比照降級(存待審);
+        const v = applyVerdicts(delta, r.data.verdicts)
+        // 不可逆操作(取代／撤回／合併／拆解)須明列裁決:漏列者不因審查漏列而未審即套——提案與待審比照降級(擬存待審,實際存入數於套用後計);
         // 整併之合併不入待審(待審以一般差量裁決,合併不在其操作集),本次不採、下次整併再提
         const unv = new Set(v.unverdicted)
         const unvTerminal = (o) => unv.has(o._i) && TERMINAL_OPS.includes(o.op)
@@ -502,13 +506,67 @@ export const mwReview = () => defineMw({
         v.delta.ops = mode === 'consolidate'
             ? v.delta.ops.filter((o) => !unvTerminal(o))
             : v.delta.ops.map((o) => (unvTerminal(o) ? { ...o, _withhold: true } : o))
-        if (nUnv) ctx.log.info(`提煉審查[${t.concept}]：${nUnv} 項不可逆操作未得裁決，${mode === 'consolidate' ? '本次不採' : '改存待審'}`)
+        if (nUnv) ctx.log.info(`提煉審查[${t.concept}]：${nUnv} 項不可逆操作未得裁決，${mode === 'consolidate' ? '本次不採' : '擬存待審'}`)
         if (v.verdictRejected.length) ctx.log.info(`提煉審查[${t.concept}]：${v.verdictRejected.length} 則裁決無效（${v.verdictRejected.slice(0, 3).map((x) => x.reason).join('；')}），相應操作按未裁決處理`)
+        logVerdicts(v, delta.ops, t, msg, ctx)
+        // 提案與審查落在同一供應商(遞補所致)時,不可逆操作之「兩方同意」退化為同一模型兩次呼叫——記錄供判讀
+        if (r.providerId && r.providerId === msg.data._provider && delta.ops.some((o) => TERMINAL_OPS.includes(o?.op))) {
+            ctx.log.info(`提煉審查[${t.concept}]：提案與審查同為 ${r.providerId}，不可逆操作之兩方同意退化為同一模型`)
+        }
         msg.data._review = { status: 'ok', verdicts: v }
         msg.data._delta = { ...delta, ops: v.delta.ops }
         return next(msg)
     },
 })
+
+/**
+ * 審查裁決之日誌與計數(剔除、存疑、依賴衝突、理由替代):審查之判斷此前只在提示詞與回覆中,生產日誌看不見
+ * (安裝方 1.0.4 回報:審查席一換或重跑,爭議被系統性清空而日誌無痕)
+ *
+ * @param {Object} v 輸入 applyVerdicts 之回傳
+ * @param {Array} ops 輸入審查前之提案操作(索引＝裁決之 i)
+ * @param {Object} t 輸入選題項
+ * @param {Object} msg 輸入訊息信封(計數用)
+ * @param {Object} ctx 輸入動作鏈 ctx(日誌用)
+ */
+function logVerdicts(v, ops, t, msg, ctx) {
+    const cut = (s, n = 40) => oneline(String(s || ''), n)
+    const label = (i) => {
+        const o = ops[i] || {}
+        return `i=${i} ${o.op || '?'}${o.question ? `「${cut(o.question, 30)}」` : (o.id ? `〔${o.id}〕` : '')}`
+    }
+    const DISPUTE = new Set(['dispute_add', 'dispute_update', 'contest'])
+    if (v.dropped.length) {
+        count(msg, 'opsDropped', v.dropped.length)
+        const by = {}
+        for (const x of v.dropped) by[x.reason] = (by[x.reason] || 0) + 1
+        const disputes = v.dropped.filter((x) => DISPUTE.has(x.op))
+        ctx.log.info(`提煉審查剔除[${t.concept}]：${Object.entries(by).map(([k, n]) => `${k}×${n}`).join('、')}${disputes.length ? `；爭議類 ${disputes.slice(0, 5).map((x) => `${label(x.index)}（${x.reason}${x.note ? `：${cut(x.note)}` : ''}）`).join('；')}` : ''}`)
+    }
+    if (v.doubted.length) {
+        count(msg, 'opsDoubted', v.doubted.length)
+        const legacy = v.doubted.filter((x) => x.legacy).length
+        ctx.log.info(`提煉審查存疑[${t.concept}]：${v.doubted.slice(0, 5).map((x) => `${label(x.index)}（${x.reason}：${cut(x.note || '（未附說明）')}）`).join('；')}${legacy ? `（其中 ${legacy} 則為舊寫法「剔除＋非對立」，已轉為存疑）` : ''}`)
+    }
+    if (v.conflicts.length) {
+        // 保留之爭議類操作所依之新項被以「離題」剔除:依規則離題優先而連帶拒收,但審查之裁決自相矛盾;其餘依賴衝突記 INFO
+        count(msg, 'reviewConflicts', v.conflicts.length)
+        const bad = v.conflicts.filter((c) => DISPUTE.has(c.keptOp) && c.reason === '離題')
+        const other = v.conflicts.filter((c) => !bad.includes(c))
+        if (bad.length) ctx.log.warn(`提煉審查自相矛盾[${t.concept}]：${bad.slice(0, 3).map((c) => `保留 ${label(c.kept)}，卻以「離題」剔除其所引 ${c.ref}（i=${c.dropped}）`).join('；')}——依規則離題優先，該操作連帶拒收`)
+        if (other.length) ctx.log.info(`提煉審查依賴衝突[${t.concept}]：${other.slice(0, 3).map((c) => `保留 ${label(c.kept)} 所引 ${c.ref} 已被剔除（${c.reason}）`).join('；')}，連帶拒收`)
+    }
+    // 理由替代之監測:以「離題」剔除爭議、而其所引之主張皆保留(既有者、或同差量保留之新項)——懷疑可能被改寫成離題
+    const keptRefs = new Set(v.delta.ops.map((o) => o?.ref).filter(Boolean))
+    const sub = v.dropped.filter((x) => x.op === 'dispute_add' && x.reason === '離題').filter((x) => {
+        const cited = (ops[x.index]?.sides || []).flatMap((sd) => (isarr(sd?.claims) ? sd.claims : []))
+        return cited.length > 0 && cited.every((c) => (String(c).startsWith('@') ? keptRefs.has(String(c).slice(1)) : true))
+    })
+    if (sub.length) {
+        count(msg, 'reviewDisputeOfftopicKept', sub.length)
+        ctx.log.info(`提煉審查不一致[${t.concept}]：以「離題」剔除爭議 ${sub.slice(0, 3).map((x) => label(x.index)).join('、')}，其所引主張卻皆保留`)
+    }
+}
 
 /**
  * 錨點:applyDelta(程式套用＋涵蓋落帳＋證據重算＋不變式自檢);違反不變式即整個差量不落盤
@@ -531,11 +589,22 @@ export const mwApplyDelta = () => defineMw({
             keyOf: normalizeConcept,
             self: t.concept,
             at: env.at,
-            meta: { provider: msg.data._provider || '', reviewed: review?.status || 'none', ...(mode !== 'delta' ? { step: mode } : {}) },
+            droppedRefs: review?.verdicts?.droppedRefs,
+            meta: {
+                provider: msg.data._provider || '',
+                reviewed: review?.status || 'none',
+                ...(mode !== 'delta' ? { step: mode } : {}),
+                // 每版之審查剔除與存疑數留在狀態(日誌會輪替、狀態不會),供趨勢判讀
+                ...(review?.verdicts?.dropped?.length ? { reviewDropped: review.verdicts.dropped.length } : {}),
+                ...(review?.verdicts?.doubted?.length ? { reviewDoubted: review.verdicts.doubted.length } : {}),
+            },
         })
         let s = r.state
         if (mode === 'pending') s.pendingReview = []
         const queued = r.withheld.filter((w) => w.resolved)
+        // 暫緩之不可逆操作其所依新項未成立(被審查剔除或被拒收)者無法存待審——如實記錄,不以「改存待審」誤報
+        const lost = r.withheld.filter((w) => !w.resolved)
+        if (lost.length) ctx.log.info(`提煉[${t.concept}]：${lost.length} 項暫緩之不可逆操作所依新項未成立（被審查剔除或拒收），未存待審（${lost.slice(0, 3).map((w) => `${w.op}（i=${w.index}）`).join('、')}）`)
         if (queued.length) {
             const q = queuePendingReview(s, queued, { at: env.at, reason: reviewedFailed ? '審查失敗' : '審查未裁決' })
             s = q.state
@@ -573,7 +642,7 @@ export const mwApplyDelta = () => defineMw({
         }
         count(msg, 'opsApplied', r.applied.length)
         count(msg, 'opsRejected', r.rejected.length)
-        count(msg, 'opsWithheld', r.withheld.length)
+        count(msg, 'opsWithheld', queued.length)
         count(msg, 'overLimit', r.overLimit)
         count(msg, 'lengthChecked', r.lengthChecked)
         // 絕對語氣指標(只計數不擋;安裝方驗收 §3 #4):本次新寫入或改寫之有效主張文字
@@ -596,7 +665,7 @@ export const mwApplyDelta = () => defineMw({
         }
         if (cov.badSkipped.length) ctx.log.info(`提煉未涵蓋[${t.concept}]：略過清單中 ${cov.badSkipped.length} 項代號或理由不合，按未涵蓋處理`)
         msg.data._next = s
-        msg.data._applied = { applied: r.applied.length, rejected: r.rejected.length, withheld: r.withheld.length, cov, exhausted, bumped: s.version !== core.state.version }
+        msg.data._applied = { applied: r.applied.length, rejected: r.rejected.length, withheld: queued.length, cov, exhausted, bumped: s.version !== core.state.version }
         return next(msg)
     },
 })
@@ -721,7 +790,7 @@ export function stageDistill(opt = {}) {
             const { stores, settings, dirs, clock } = ctx.deps
             const k = settings.knowledge
             const log = ctx.log
-            const stat = { concepts: 0, updated: 0, bumps: 0, failed: 0, aiCalls: 0, aiAttempts: 0, batches: 0, consolidated: 0, pendingReviewed: 0, tails: 0, degraded: 0, opsApplied: 0, opsRejected: 0, opsWithheld: 0, overLimit: 0, lengthChecked: 0, absoluteTone: 0, questionsAdded: 0, questionsResolved: 0, longPrompts: 0, notesUsed: 0, notesSkipped: 0, notesUncovered: 0, notesExhausted: 0, unsectioned: 0, twinsMerged: 0, repaired: 0 }
+            const stat = { concepts: 0, updated: 0, bumps: 0, failed: 0, aiCalls: 0, aiAttempts: 0, batches: 0, consolidated: 0, pendingReviewed: 0, tails: 0, degraded: 0, opsApplied: 0, opsRejected: 0, opsWithheld: 0, opsDropped: 0, opsDoubted: 0, reviewConflicts: 0, reviewDisputeOfftopicKept: 0, overLimit: 0, lengthChecked: 0, absoluteTone: 0, questionsAdded: 0, questionsResolved: 0, longPrompts: 0, notesUsed: 0, notesSkipped: 0, notesUncovered: 0, notesExhausted: 0, unsectioned: 0, twinsMerged: 0, repaired: 0 }
             const budget = budgetOf(ctx)
             const deadline = opt.deadline || budget.expired
             const minRemainingMs = opt.minRemainingMs ?? k.distillMinRemainingMs ?? 600_000

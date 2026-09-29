@@ -79,7 +79,7 @@ let test = async () => {
             }
         }
         if (prompt.includes('的審查員')) {
-            //提煉之審查: 逐條裁決 keep/drop/fix(取代/撤回/合併須明列), 此處全數保留
+            //提煉之審查: 逐條裁決 keep/drop/fix/doubt(取代/撤回/合併/拆解須明列), 此處全數保留
             return { verdicts: [...prompt.matchAll(/^i=(\d+) /gm)].map((m) => ({ i: Number(m[1]), action: 'keep' })) }
         }
         return null

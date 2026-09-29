@@ -374,10 +374,16 @@ export function pickCategories(notes, cores, opt = {}) {
  *   折疊(tw→cn)之同鍵裡亦有繁體語意不同者(曆年／歷年、回復率／回覆率)。根因(詞彙表附篇數被照抄)已於 2.0 消除,
  *   這裡只處理既有資料(2026-09-29 雙審定案 Q6)。輸出原字形(改名以折疊前之原字形精確比對)。
  *
+ * 另列兩類只供人審之候選(1.0.5;安裝方 1.0.4 回報 ④、三獨立審定案 T2′):
+ *   annotated——「名稱(說明)」之括號說明、英文對照或「是否在清單中」之註記(分群鍵保留括號內容,與「名稱」分成兩鍵);
+ *     括號內只有數字／分隔符者(AR(1)、GARCH(1,1)、I(0)、(2008)、(743))不列;限定語(如「動量(時間序列)」)可能是不同概念,故不併入 renames;
+ *   multi——括號外以「,」「，」「、」「;」「；」串接多個概念之單一標籤;改名對照只能一對一,拆分屬使用方之資料整理。
+ *
  * @param {Array} notes 輸入筆記陣列，非陣列視為空
  * @param {Object} [opt={}] 輸入設定物件
  * @param {Integer} [opt.minSuffix=10] 輸入「名稱(N)」之 N 至少多少才列入(篇數照抄多為兩位數以上)
- * @returns {Object} 回傳 { renames:{ 原寫法: 基名 }, renameDetail:Array({ form, base, notes }), foldGroups:Array({ key, forms:Array({ form, notes }) }) }
+ * @returns {Object} 回傳 { renames:{ 原寫法: 基名 }, renameDetail:Array({ form, base, notes, yearLike }), foldGroups:Array({ key, forms:Array({ form, notes }) }),
+ *   annotated:Array({ form, base, inner, notes, baseUsed }), multi:Array({ form, parts, notes }) }；yearLike＝N 看似年份(1000～2100,如「金融危機(2008)」,多為誤報)
  * @example
  * const notes = [{ concepts: ['市場微結構'] }, { concepts: ['市場微結構(743)'] }, { concepts: ['AR(1)'] }]
  * console.log(suggestConceptRenames(notes).renames)
@@ -409,14 +415,83 @@ export function suggestConceptRenames(notes, opt = {}) {
             if (!baseForms) continue
             const base = [...baseForms.entries()].sort((a, b) => b[1] - a[1])[0][0]
             renames[form] = base
-            renameDetail.push({ form, base, notes: cnt })
+            const n = Number(m[2])
+            renameDetail.push({ form, base, notes: cnt, yearLike: n >= 1000 && n <= 2100 })
         }
     }
     const foldGroups = [...byKey.entries()]
         .filter(([, forms]) => new Set([...forms.keys()].map((f) => f.normalize('NFKC').replace(/\s+/g, '').toLowerCase())).size > 1)
         .map(([key, forms]) => ({ key, forms: [...forms.entries()].map(([form, n]) => ({ form, notes: n })).sort((a, b) => b.notes - a.notes) }))
         .sort((a, b) => b.forms.reduce((s, x) => s + x.notes, 0) - a.forms.reduce((s, x) => s + x.notes, 0))
-    return { renames, renameDetail, foldGroups }
+    const annotated = []
+    const multi = []
+    for (const forms of byKey.values()) {
+        for (const [form, cnt] of forms) {
+            const a = annotationOf(form)
+            if (a) annotated.push({ form, base: a.base, inner: a.inner, notes: cnt, baseUsed: byKey.has(normalizeConcept(a.base)) })
+            const parts = splitTopLevel(form.normalize('NFKC'))
+            if (parts.length >= 2) multi.push({ form, parts, notes: cnt })
+        }
+    }
+    annotated.sort((a, b) => Number(b.baseUsed) - Number(a.baseUsed) || b.notes - a.notes || a.form.localeCompare(b.form))
+    multi.sort((a, b) => b.notes - a.notes || a.form.localeCompare(b.form))
+    return { renames, renameDetail, foldGroups, annotated, multi }
 }
 
-export default { conceptVocabulary, coreForKey, twinsOf, isReady, groupByConcept, pickConcepts, orphanNotes, pickCategories, suggestConceptRenames }
+/**
+ * 標籤之末尾括號說明:「名稱(說明)」且括號內不是只有數字／分隔符(排除 AR(1)、GARCH(1,1)、I(0)、(2008)、(743))
+ *
+ * @param {String} tag 輸入標籤原字形
+ * @returns {Object|null} 回傳 { base, inner } 或 null
+ */
+function annotationOf(tag) {
+    const m = String(tag || '').normalize('NFKC').trim().match(/^(.+?)\s*\(([^()]+)\)$/)
+    if (!m || /^[\p{N}\s,.\-+:/·]+$/u.test(m[2])) return null
+    return { base: m[1].trim(), inner: m[2].trim() }
+}
+
+/**
+ * 可疑之概念標籤(括號說明／英文對照,或一個標籤擠多個概念;萃取段只計數、不改資料——判準同 suggestConceptRenames 之 annotated／multi)
+ *
+ * @param {Array} tags 輸入標籤陣列，非陣列視為空
+ * @returns {Array} 回傳 [{ tag, kind:'annotated'|'multi' }]
+ * @example
+ * console.log(tagSuspects(['GARCH(1,1)', '價格發現(未載入)', '甲, 乙', 'AR(1)']).map((x) => x.kind))
+ * // => [ 'annotated', 'multi' ]
+ */
+export function tagSuspects(tags) {
+    const out = []
+    for (const t of isarr(tags) ? tags : []) {
+        if (annotationOf(t)) out.push({ tag: t, kind: 'annotated' })
+        else if (splitTopLevel(String(t || '').normalize('NFKC')).length >= 2) out.push({ tag: t, kind: 'multi' })
+    }
+    return out
+}
+
+/**
+ * 以括號外之「,」「、」「;」切分(括號／引號內不切,如 GARCH(1,1));NFKC 後全形之「，」「；」已轉為半形
+ *
+ * @param {String} s 輸入字串
+ * @returns {Array} 回傳非空片段陣列(去頭尾空白)
+ */
+function splitTopLevel(s) {
+    const OPEN = '([「『【'
+    const CLOSE = ')]」』】'
+    const parts = []
+    let depth = 0
+    let cur = ''
+    for (const ch of String(s || '')) {
+        if (OPEN.includes(ch)) depth++
+        else if (CLOSE.includes(ch)) depth = Math.max(0, depth - 1)
+        if (depth === 0 && /[,、;]/.test(ch)) {
+            parts.push(cur)
+            cur = ''
+            continue
+        }
+        cur += ch
+    }
+    parts.push(cur)
+    return parts.map((x) => x.trim()).filter(Boolean)
+}
+
+export default { conceptVocabulary, coreForKey, twinsOf, isReady, groupByConcept, pickConcepts, orphanNotes, pickCategories, suggestConceptRenames, tagSuspects }

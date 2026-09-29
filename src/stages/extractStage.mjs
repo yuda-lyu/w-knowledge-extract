@@ -13,7 +13,7 @@ import path from 'path'
 import isobj from 'wsemi/src/isobj.mjs'
 import { defineMw, applyTaps, makeMsg, count, runChainOverMsgs, stdReport } from '../core/kernel.mjs'
 import { budgetOf } from '../core/budget.mjs'
-import { conceptVocabulary } from '../stores/conceptGroups.mjs'
+import { conceptVocabulary, tagSuspects } from '../stores/conceptGroups.mjs'
 import { saveClues } from '../stores/frontierPolicy.mjs'
 import { byRetryTierFifo } from '../stores/docPolicy.mjs'
 import { runAiBatchStage } from './aiBatchStage.mjs'
@@ -95,6 +95,13 @@ export const mwRenderNote = () => defineMw({
         const slug = slugify(k.title, doc.id)
         const file = path.join(dirs.notes, `${slug}.md`)
         const concepts = (k.concepts || []).map((c) => String(c).trim()).filter(Boolean).slice(0, 6)
+        // 可疑標籤(括號說明／英文對照、一個標籤擠多個概念):只計數與記錄,不改資料——量測提示詞之「一標籤一概念」是否有效,
+        //   存量之清理由使用方以 suggestConceptRenames 之候選人審(1.0.5;安裝方 1.0.4 回報 ④)
+        const sus = tagSuspects(concepts)
+        if (sus.length) {
+            count(msg, 'tagSuspect', sus.length)
+            ctx.log.info(`萃取標籤可疑[${slug}]：${sus.map((x) => `「${x.tag}」`).join('、')}（括號說明或多概念；只計數，清理見 suggestConceptRenames）`)
+        }
         const q = domain.normalizeQuality(k)
         const cat = domain.vocab.categories.includes(k.category) ? k.category : '其他'
         msg.data._note = {
@@ -303,6 +310,7 @@ export function stageExtract(opt = {}) {
                     notes: r.applied.notes || 0,
                     skipped: r.applied.skipped || 0,
                     explore: r.applied.explore || 0,
+                    tagSuspect: r.applied.tagSuspect || 0,
                     aborted: r.aborted,
                     stopped: r.stopped,
                     failedBatches: r.failedBatches,

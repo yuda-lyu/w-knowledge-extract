@@ -14,7 +14,7 @@ import { readMd, writeMd } from '../src/md/md.mjs'
 
 import { probeSiteFeed, probeSearchEndpoints, mwProbe, mwSettleClue, stageExpand } from '../src/stages/expandStage.mjs'
 import { mwSettleTriage, stageTriage } from '../src/stages/triageStage.mjs'
-import { mwSaveClues, stageExtract } from '../src/stages/extractStage.mjs'
+import { mwSaveClues, mwRenderNote, stageExtract } from '../src/stages/extractStage.mjs'
 import {
     pickCandidates, makeSlugResolver, applyRelationsToNote, markConflict, rebuildRelationIndex,
     mwBuildEdges, mwRebuildRelationIndex, stageRelate, stageRelationIndex
@@ -135,6 +135,24 @@ describe('unit-check-stages', function() {
             await composeChain([mw])(msg, ctx)
             assert.equal(msg.stats.explore, 1)
             assert.equal((await frontier.select()).length, 1)
+        })
+
+        it('mwRenderNote:可疑標籤(括號說明／一標籤多概念)只計數 tagSuspect 並記 INFO,標籤原樣入筆記(不改資料);無可疑者不計', async () => {
+            const infos = []
+            const rec = { ...log, info: (m) => infos.push(m) }
+            const domain = { normalizeQuality: () => ({}), vocab: { categories: ['其他'] }, renderNoteBody: () => 'b' }
+            const run = async (concepts) => {
+                const msg = makeMsg('doc', { doc: { id: 'd1' }, _aiItem: { title: '標題', concepts }, _domain: domain })
+                await composeChain([mwRenderNote()])(msg, { deps: { dirs: { notes: TMP }, clock }, log: rec })
+                return msg
+            }
+            const m1 = await run(['價格發現(未在清單中)', '訂單流、流動性', 'AR(1)', '均值回歸'])
+            assert.equal(m1.stats.tagSuspect, 2)
+            assert.deepEqual(m1.data._note.record.concepts, ['價格發現(未在清單中)', '訂單流、流動性', 'AR(1)', '均值回歸'], '只計數,不改寫標籤')
+            assert.match(infos[0], /^萃取標籤可疑\[.+\]：「價格發現\(未在清單中\)」、「訂單流、流動性」（括號說明或多概念；只計數，清理見 suggestConceptRenames）$/)
+            const m2 = await run(['AR(1)', 'GARCH(1,1)'])
+            assert.equal(m2.stats.tagSuspect, undefined)
+            assert.equal(infos.length, 1)
         })
 
         it('stageExtract:opt 非物件視為{},不拋錯;有效輸入(空 raw 池)行為不變', async () => {

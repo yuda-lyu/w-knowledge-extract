@@ -157,14 +157,38 @@ describe('unit-domain', function() {
         assert.match(body, /- 待審：〔D9〕擬拆解：待審之拆解/)
         assert.match(body, /- 待審：〔C5〕擬撤回：離題/)
         const rulesText = renderRules(d.rules)
-        assert.match(d.buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText }), /"op":"dispute_dissolve","id":"D2","reason":"為何不是對立","kinds":\["principle"\]/)
-        assert.match(d.buildConsolidatePrompt({ concept: '概念', scope: 'concept', digest: '', live: 90, cap: 80, rulesText }), /dispute_dissolve 拆解硬配之爭議/)
+        const pp = d.buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText })
+        assert.match(pp, /"op":"dispute_dissolve","id":"D2","reason":"…","kinds":\[null,"principle"\]/)
+        assert.match(pp, /kinds\[k\] 為 side k 轉出主張之種類，引主張之方填 null/)
+        assert.match(pp, /標有「審查存疑」者請獨立判斷，不可只引述存疑/)
+        assert.match(d.buildConsolidatePrompt({ concept: '概念', scope: 'concept', digest: '', live: 90, cap: 80, rulesText }), /dispute_dissolve 拆解非對立之爭議（依規則表之爭議規則與「非對立之界線」判定/)
         const rv = d.buildReviewPrompt({ concept: '概念', mode: 'delta', ops: [], batch: [], rulesText })
-        assert.match(rv, /只能以「離題」或「同篇」或「非對立」剔除/)
+        assert.match(rv, /只能以「離題」或「同篇」剔除——不可把真實之對立藏掉/)
+        assert.match(rv, /- doubt：只用於爭議類操作——你依規則表「非對立之界線」認為兩方並非對立時用之，reason 寫「非對立」/)
+        assert.match(rv, /程式照常套用該操作，並在爭議上標示審查存疑，不會移除/)
         assert.match(rv, /以「對立成立」剔除/)
         assert.match(rv, /拆解（dispute_dissolve）不可逆/)
-        assert.match(rulesText, /硬配之對立.*dispute_dissolve 拆解（內容全留）/)
-        assert.match(createDistillDomain({ vocab: {} }).buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText }), /"kinds":\["principle"\]/)
+        assert.match(rv, /爭議各方以 side k 標示，k 即操作之 "side" 值/)
+        assert.match(rv, /\{"verdicts":\[\{"i":0,"action":"keep","reason":"","note":""\}\]\}/)
+        // 「非對立」之唯一定義在規則表(獨立一條,含演進之切分);其餘三處只引用
+        assert.equal(d.rules.filter((r) => /非對立之界線】/.test(r.text)).length, 1)
+        assert.match(rulesText, /【非對立之界線】只有兩方回答的是不同問題、或兩方結論可同時成立.*同一對象之結論隨時期改變（較早期間成立、其後之新證據顯示不再成立）屬演進，依演進規則以 supersede 處理/)
+        for (const p of [pp, rv]) assert.doesNotMatch(p.replace(rulesText, ''), /兩方並非回答同一問題、或結論並不相反/, '界線不在規則表外另寫一份')
+        // md:未解決之爭議常駐顯示審查存疑
+        const s2 = emptyState({ coreId: 'k', concept: '概念A', scope: 'concept' })
+        s2.version = 5
+        s2.claims = s.claims
+        s2.disputes = [{ id: 'D2', question: '問', status: 'open', sides: [{ position: '甲', claims: ['C1'] }, { position: '乙', claims: ['C2'] }], doubt: { reason: '非對立', note: '兩方回答不同問題', version: 4, at: 'T', op: 'dispute_add', count: 2 } }]
+        assert.match(d.renderState(s2, { notesById: new Map() }).body, / {2}- 審查存疑（v4，累計 2 次；非對立）：兩方回答不同問題/)
+    })
+
+    it('本質之 claims 只列主張、爭議寫在文字(1.0.5 真實模型驗收實測:本質 claims 引爭議之 @d 而整條被拒);文字可寫〔@ref名〕(程式換成實際編號)', () => {
+        const d = createDistillDomain({})
+        const rulesText = renderRules(d.rules)
+        assert.match(rulesText, /不可擇一抹平爭議——有爭議者在文字中並陳兩方，claims 只列主張（不列爭議）/)
+        assert.match(rulesText, /同一差量內之新條目寫〔@ref名〕，由程式換成實際編號/)
+        assert.match(d.buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText }), /- essence 本質（claims 只列所依之主張，不列爭議）/)
+        assert.match(d.buildConsolidatePrompt({ concept: '概念', scope: 'concept', digest: '', live: 90, cap: 80, rulesText }), /- essence 重寫本質（claims 只列主張，不列爭議）/)
     })
 
     it('toneOf:絕對語氣片語(只計數不擋);前兩字含「不未非無」或為「難以」者不計;不收裸詞以免「一定程度／絕對值／保證金」誤計;absolutePhrases 可換或給 [] 停用', () => {
