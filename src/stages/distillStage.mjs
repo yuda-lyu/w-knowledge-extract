@@ -549,12 +549,13 @@ function logVerdicts(v, ops, t, msg, ctx) {
         ctx.log.info(`提煉審查存疑[${t.concept}]：${v.doubted.slice(0, 5).map((x) => `${label(x.index)}（${x.reason}：${cut(x.note || '（未附說明）')}）`).join('；')}${legacy ? `（其中 ${legacy} 則為舊寫法「剔除＋非對立」，已轉為存疑）` : ''}`)
     }
     if (v.conflicts.length) {
-        // 保留之爭議類操作所依之新項被以「離題」剔除:依規則離題優先而連帶拒收,但審查之裁決自相矛盾;其餘依賴衝突記 INFO
+        // 保留之操作所引之新項被剔除(任一理由):審查之裁決自相矛盾,該操作連帶拒收、其內容(爭議、本質、參數…)本批不成立——一律 WARN,
+        //   巡檢之「未列入已知常態之警告」可見(1.0.5 只對「爭議類＋離題」記 WARN、其餘記 INFO;安裝方正式環境一天 11 項爭議經此路徑
+        //   被清掉而巡檢無感,2026-10-01);reviewDisputesCascaded＝因此不成立之爭議類操作數
         count(msg, 'reviewConflicts', v.conflicts.length)
-        const bad = v.conflicts.filter((c) => DISPUTE.has(c.keptOp) && c.reason === '離題')
-        const other = v.conflicts.filter((c) => !bad.includes(c))
-        if (bad.length) ctx.log.warn(`提煉審查自相矛盾[${t.concept}]：${bad.slice(0, 3).map((c) => `保留 ${label(c.kept)}，卻以「離題」剔除其所引 ${c.ref}（i=${c.dropped}）`).join('；')}——依規則離題優先，該操作連帶拒收`)
-        if (other.length) ctx.log.info(`提煉審查依賴衝突[${t.concept}]：${other.slice(0, 3).map((c) => `保留 ${label(c.kept)} 所引 ${c.ref} 已被剔除（${c.reason}）`).join('；')}，連帶拒收`)
+        const disputesLost = new Set(v.conflicts.filter((c) => DISPUTE.has(c.keptOp)).map((c) => c.kept)).size
+        if (disputesLost) count(msg, 'reviewDisputesCascaded', disputesLost)
+        ctx.log.warn(`提煉審查自相矛盾[${t.concept}]：${v.conflicts.slice(0, 5).map((c) => `保留 ${label(c.kept)}，卻以「${c.reason}」剔除其所引 ${c.ref}（i=${c.dropped}）`).join('；')}${v.conflicts.length > 5 ? `；等共 ${v.conflicts.length} 則` : ''}——所引不成立，該操作連帶拒收`)
     }
     // 理由替代之監測:以「離題」剔除爭議、而其所引之主張皆保留(既有者、或同差量保留之新項)——懷疑可能被改寫成離題
     const keptRefs = new Set(v.delta.ops.map((o) => o?.ref).filter(Boolean))
@@ -790,7 +791,7 @@ export function stageDistill(opt = {}) {
             const { stores, settings, dirs, clock } = ctx.deps
             const k = settings.knowledge
             const log = ctx.log
-            const stat = { concepts: 0, updated: 0, bumps: 0, failed: 0, aiCalls: 0, aiAttempts: 0, batches: 0, consolidated: 0, pendingReviewed: 0, tails: 0, degraded: 0, opsApplied: 0, opsRejected: 0, opsWithheld: 0, opsDropped: 0, opsDoubted: 0, reviewConflicts: 0, reviewDisputeOfftopicKept: 0, overLimit: 0, lengthChecked: 0, absoluteTone: 0, questionsAdded: 0, questionsResolved: 0, longPrompts: 0, notesUsed: 0, notesSkipped: 0, notesUncovered: 0, notesExhausted: 0, unsectioned: 0, twinsMerged: 0, repaired: 0 }
+            const stat = { concepts: 0, updated: 0, bumps: 0, failed: 0, aiCalls: 0, aiAttempts: 0, batches: 0, consolidated: 0, pendingReviewed: 0, tails: 0, degraded: 0, opsApplied: 0, opsRejected: 0, opsWithheld: 0, opsDropped: 0, opsDoubted: 0, reviewConflicts: 0, reviewDisputesCascaded: 0, reviewDisputeOfftopicKept: 0, overLimit: 0, lengthChecked: 0, absoluteTone: 0, questionsAdded: 0, questionsResolved: 0, longPrompts: 0, notesUsed: 0, notesSkipped: 0, notesUncovered: 0, notesExhausted: 0, unsectioned: 0, twinsMerged: 0, repaired: 0 }
             const budget = budgetOf(ctx)
             const deadline = opt.deadline || budget.expired
             const minRemainingMs = opt.minRemainingMs ?? k.distillMinRemainingMs ?? 600_000

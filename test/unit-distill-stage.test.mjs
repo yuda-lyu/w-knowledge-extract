@@ -496,7 +496,8 @@ describe('unit-distill-stage', function() {
             const infos = []
             const log = { info: (m) => infos.push(m), warn: () => {}, error: () => {} }
             const doubtIt = (p) => ({ verdicts: [...p.matchAll(/^i=(\d+) (.*)$/gm)].map((m) => (/dispute_add/.test(m[2]) ? { i: Number(m[1]), ...verdict } : { i: Number(m[1]), action: 'keep' })) })
-            const r4 = await distillTarget({ concept: '學習率', notes: notes.slice(0, 3), settings: env.settings, ai: scriptAi({ propose: withDispute, review: doubtIt }), log })
+            // 時鐘一律固定(存疑之呈現窗以時刻比較;r4 曾用真實時鐘,2026-10-01 起真實時刻晚於 r5 之固定時刻而翻轉)
+            const r4 = await distillTarget({ concept: '學習率', notes: notes.slice(0, 3), settings: env.settings, ai: scriptAi({ propose: withDispute, review: doubtIt }), log, clock: { iso8: () => '2026-09-30T00:00:00+08:00', stamp8: () => 'x' } })
             const d = r4.state.disputes[0]
             assert.deepEqual([r4.ok, d?.status, d?.doubt?.reason, r4.stats.opsDoubted], [true, 'open', '非對立', 1])
             assert.ok(infos.some((m) => /^提煉審查存疑\[學習率\]：i=1 dispute_add「預熱是否必要」（非對立：/.test(m)), infos.join('\n'))
@@ -514,7 +515,7 @@ describe('unit-distill-stage', function() {
         }
     })
 
-    it('審查剔除入日誌與計數;保留之爭議所引新主張被以離題剔除 → WARN「審查自相矛盾」且拒收理由寫明因果;提案與審查同一供應商時記錄', async () => {
+    it('審查剔除入日誌與計數;保留之爭議所引新主張被剔除(不限理由)→ WARN「審查自相矛盾」＋reviewDisputesCascaded,拒收理由寫明因果;提案與審查同一供應商時記錄', async () => {
         const env = mkEnv(['e1', 'e2', 'e3'].map((id) => ({ id, concepts: ['學習率'] })))
         const notes = await env.stores.notes.select()
         const warns = []
@@ -531,11 +532,31 @@ describe('unit-distill-stage', function() {
         }
         const review = (p) => ({ verdicts: [...p.matchAll(/^i=(\d+) (.*)$/gm)].map((m) => (/"text":"甲"/.test(m[2]) ? { i: Number(m[1]), action: 'drop', reason: '離題', note: '與本概念無關' } : { i: Number(m[1]), action: 'keep' })) })
         const r = await distillTarget({ concept: '學習率', notes, settings: env.settings, ai: scriptAi({ propose, review }), log })
-        assert.deepEqual([r.ok, r.state.disputes.length, r.stats.opsDropped, r.stats.reviewConflicts], [true, 0, 1, 1])
+        assert.deepEqual([r.ok, r.state.disputes.length, r.stats.opsDropped, r.stats.reviewConflicts, r.stats.reviewDisputesCascaded], [true, 0, 1, 1, 1])
         assert.ok(infos.some((m) => m === '提煉審查剔除[學習率]：離題×1'), infos.join('\n'))
-        assert.ok(warns.some((m) => /^提煉審查自相矛盾\[學習率\]：保留 i=1 dispute_add「預熱是否必要」，卻以「離題」剔除其所引 @x（i=0）——依規則離題優先，該操作連帶拒收$/.test(m)), warns.join('\n'))
+        assert.ok(warns.some((m) => m === '提煉審查自相矛盾[學習率]：保留 i=1 dispute_add「預熱是否必要」，卻以「離題」剔除其所引 @x（i=0）——所引不成立，該操作連帶拒收'), warns.join('\n'))
         assert.ok(infos.some((m) => /^提煉拒收\[學習率\]：所引 @x 已被審查剔除（離題）×1$/.test(m)), infos.join('\n'))
         assert.equal(r.state.changelog.at(-1).reviewDropped, 1, '每版之審查剔除數留在狀態(changelog)')
+        // 不限離題:以「重複」剔除所引新主張亦 WARN(1.0.5 只記 INFO「依賴衝突」,巡檢看不到——安裝方正式環境一天 11 項,2026-10-01)
+        warns.length = 0
+        const dupReview = (p) => ({ verdicts: [...p.matchAll(/^i=(\d+) (.*)$/gm)].map((m) => (/"text":"甲"/.test(m[2]) ? { i: Number(m[1]), action: 'drop', reason: '重複' } : { i: Number(m[1]), action: 'keep' })) })
+        const rd = await distillTarget({ concept: '學習率', notes, settings: env.settings, ai: scriptAi({ propose, review: dupReview }), log })
+        assert.deepEqual([rd.state.disputes.length, rd.stats.reviewDisputesCascaded], [0, 1])
+        assert.ok(warns.some((m) => /^提煉審查自相矛盾\[學習率\]：保留 i=1 dispute_add「預熱是否必要」，卻以「重複」剔除其所引 @x（i=0）——所引不成立，該操作連帶拒收$/.test(m)), warns.join('\n'))
+        assert.ok(!infos.some((m) => /提煉審查依賴衝突/.test(m)), '不再分 INFO「依賴衝突」')
+        // 「性質標錯」不剔除新增主張 → 按未裁決保留、爭議照立、無連帶、無 WARN;裁決無效入 INFO
+        warns.length = 0
+        infos.length = 0
+        const labelReview = (p) => ({ verdicts: [...p.matchAll(/^i=(\d+) (.*)$/gm)].map((m) => (/"text":"甲"/.test(m[2]) ? { i: Number(m[1]), action: 'drop', reason: '性質標錯', note: '單篇不宜列為規則' } : { i: Number(m[1]), action: 'keep' })) })
+        const rl = await distillTarget({ concept: '學習率', notes, settings: env.settings, ai: scriptAi({ propose, review: labelReview }), log })
+        assert.deepEqual([rl.state.disputes.length, rl.state.claims.some((c) => c.text === '甲'), rl.stats.reviewConflicts || 0, rl.stats.opsDropped || 0], [1, true, 0, 0])
+        assert.ok(!warns.some((m) => /自相矛盾/.test(m)), warns.join('\n'))
+        assert.ok(infos.some((m) => /^提煉審查\[學習率\]：1 則裁決無效（新增主張／參數之剔除理由須為：.*收到「性質標錯」——標籤（種類、證據性質、快照）請以 fix 改正）），相應操作按未裁決處理$/.test(m)), infos.join('\n'))
+        // fix 改 kind／basis → 照套新標籤,爭議照立
+        const fixReview = (p) => ({ verdicts: [...p.matchAll(/^i=(\d+) (.*)$/gm)].map((m) => (/"text":"甲"/.test(m[2]) ? { i: Number(m[1]), action: 'fix', fields: { kind: 'pitfall', basis: '實務' }, note: '單篇實務經驗' } : { i: Number(m[1]), action: 'keep' })) })
+        const rf = await distillTarget({ concept: '學習率', notes, settings: env.settings, ai: scriptAi({ propose, review: fixReview }), log })
+        const ca = rf.state.claims.find((c) => c.text === '甲')
+        assert.deepEqual([rf.state.disputes.length, ca.kind, ca.basis], [1, 'pitfall', '實務'])
         // 以「離題」剔除爭議、其所引之新主張卻保留 → 理由替代之監測(INFO＋計數;爭議類剔除附 note 入日誌)
         infos.length = 0
         const offKept = (p) => ({ verdicts: [...p.matchAll(/^i=(\d+) (.*)$/gm)].map((m) => (/dispute_add/.test(m[2]) ? { i: Number(m[1]), action: 'drop', reason: '離題', note: '與學習率無關' } : { i: Number(m[1]), action: 'keep' })) })

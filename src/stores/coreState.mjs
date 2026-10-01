@@ -10,12 +10,15 @@
 //   ②confirm 與 supersede／retract 同一項 → 皆拒。③新項以 ref 互引(他處寫 '@ref'),被拒之新項其依賴操作連鎖拒收
 //     (否則引用懸空觸發不變式、整個差量丟棄)。④爭議之立場若出處全來自同一篇 → 拒收(同篇正反不成爭議)。
 //   ⑤contested 為衍生狀態:被未解決之爭議某方引用即 contested,否則 active——模型不直接改;終態(superseded／retracted)不可逆。
-//   ⑥文字欄以〔C12〕格式引用他項,引用不存在者拒收(自由文字之「Q1」「C4」可能是季度或術語,不檢查)。
+//   ⑥文字欄以〔C12〕格式引用他項,引用不存在者拒收(自由文字之「Q1」「C4」可能是季度或術語,不檢查);同差量之新項寫〔@ref〕,
+//     落盤前換成實際 id,ref 未定義者拒收,所指新項不成立(被剔除、被拒收)者只去掉標記——文字提及不是結構引用,不連帶拒收。
 //   ⑦新增項與既有項全文相同 → 改記為 confirm(累積出處,不另立重複項)。
 //   ⑧爭議可立亦可拆(2026-09-29):兩方並非回答同一問題、或結論並不相反之「硬配對立」,以 dispute_dissolve 拆解——爭議轉終態
-//     (理由「非對立」),只有立場文字之一方由程式轉為獨立主張(出處沿用),內容與出處全留、只拿掉對立標籤;審查剔除提案中之
-//     dispute_add／dispute_update 亦可用「非對立」,其只有立場文字之方同樣轉為新增主張。此前只能建立爭議、不能不刪內容地解除
-//     (有 A→B 無 B→A);「防對立被藏」之保護不變——任何拆解都不刪內容。
+//     (理由「非對立」),只有立場文字之一方由程式轉為獨立主張(出處沿用),內容與出處全留、只拿掉對立標籤;拆解為不可逆操作,
+//     須提案／整併提出且審查明列保留。審查對爭議類操作只能以形式理由(離題、同篇)剔除,認為非對立者以 doubt 標示存疑——
+//     照套該操作並記於爭議(1.0.5,三獨立審定案 E′)。此前只能建立爭議、不能不刪內容地解除(有 A→B 無 B→A)。
+//   ⑨審查之剔除只用於內容不成立者;可修者不刪(2026-10-01):新增主張與參數之標籤(種類、證據性質、快照)錯誤以 fix 改正,
+//     「性質標錯」對其不予剔除(按未裁決保留)。保留之操作所引新項被剔除而連帶拒收者,審查裁決自相矛盾,由呼叫端一律記 WARN。
 
 import isobj from 'wsemi/src/isobj.mjs'
 import isarr from 'wsemi/src/isarr.mjs'
@@ -301,14 +304,29 @@ export function applyDelta(state, delta, ctx = {}) {
     }
     // 引用須為指定種類(之非終態)項:不成立時回寫明根因之理由——依賴失敗、ref 未定義、不存在、種類不符、終態各自寫明,
     //   不以「不存在或為終態」概括(1.0.5 真實模型驗收實測:本質引用爭議之 @ref 被報「不存在或為終態」,看不出錯在種類)
+    //   依賴失敗另回 dep(各引用點原樣使用,不加前綴——「所引 @x 已被審查剔除(理由)」於全部引用點同一句)
     const refOfKind = (x, keys, opt = {}) => {
         const r = resolveRef(x)
-        if (!r.id) return { id: null, why: r.dep || r.reason }
+        if (!r.id) return { id: null, why: r.dep || r.reason, dep: r.dep || '' }
         const h = findItem(s, r.id)
         const shown = str(x) === r.id ? r.id : `${str(x)}＝${r.id}`
         if (!keys.includes(h.key)) return { id: null, why: `${shown} 為${NAME_OF_KEY[h.key] || h.key}，須為${keys.map((k) => NAME_OF_KEY[k] || k).join('或')}` }
         if (opt.live !== false && TERMINAL.has(h.item.status)) return { id: null, why: `${shown} 已${h.item.status === 'retracted' ? '撤回' : '取代'}` }
         return { id: r.id, hit: h }
+    }
+    // 操作之目標(id)須為指定種類:不成立時回寫明根因之理由——依賴失敗(dep)、ref 未定義、不存在、種類不符;終態由各操作依其語意自判
+    //   (1.0.5 之 refOfKind 只用於引用欄,目標欄仍把「種類不符」報成「不存在」,2026-10-01 補齊)
+    const targetOfKind = (x, keys, noun = '目標') => {
+        const tg = targetOf(x)
+        if (!tg.hit) {
+            const v = str(x)
+            return { hit: null, why: tg.dep || (v.startsWith('@') && !refState.has(v.slice(1)) ? `ref「${v}」未定義` : `${noun} ${tg.shown || '(空)'} 不存在`) }
+        }
+        if (!keys.includes(tg.hit.key)) {
+            const shown = str(x) === tg.hit.item.id ? tg.hit.item.id : `${str(x)}＝${tg.hit.item.id}`
+            return { hit: null, why: `目標 ${shown} 為${NAME_OF_KEY[tg.hit.key]}，須為${keys.map((k) => NAME_OF_KEY[k]).join('或')}` }
+        }
+        return { hit: tg.hit, why: '' }
     }
     // 「方」之索引:接受整數、數字字串與「side1／side 1」(提示詞以 `side k` 標示,模型可能照抄);其餘回 null
     const parseSide = (v) => {
@@ -321,14 +339,12 @@ export function applyDelta(state, delta, ctx = {}) {
         item.history = isarr(item.history) ? item.history : []
         item.history.push({ version, at, op, ...(note ? { note } : {}), ...(before ? { before } : {}) })
     }
-    // 文字中之引用:〔id〕須存在;〔@ref〕須為本差量宣告、且尚未失敗之 ref(落盤前換成實際 id,見下方 linkCodes)
+    // 文字中之引用:〔id〕須存在;〔@ref〕須為本差量宣告之 ref(落盤前換成實際 id;所指新項被剔除或拒收者去掉標記,見下方 linkCodes)。
+    //   文字中之提及不是結構引用:所指新項不成立時只去掉標記、不連帶拒收本操作——與「同差量稍後才失敗者去掉標記」同一處置
+    //   (1.0.5 對已被剔除者拒收,同一情形依先後兩種結果;且文字提及使內容連帶遺失,2026-10-01 改)
     const danglingIn = (v) => {
         for (const m of v.matchAll(REF_RE)) if (!findItem(s, m[1])) return `文字引用懸空：〔${m[1]}〕`
-        for (const m of v.matchAll(TEMP_REF_RE)) {
-            const r = refState.get(m[1])
-            if (!r) return `文字引用懸空：〔@${m[1]}〕（ref 未定義）`
-            if (r.rejected) return `文字引用懸空：〔@${m[1]}〕（${r.dropped ? `已被審查剔除（${r.dropped}）` : `已被拒收（${r.why || '未成立'}）`}）`
-        }
+        for (const m of v.matchAll(TEMP_REF_RE)) if (!refState.has(m[1])) return `文字引用懸空：〔@${m[1]}〕（ref 未定義）`
         return ''
     }
     // 文字欄:長度(逾 2 倍拒收、逾上限計數)與文字中之引用;fields 未給即取該種類之全部文字欄
@@ -468,10 +484,10 @@ export function applyDelta(state, delta, ctx = {}) {
             break
         }
         case 'confirm': {
-            const tg = targetOf(op.id)
-            const hit = tg.hit
-            if (!hit || !['claims', 'parameters', 'disputes'].includes(hit.key)) {
-                fail(tg.dep || `目標 ${tg.shown || '(空)'} 不存在`)
+            const tk = targetOfKind(op.id, ['claims', 'parameters', 'disputes'])
+            const hit = tk.hit
+            if (!hit) {
+                fail(tk.why)
                 break
             }
             if (!live(hit)) {
@@ -503,14 +519,10 @@ export function applyDelta(state, delta, ctx = {}) {
             break
         }
         case 'revise': {
-            const tg = targetOf(op.id)
-            const hit = tg.hit
+            const tk = targetOfKind(op.id, Object.keys(REVISABLE))
+            const hit = tk.hit
             if (!hit) {
-                fail(tg.dep || `目標 ${tg.shown || '(空)'} 不存在`)
-                break
-            }
-            if (!REVISABLE[hit.key]) {
-                fail(`目標 ${hit.item.id} 為${NAME_OF_KEY[hit.key]}，不可修訂（revise 限${Object.keys(REVISABLE).map((k) => NAME_OF_KEY[k]).join('、')}）`)
+                fail(tk.why)
                 break
             }
             if (!live(hit)) {
@@ -562,10 +574,10 @@ export function applyDelta(state, delta, ctx = {}) {
             break
         }
         case 'supersede': {
-            const tg = targetOf(op.id)
-            const hit = tg.hit
-            if (!hit || !['claims', 'parameters'].includes(hit.key)) {
-                fail(tg.dep || `目標 ${tg.shown || '(空)'} 不存在`)
+            const tk = targetOfKind(op.id, ['claims', 'parameters'])
+            const hit = tk.hit
+            if (!hit) {
+                fail(tk.why)
                 break
             }
             if (!live(hit)) {
@@ -589,7 +601,7 @@ export function applyDelta(state, delta, ctx = {}) {
             if (str(op.by)) {
                 const r = refOfKind(op.by, [hit.key], { live: false })
                 if (!r.id || r.id === hit.item.id) {
-                    fail(r.id ? '取代者不可為自身' : `取代者 ${r.why}`)
+                    fail(r.id ? '取代者不可為自身' : (r.dep || `取代者 ${r.why}`))
                     break
                 }
                 by = r.id
@@ -603,10 +615,10 @@ export function applyDelta(state, delta, ctx = {}) {
             break
         }
         case 'retract': {
-            const tg = targetOf(op.id)
-            const hit = tg.hit
+            const tk = targetOfKind(op.id, Object.keys(PREFIX_OF_KEY))
+            const hit = tk.hit
             if (!hit) {
-                fail(tg.dep || `目標 ${tg.shown || '(空)'} 不存在`)
+                fail(tk.why)
                 break
             }
             if (TERMINAL.has(hit.item.status)) {
@@ -646,10 +658,10 @@ export function applyDelta(state, delta, ctx = {}) {
             break
         }
         case 'contest': {
-            const tg = targetOf(op.id)
-            const hit = tg.hit
-            if (!hit || hit.key !== 'claims') {
-                fail(tg.dep || `目標主張 ${tg.shown || '(空)'} 不存在`)
+            const tk = targetOfKind(op.id, ['claims'], '目標主張')
+            const hit = tk.hit
+            if (!hit) {
+                fail(tk.why)
                 break
             }
             if (!live(hit)) {
@@ -660,9 +672,9 @@ export function applyDelta(state, delta, ctx = {}) {
                 fail('缺 reason')
                 break
             }
-            const r = resolveRef(op.dispute)
-            if (!r.id || findItem(s, r.id)?.key !== 'disputes') {
-                fail(r.dep || 'contest 須連既有或同一差量新建之爭議')
+            const r = refOfKind(op.dispute, ['disputes'], { live: false })
+            if (!r.id) {
+                fail(!str(op.dispute) ? 'contest 須連既有或同一差量新建之爭議' : (r.dep || `所連爭議 ${r.why}`))
                 break
             }
             const d = findItem(s, r.id).item
@@ -696,10 +708,10 @@ export function applyDelta(state, delta, ctx = {}) {
             const isAdd = op.op === 'dispute_add'
             let d = null
             if (!isAdd) {
-                const tg = targetOf(op.id)
-                const hit = tg.hit
-                if (!hit || hit.key !== 'disputes') {
-                    fail(tg.dep || `目標爭議 ${tg.shown || '(空)'} 不存在`)
+                const tk = targetOfKind(op.id, ['disputes'], '目標爭議')
+                const hit = tk.hit
+                if (!hit) {
+                    fail(tk.why)
                     break
                 }
                 if (TERMINAL.has(hit.item.status)) {
@@ -794,10 +806,10 @@ export function applyDelta(state, delta, ctx = {}) {
         }
         case 'dispute_dissolve': {
             // 拆解硬配之對立(檔頭⑧):爭議轉終態,只有立場文字之方轉為獨立主張——內容與出處全留,只拿掉對立標籤
-            const tg = targetOf(op.id)
-            const hit = tg.hit
-            if (!hit || hit.key !== 'disputes') {
-                fail(tg.dep || `目標爭議 ${tg.shown || '(空)'} 不存在`)
+            const tk = targetOfKind(op.id, ['disputes'], '目標爭議')
+            const hit = tk.hit
+            if (!hit) {
+                fail(tk.why)
                 break
             }
             if (TERMINAL.has(hit.item.status)) {
@@ -876,9 +888,9 @@ export function applyDelta(state, delta, ctx = {}) {
             }
             let claim = ''
             if (str(op.claim)) {
-                const r = resolveRef(op.claim)
-                if (!r.id || findItem(s, r.id)?.key !== 'claims') {
-                    fail(r.dep || `所依主張 ${str(op.claim)} 不存在`)
+                const r = refOfKind(op.claim, ['claims'], { live: false })
+                if (!r.id) {
+                    fail(r.dep || `所依主張 ${r.why}`)
                     break
                 }
                 claim = r.id
@@ -917,10 +929,10 @@ export function applyDelta(state, delta, ctx = {}) {
             break
         }
         case 'question_resolve': {
-            const tg = targetOf(op.id)
-            const hit = tg.hit
-            if (!hit || hit.key !== 'questions') {
-                fail(tg.dep || `目標問題 ${tg.shown || '(空)'} 不存在`)
+            const tk = targetOfKind(op.id, ['questions'], '目標問題')
+            const hit = tk.hit
+            if (!hit) {
+                fail(tk.why)
                 break
             }
             if (hit.item.status !== 'open') {
@@ -1018,7 +1030,7 @@ export function applyDelta(state, delta, ctx = {}) {
         case 'merge': {
             const ri = refOfKind(op.into, ['claims', 'parameters', 'questions'])
             if (!ri.id) {
-                fail(`into ${ri.why}`)
+                fail(ri.dep || `into ${ri.why}`)
                 break
             }
             const into = ri.hit
@@ -1033,7 +1045,7 @@ export function applyDelta(state, delta, ctx = {}) {
             }
             const badFrom = from.map((id) => refOfKind(id, [into.key])).find((r) => !r.id)
             if (badFrom) {
-                fail(`from ${badFrom.why}`)
+                fail(badFrom.dep || `from ${badFrom.why}`)
                 break
             }
             const hits = from.map((id) => findItem(s, id))
@@ -1108,7 +1120,7 @@ export function applyDelta(state, delta, ctx = {}) {
 
     // 文字中殘留之本批代號(如「N4 指出…」)換成筆記連結 [[id]]:代號只在本批有效,留在狀態裡,下一批同名之代號即指向別篇
     //   (2026-09-29 真實模型驗收實測:爭議註記寫「N4 指出」)。長度與同文比對以模型原文為準(上方逐操作已查),此處只改存入之文字。
-    //   〔@ref〕同理換成〔實際 id〕;所指之新項於同差量稍後才失敗者(檢查當時尚未處理)無 id 可換,去掉該標記(不留短命識別碼)
+    //   〔@ref〕同理換成〔實際 id〕;所指之新項被審查剔除、被拒收或於同差量稍後才失敗者無 id 可換,去掉該標記(不留短命識別碼)
     const linkCodes = (v) => (typeof v === 'string'
         ? v.replace(/(?<![A-Za-z0-9])N\d+(?![0-9])/g, (m) => (codeMap.has(m) ? `[[${codeMap.get(m)}]]` : m))
             .replace(TEMP_REF_RE, (m, ref) => {
@@ -1217,12 +1229,19 @@ export function pendingReviewOps(state) {
 }
 
 
-/** 審查剔除之理由(列舉) */
+/** 審查剔除之理由(列舉);「性質標錯」指操作類別用錯(如應立爭議卻寫成取代或待解問題),標籤錯誤以 fix 改正 */
 export const DROP_REASONS = ['離題', '無出處支持', '同篇', '重複', '性質標錯', '捏造']
 
-/** 爭議類操作只接受之剔除理由——只收形式理由(程式保證:審查不可把真實爭議藏掉,安裝方 r3 實測「審計挑、修訂刪」使爭議流失)。
+/** 新增主張(add)與參數(param_add)之剔除理由:其標籤(種類 kind、證據性質 basis、快照 snapshot)可由審查以 fix 改正,故不收「性質標錯」——可修者不刪。
+ *  審查仍以此理由剔除者為無效裁決、按未裁決保留(與爭議類理由不合同一機制)。
+ *  (2026-10-01;安裝方 1.0.5 正式環境實測:審查以「性質標錯」剔除內容正確之新主張,引用它之爭議連帶拒收,一天 11 項;
+ *  當時提示詞只寫「fix 修正文字欄位」而未告知可改 kind／basis) */
+export const NEW_ITEM_DROP_REASONS = DROP_REASONS.filter((r) => r !== '性質標錯')
+
+/** 爭議類操作只接受之剔除理由——只收形式理由(對爭議類操作之直接裁決,審查不可把真實爭議藏掉;安裝方 r3 實測「審計挑、修訂刪」使爭議流失)。
  *  「兩方非對立」屬內容判斷,審查以 doubt(存疑)表達:爭議照立並加註,拆解另由提案／整併端以 dispute_dissolve 提出、審查明列保留
- *  (1.0.4 曾以「非對立」剔除,預設審查席之同系模型實測把真爭議當非對立剔除;2026-09-29 三獨立審定案 E′,檔頭⑧) */
+ *  (1.0.4 曾以「非對立」剔除,預設審查席之同系模型實測把真爭議當非對立剔除;2026-09-29 三獨立審定案 E′,檔頭⑧)。
+ *  間接路徑:剔除爭議所引之新項時爭議連帶拒收——新增主張之標籤錯誤已不可剔除(NEW_ITEM_DROP_REASONS),其餘理由之連帶一律記 WARN「提煉審查自相矛盾」 */
 export const DISPUTE_DROP_REASONS = ['離題', '同篇']
 
 /** 存疑之理由(裁決 action:'doubt';只適用於爭議類操作);舊寫法 drop＋「非對立」視同存疑 */
@@ -1234,8 +1253,8 @@ export const DISSOLVE_DROP_REASONS = [...DROP_REASONS, '對立成立']
 /** 模型可列入 skipped 之理由(支持既有主張之筆記須 confirm,不可列 skipped) */
 export const SKIP_REASONS = ['離題', '無可用知識', '品質不足']
 
-// 審查 fix 可改之欄位(不得新增出處:sources 只可刪減)
-const FIXABLE = {
+/** 審查 fix 可改之欄位(依操作;不得新增出處:sources 只可刪減)——審查提示詞自此表列出本批各操作可改之欄位(提示詞與程式同一來源) */
+export const FIXABLE_FIELDS = {
     add: ['text', 'conditions', 'pros', 'cons', 'period', 'critique', 'facet', 'basis', 'kind', 'sources'],
     confirm: ['sources'],
     revise: ['fields', 'reason', 'sources'],
@@ -1252,6 +1271,7 @@ const FIXABLE = {
     related_add: ['concepts'],
 }
 const DISPUTE_OPS = new Set(['dispute_add', 'dispute_update', 'contest'])
+const NEW_ITEM_OPS = new Set(['add', 'param_add'])
 
 
 /** 操作中所有「指向項目」之欄位值(含同差量之 '@ref') */
@@ -1330,9 +1350,15 @@ export function applyVerdicts(delta, verdicts, opt = {}) {
         }
         if (action === 'drop') {
             const reason = str(v.reason)
-            const okList = op?.op === 'dispute_dissolve' ? DISSOLVE_DROP_REASONS : (DISPUTE_OPS.has(op?.op) ? DISPUTE_DROP_REASONS : DROP_REASONS)
+            let okList = DROP_REASONS
+            if (op?.op === 'dispute_dissolve') okList = DISSOLVE_DROP_REASONS
+            else if (DISPUTE_OPS.has(op?.op)) okList = DISPUTE_DROP_REASONS
+            else if (NEW_ITEM_OPS.has(op?.op)) okList = NEW_ITEM_DROP_REASONS
             if (!okList.includes(reason)) {
-                verdictRejected.push({ i, reason: `${DISPUTE_OPS.has(op?.op) ? '爭議類操作' : '操作'}之剔除理由須為：${okList.join('、')}（收到「${reason}」）` })
+                // 新增主張／參數之「性質標錯」:標籤可由 fix 改正,不予剔除(按未裁決保留,內容不失;引用它之操作不連帶拒收)
+                const who = DISPUTE_OPS.has(op?.op) ? '爭議類操作' : (NEW_ITEM_OPS.has(op?.op) ? '新增主張／參數' : '操作')
+                const hint = NEW_ITEM_OPS.has(op?.op) && DROP_REASONS.includes(reason) ? '——標籤（種類、證據性質、快照）請以 fix 改正' : ''
+                verdictRejected.push({ i, reason: `${who}之剔除理由須為：${okList.join('、')}（收到「${reason}」${hint}）` })
                 unverdicted.push(i)
                 kept.push({ ...op, _i: i })
                 return
@@ -1341,7 +1367,7 @@ export function applyVerdicts(delta, verdicts, opt = {}) {
             return
         }
         if (action === 'fix') {
-            const allow = FIXABLE[op?.op] || []
+            const allow = FIXABLE_FIELDS[op?.op] || []
             const f = isobj(v.fields) ? v.fields : {}
             const keys = Object.keys(f).filter((k) => allow.includes(k))
             if (!keys.length) {
@@ -1656,4 +1682,4 @@ export function stateDigest(state, opt = {}) {
 }
 
 
-export default { STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, RETRACT_REASONS, TERMINAL_OPS, PENDING_REVIEW_CAP, DROP_REASONS, DISPUTE_DROP_REASONS, DOUBT_REASONS, DISSOLVE_DROP_REASONS, SKIP_REASONS, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, emptyState, upgradeState, findItem, deriveStatus, applyDelta, queuePendingReview, pendingReviewOps, applyVerdicts, coverageOf, commitBatch, checkInvariants, renderRules, stateDigest }
+export default { STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, RETRACT_REASONS, TERMINAL_OPS, PENDING_REVIEW_CAP, DROP_REASONS, NEW_ITEM_DROP_REASONS, DISPUTE_DROP_REASONS, DOUBT_REASONS, DISSOLVE_DROP_REASONS, FIXABLE_FIELDS, SKIP_REASONS, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, emptyState, upgradeState, findItem, deriveStatus, applyDelta, queuePendingReview, pendingReviewOps, applyVerdicts, coverageOf, commitBatch, checkInvariants, renderRules, stateDigest }

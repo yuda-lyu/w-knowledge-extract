@@ -32,8 +32,8 @@ import { normalizeFeedItems, filterFeedItems, admitFeedItems, ingestFeedItems } 
 import { conceptVocabulary, pickConcepts, pickCategories, orphanNotes, coreForKey, twinsOf, isReady, groupByConcept, suggestConceptRenames, tagSuspects } from './stores/conceptGroups.mjs'
 import {
     emptyState, upgradeState, findItem, deriveStatus, applyDelta, applyVerdicts, coverageOf, commitBatch, checkInvariants, stateDigest, renderRules,
-    queuePendingReview, pendingReviewOps, STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, TERMINAL_OPS, RETRACT_REASONS, DROP_REASONS,
-    DISPUTE_DROP_REASONS, DOUBT_REASONS, DISSOLVE_DROP_REASONS, SKIP_REASONS, PENDING_REVIEW_CAP, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS
+    queuePendingReview, pendingReviewOps, STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, TERMINAL_OPS, RETRACT_REASONS, DROP_REASONS, NEW_ITEM_DROP_REASONS,
+    DISPUTE_DROP_REASONS, DOUBT_REASONS, DISSOLVE_DROP_REASONS, SKIP_REASONS, PENDING_REVIEW_CAP, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, FIXABLE_FIELDS
 } from './stores/coreState.mjs'
 import { makeEvidence, UNASSESSED } from './stores/evidence.mjs'
 import { createCoreStore, mdHashOf } from './stores/coreStore.mjs'
@@ -289,6 +289,7 @@ let WKnowledgeExtract = {
     TERMINAL_OPS,
     RETRACT_REASONS,
     DROP_REASONS,
+    NEW_ITEM_DROP_REASONS,
     DISPUTE_DROP_REASONS,
     DOUBT_REASONS,
     DISSOLVE_DROP_REASONS,
@@ -296,6 +297,7 @@ let WKnowledgeExtract = {
     PENDING_REVIEW_CAP,
     DEFAULT_CLAIM_KINDS,
     DEFAULT_LIMITS,
+    FIXABLE_FIELDS,
     makeEvidence,
     UNASSESSED,
     createCoreStore,

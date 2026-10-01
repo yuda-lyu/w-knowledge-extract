@@ -15,7 +15,7 @@ import isobj from 'wsemi/src/isobj.mjs'
 import strTruncate from 'wsemi/src/strTruncate.mjs'
 import { sectionOf, dropSection } from '../md/md.mjs'
 import { resolveVocab, kbLabelOf } from './vocabDefault.mjs'
-import { DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, DROP_REASONS, DISPUTE_DROP_REASONS, DOUBT_REASONS, SKIP_REASONS, RETRACT_REASONS } from '../stores/coreState.mjs'
+import { DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, DROP_REASONS, NEW_ITEM_DROP_REASONS, DISPUTE_DROP_REASONS, DOUBT_REASONS, SKIP_REASONS, RETRACT_REASONS, FIXABLE_FIELDS } from '../stores/coreState.mjs'
 import { makeEvidence, UNASSESSED } from '../stores/evidence.mjs'
 
 
@@ -224,7 +224,7 @@ ${batch.map((b) => b.digest).join('\n\n')}`
     }
 
     /**
-     * 審查提示詞:逐操作裁決(keep／drop／fix);不得新增操作、fix 不得增加出處
+     * 審查提示詞:逐操作裁決(keep／drop／doubt／fix);不得新增操作、fix 不得增加出處;剔除只用於內容不成立者,標籤錯誤以 fix 改正
      *
      * @param {Object} ctx 輸入 { concept, scope, mode:'delta'|'pending'|'consolidate', ops:Array, batch:[{ code, digest }], touched(被觸及之既有條目摘要), rulesText, pending(舊參數:同 mode==='pending') }
      * @returns {String} 回傳 prompt 字串
@@ -233,16 +233,21 @@ ${batch.map((b) => b.digest).join('\n\n')}`
         const ops = isarr(ctx?.ops) ? ctx.ops : []
         const batch = isarr(ctx?.batch) ? ctx.batch : []
         const mode = ctx?.mode || (ctx?.pending ? 'pending' : 'delta')
+        // fix 可改之欄位:只列本批出現之操作,取自程式之 FIXABLE_FIELDS(提示詞與程式同一來源;1.0.5 只寫「修正文字欄位」,
+        //   審查不知 kind／basis 可改,遂以「性質標錯」整條剔除——安裝方正式環境實測,2026-10-01)
+        const fixable = [...new Set(ops.map((o) => o?.op))].filter((k) => FIXABLE_FIELDS[k]).map((k) => `${k}＝${FIXABLE_FIELDS[k].join('、')}`)
+        const kindEx = claimKinds[Math.min(2, claimKinds.length - 1)]
         const lead = {
             pending: `以下是「${ctx?.concept}」前次未經審查而暫緩之取代／撤回操作（逐條編號 i），以及其所引之筆記與被觸及之既有條目。`,
             consolidate: `以下是整併員對「${ctx?.concept}」提出之整併操作（逐條編號 i）與被觸及之既有條目；整併不處理筆記、不新增知識——請確認被合併者確為同義或重複、精簡後未改原意。`,
         }[mode] || `以下是提煉器對「${ctx?.concept}」提出之差量操作（逐條編號 i），以及本批筆記與被觸及之既有條目。`
         return `你是${kb}的審查員。${lead}請逐條裁決：
 - keep：保留；
-- drop：剔除，reason 擇一：${DROP_REASONS.join('｜')}（爭議類操作 dispute_add、dispute_update、contest 只能以「${DISPUTE_DROP_REASONS.join('」或「')}」剔除——不可把真實之對立藏掉；拆解 dispute_dissolve 若對立其實成立，以「對立成立」剔除）；
+- drop：剔除——只用於內容不成立者，reason 擇一：${DROP_REASONS.join('｜')}（「性質標錯」指操作類別用錯，如應立爭議卻寫成取代或待解問題；新增主張 add、參數 param_add 只能以「${NEW_ITEM_DROP_REASONS.join('」「')}」剔除——其種類、證據性質、快照標錯者請以 fix 改正，不可剔除；爭議類操作 dispute_add、dispute_update、contest 只能以「${DISPUTE_DROP_REASONS.join('」或「')}」剔除——不可把真實之對立藏掉；拆解 dispute_dissolve 若對立其實成立，以「對立成立」剔除）；
 - doubt：只用於爭議類操作——你依規則表「非對立之界線」認為兩方並非對立時用之，reason 寫「${DOUBT_REASONS[0]}」，note 寫明兩方各回答什麼問題、或為何可同時成立；程式照常套用該操作，並在爭議上標示審查存疑，不會移除（拆解另由提煉器提出）；
-- fix：修正文字欄位（fields），不可新增出處（sources 只可刪減）。
+- fix：以 fields 改正欄位（只寫要改之欄位與其新值），不可新增出處（sources 只可刪減）${fixable.length ? `；本次各操作可改之欄位：${fixable.join('；')}` : ''}；例：{"i":3,"action":"fix","fields":{"kind":"${kindEx}"},"note":"…"}。
 各裁決可附 note（一句說明，≤120 字）；drop 與 doubt 請務必附。爭議各方以 side k 標示，k 即操作之 "side" 值（自 0 起）。
+被其他操作以 "@ref名" 引用之新項若剔除，引用它之操作會一併不成立（連帶拒收）——內容可用而標籤或措辭有誤者，請以 fix 改正，不要剔除。
 取代（supersede）、撤回（retract）、合併（merge）、拆解（dispute_dissolve）不可逆，須逐條明列裁決；未列出者視為未審、本次不套用。其餘操作未列出者視為 keep。不得新增操作，不要重寫整份核心。
 
 【規則】（與提煉器相同；依優先序）

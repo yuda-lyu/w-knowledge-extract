@@ -182,6 +182,20 @@ describe('unit-domain', function() {
         assert.match(d.renderState(s2, { notesById: new Map() }).body, / {2}- 審查存疑（v4，累計 2 次；非對立）：兩方回答不同問題/)
     })
 
+    it('審查提示詞(2026-10-01;安裝方 1.0.5 實測審查以「性質標錯」整條剔除):fix 可改之欄位依本批操作自 FIXABLE_FIELDS 列出並附格式;新增主張／參數不以「性質標錯」剔除;告知剔除被引用之新項會連帶', () => {
+        const d = createDistillDomain({})
+        const rulesText = renderRules(d.rules)
+        const ops = [{ op: 'add', ref: 'a', kind: 'rule', text: 't', sources: ['N1'] }, { op: 'dispute_add', question: 'q', sides: [] }, { op: 'param_add', name: 'k', value: '1', sources: ['N1'] }, { op: 'add', kind: 'rule', text: 'u', sources: ['N2'] }]
+        const rv = d.buildReviewPrompt({ concept: '概念', mode: 'delta', ops, batch: [], rulesText })
+        assert.ok(rv.includes('本次各操作可改之欄位：add＝text、conditions、pros、cons、period、critique、facet、basis、kind、sources；dispute_add＝question、note；param_add＝name、value、conditions、period、snapshot、sources；'), '只列本批出現之操作、依出現序、與程式同一來源')
+        assert.ok(rv.includes('例：{"i":3,"action":"fix","fields":{"kind":"pitfall"},"note":"…"}'))
+        assert.ok(rv.includes('新增主張 add、參數 param_add 只能以「離題」「無出處支持」「同篇」「重複」「捏造」剔除——其種類、證據性質、快照標錯者請以 fix 改正，不可剔除'))
+        assert.ok(rv.includes('「性質標錯」指操作類別用錯'))
+        assert.ok(rv.includes('被其他操作以 "@ref名" 引用之新項若剔除，引用它之操作會一併不成立（連帶拒收）——內容可用而標籤或措辭有誤者，請以 fix 改正，不要剔除。'))
+        assert.ok(!d.buildReviewPrompt({ concept: '概念', mode: 'pending', ops: [], batch: [], rulesText }).includes('本次各操作可改之欄位'), '無操作不列')
+        assert.ok(d.claimKinds.includes(/"fields":\{"kind":"([^"]+)"\}/.exec(rv)[1]), '範例之種類取自許可清單')
+    })
+
     it('本質之 claims 只列主張、爭議寫在文字(1.0.5 真實模型驗收實測:本質 claims 引爭議之 @d 而整條被拒);文字可寫〔@ref名〕(程式換成實際編號)', () => {
         const d = createDistillDomain({})
         const rulesText = renderRules(d.rules)
