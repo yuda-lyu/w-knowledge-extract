@@ -1,0 +1,164 @@
+{
+  "std": "ES9",
+  "v": 2,
+  "note": "依出處收斂措辭之修訂(檢定標準 ES9 之語氣超出證據;修訂席)之通用題組:每案一個經兩席判為「語氣超出證據」之斷言(新增主張或爭議之一方)、其所引出處與覆核說明,請模型依出處改寫 text／conditions／period(方:立場與條件),改不成者回 drop。應然由正式提示詞之規則推得——收斂語氣、縮小到出處涉及之範圍、出處所載之前提寫進條件、期間寫進 period;不得加入出處沒有之內容、不得把斷言改成另一件事(出處所支持者已是另一件事時應 drop)。應然 fix 之謂詞為案明定之可接受寫法(conditionsAny:條件須含其一;periodAny:期間須含其一;textMustNot:斷言不得再含),改寫須先過正式之操作守門與納入閘(數字紮根、標注、不提及筆記、流程外洩)。題材中立(教育、園藝、交通、家電、料理、健康、工作)、材料為合成,只收判得清楚之案。",
+  "cases": [
+    {
+      "id": "r01",
+      "holdout": false,
+      "input": {
+        "kind": "add",
+        "text": "每日晨讀可提高學生之閱讀能力",
+        "annotation": { "kind": "rule", "critique": "僅單一學校、單一年級之一學期觀察", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "a1", "title": "單一小學晨讀計畫", "text": "某一所小學之三年級實施每日 15 分鐘晨讀一學期後，該年級學生之閱讀測驗平均分數較前一學期提高。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只涵蓋某一所小學之三年級、實施一學期之結果，斷言寫成一般學生皆適用" }]
+      },
+      "expect": { "fix": { "conditionsAny": ["三年級", "小學"] } },
+      "why": "出處只支持單一小學三年級一學期之結果;收斂時須把該前提寫進條件(含三年級或小學)"
+    },
+    {
+      "id": "r02",
+      "holdout": false,
+      "input": {
+        "kind": "add",
+        "text": "該河段之溶氧量維持在每公升 6 毫克以上",
+        "annotation": { "kind": "rule", "critique": "僅單一河段之觀測", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "b1", "title": "河段水質觀測", "text": "在 2018 至 2020 年之觀測期間，該河段之溶氧量維持在每公升 6 毫克以上；之後未再觀測。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只涵蓋 2018 至 2020 年之觀測期間，斷言寫成不限期間" }]
+      },
+      "expect": { "fix": { "periodAny": ["2018", "2020"] } },
+      "why": "出處之結論限於 2018 至 2020 年之觀測期間;期間須寫進 period"
+    },
+    {
+      "id": "r03",
+      "holdout": false,
+      "input": {
+        "kind": "add",
+        "text": "使用此款麵粉製作之麵包一定更鬆軟",
+        "annotation": { "kind": "rule", "critique": "僅一次試做", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "c1", "title": "麵粉試做紀錄", "text": "以此款麵粉製作之吐司，在一次試做中體積較大；口感未評估。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只記錄一次試做之體積較大，未評估口感" }]
+      },
+      "expect": { "drop": true },
+      "why": "出處只支持體積較大、口感未評估;收斂到出處所支持者即成另一件事(體積而非鬆軟)——不得把斷言改成另一件事 → drop"
+    },
+    {
+      "id": "r04",
+      "holdout": false,
+      "input": {
+        "kind": "side",
+        "text": "遠距教學之學習成效一律優於實體課程",
+        "question": "遠距教學與實體課程之學習成效",
+        "sources": [{ "id": "d1", "title": "某大學線上課程比較", "text": "某大學一門統計入門課比較線上班與實體班，線上班之期末測驗平均分數略高於實體班。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只比較某大學之一門統計入門課，且差距為略高" }]
+      },
+      "expect": { "fix": { "conditionsAny": ["統計", "大學", "一門"], "textMustNot": ["一律"] } },
+      "why": "爭議之一方:出處只涵蓋某大學一門統計入門課;收斂須去掉「一律」並把範圍寫進條件"
+    },
+    {
+      "id": "r05",
+      "holdout": false,
+      "input": {
+        "kind": "add",
+        "text": "所有番茄品種在每日日照 6 小時以上時結果數皆較多",
+        "annotation": { "kind": "rule", "critique": "僅單一溫室之單一品種", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "e1", "title": "溫室番茄日照試驗", "text": "在同一溫室內比較同一品種之番茄植株：每日日照 6 小時以上之組別，平均每株結果數多於每日日照不足 4 小時之組別。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只比較同一溫室內之一個品種，斷言擴大到所有品種" }]
+      },
+      "expect": { "fix": { "textMustNot": ["所有"], "conditionsAny": ["溫室", "同一品種", "單一品種"] } },
+      "why": "出處只涵蓋同一溫室之單一品種;收斂須去掉「所有」並把溫室或品種之前提寫進條件"
+    },
+    {
+      "id": "r06",
+      "holdout": false,
+      "input": {
+        "kind": "add",
+        "text": "雨天騎乘機車時煞車距離一定會加倍",
+        "conditions": ["路面濕滑"],
+        "annotation": { "kind": "pitfall", "critique": "僅單次測試" },
+        "sources": [{ "id": "f1", "title": "機車煞車距離測試", "text": "某次測試中，濕滑路面之機車煞車距離約為乾燥路面之 1.5 倍。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處為單次測試且量到約 1.5 倍，斷言寫成一定加倍" }]
+      },
+      "expect": { "fix": { "textMustNot": ["一定", "加倍"], "conditionsAny": ["濕滑", "雨"] } },
+      "why": "陷阱主張:出處只量到單次測試約 1.5 倍;收斂須去掉「一定」「加倍」,條件仍須含濕滑路面(陷阱主張缺條件即不過標注之納入閘)"
+    },
+    {
+      "id": "r07",
+      "holdout": false,
+      "input": {
+        "kind": "side",
+        "text": "此款節能燈泡在任何環境下皆可使用十年",
+        "question": "此款節能燈泡之使用年限",
+        "sources": [{ "id": "g1", "title": "燈泡壽命估計", "text": "製造商估計，在室溫 25 度、每日點亮 3 小時之條件下，此款燈泡可使用約十年。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處為製造商於特定使用條件下之估計值" }]
+      },
+      "expect": { "fix": { "textMustNot": ["任何環境"], "conditionsAny": ["每日", "室溫", "25 度", "3 小時"] } },
+      "why": "爭議之一方:出處只支持特定使用條件下之估計;收斂須去掉「任何環境」並把使用條件寫進條件"
+    },
+    {
+      "id": "r08",
+      "holdout": true,
+      "input": {
+        "kind": "add",
+        "text": "每天喝綠茶可以預防慢性病",
+        "annotation": { "kind": "rule", "critique": "僅一項觀察研究", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "h1", "title": "綠茶與血液指標", "text": "一項觀察研究發現，每日飲用綠茶者之某項血液指標略低；研究未追蹤疾病之發生。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只觀察到某項血液指標略低，未涉及疾病之預防" }]
+      },
+      "expect": { "drop": true },
+      "why": "出處只支持某項血液指標略低、未追蹤疾病;收斂即成另一件事(血液指標而非預防疾病)→ drop"
+    },
+    {
+      "id": "r09",
+      "holdout": false,
+      "input": {
+        "kind": "add",
+        "text": "道路改為單行道可減少交通事故",
+        "annotation": { "kind": "rule", "critique": "僅單一路段改制前後一年之比較", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "i1", "title": "單行道改制評估", "text": "某市一條路段於 2021 年改為單行道後，之後一年內該路段之交通事故件數較改制前一年減少。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只涉及某市單一路段改制前後一年之比較" }]
+      },
+      "expect": { "fix": { "conditionsAny": ["路段", "某市"] } },
+      "why": "出處只涵蓋某市單一路段;收斂須把路段之前提寫進條件"
+    },
+    {
+      "id": "h1",
+      "holdout": true,
+      "input": {
+        "kind": "add",
+        "text": "使用站立式辦公桌可改善員工之背痛",
+        "annotation": { "kind": "rule", "critique": "僅一家公司之自評", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "j1", "title": "站立式辦公桌與背痛", "text": "某公司 30 名員工使用站立式辦公桌 3 個月後，自評之背痛程度較使用前降低。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只為一家公司 30 名員工 3 個月之自評結果" }]
+      },
+      "expect": { "fix": { "conditionsAny": ["自評", "30 名", "3 個月", "一家公司", "某公司"] } },
+      "why": "出處只涵蓋一家公司之自評;收斂須把自評、人數、期間或公司等前提寫進條件"
+    },
+    {
+      "id": "h2",
+      "holdout": true,
+      "input": {
+        "kind": "side",
+        "text": "所有手機應用程式改用深色介面皆可省電",
+        "question": "深色介面是否省電",
+        "sources": [{ "id": "k1", "title": "深色介面耗電量測", "text": "在 OLED 螢幕之手機上，深色介面之耗電量較淺色介面低；LCD 螢幕之手機則差異不大。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只在 OLED 螢幕之手機上量到省電，LCD 螢幕差異不大" }]
+      },
+      "expect": { "fix": { "textMustNot": ["所有"], "conditionsAny": ["OLED"] } },
+      "why": "爭議之一方:出處只支持 OLED 螢幕之手機;收斂須去掉「所有」並把 OLED 寫進條件"
+    },
+    {
+      "id": "h3",
+      "holdout": true,
+      "input": {
+        "kind": "add",
+        "text": "此款空氣清淨機可去除室內所有過敏原",
+        "annotation": { "kind": "rule", "critique": "僅測試塵蟎過敏原", "pros": ["出處未載"], "cons": ["出處未載"] },
+        "sources": [{ "id": "l1", "title": "空氣清淨機測試", "text": "在密閉之測試室內運轉 1 小時後，此款空氣清淨機使塵蟎過敏原濃度降低約九成；其他過敏原未測試。" }],
+        "votes": [{ "verdict": "overclaim", "reason": "出處只測試塵蟎過敏原且於密閉測試室內" }]
+      },
+      "expect": { "fix": { "textMustNot": ["所有"], "conditionsAny": ["測試室", "密閉", "塵蟎"] } },
+      "why": "出處只涵蓋密閉測試室內之塵蟎過敏原;收斂須去掉「所有」並把測試條件寫進條件(或斷言改為塵蟎過敏原時,條件仍須含其一)"
+    }
+  ]
+}

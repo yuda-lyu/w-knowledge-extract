@@ -1,0 +1,1815 @@
+// extractBench.mjs — 提煉之 AI 能力評分(十四角色):以抓取套件之角色化評分核心(defineBenchRole、runBench、defineBenchRoles)定義
+//   判定類六角色——出處支持覆核(support-check;ES9)、依出處收斂措辭之修訂(support-revise;ES9 之語氣超出證據)、失撐主張找支持(orphan-check;ES8)、
+//   爭議覆核(dispute-check;ES14)、同義覆核(synonym-check;ES11)、同義提議(synonym-propose;ES11)——與工作流類八角色(3+3 之各棒與待審裁決;
+//   id 以 wf- 前綴)——審計(wf-audit)、終審(wf-accept)、待審裁決(wf-pending)、整合(wf-integrate)、起草(wf-draft)、修訂(wf-revise)、
+//   整併(wf-consolidate)、本質(wf-essence);判準、失敗與停測、併發、報表與評比表皆在核心
+//
+// 【呼叫與解析同正式】各角色皆給 call:單棒經提煉之單棒呼叫包裝 extractAiCall(callVia;與正式之各判定小組與 3+3 之單棒同一路徑——席位依
+//   提示詞長度預篩遞補鏈、工作流入口 getWkf().callAi、acceptTruncated:false、正式之 parseXxx 取回覆中最後一個含指定鍵且過 check 之物件);
+//   起草三席之棒(起草、整併、本質)經正式之 extractFanout(fanoutVia):受測模型為起草第一席,其餘兩席為凍結腳本(替身調度層回合法之空差量,
+//   不呼叫 AI;正式之 extractFanout 不改)——只量受測席之候選。交調度層之 check 為正式之 checkXxx。結果轉為核心所讀之形狀(抓取套件之
+//   callJsonShapeOf;失敗之逐次摘要「條目:錯誤型別(耗時)」與驗證失敗之不合格原因同核心之 callJson),調度事件經 extractAiCall 轉交(冷卻＝限流即停)。
+// 【提示詞與判定同正式】提示詞一律以本套件之正式 domain(createExtractDomain;建構參數為詞彙與語言設定)組;ES9／ES8／ES14／ES11 之頁組法為
+//   standards/esCases(與安裝方之檢定標準逐案題組同一份,亦與正式之 run*Check 同一組法)。工作流類之提示詞為正式之 domain.build*Prompt＋正式呼叫點
+//   之附錄(終審附錄;重審段於無重審筆記時為空,同正式),材料由案之合成核心狀態(esCases 之 coreStateOf)與合成出處組成。逐案之類別以正式之函數
+//   算出(各角色之類別見【類別】)。量的是模型於正式提示詞與正式判準下之表現,不另立一套評分規則、不設相似度門檻。詞彙經 opt.vocab／命令列 --vocab
+//   注入即以之組提示詞(只收本套件所讀之鍵;多段共用之詞彙表加 --vocab-pick);語言設定經 opt.lang／命令列 --lang(預設同正式:臺灣正體)。
+// 【判準】逐案每回之類別皆＝應然才通過(核心之 judgeBenchCase;一回不符即不通過,不以比率放行);合契約率、耗時、呼叫失敗只列資訊。
+// 【類別】
+//   support-check    supported／not(不受支持之三種原因同類)／unsure;應然列了支持之出處(expect.by)者,受支持之票須分別列出、非空且皆屬應然,
+//                    否則 supported(出處不符)
+//   support-revise   ok／首個不成立之謂詞:drop(應改不成而改寫)、fix(應改寫而回 drop)、gate(套回後未過操作守門＋納入閘)、conditionsAny
+//                    (條件未含任一可接受之寫法)、periodAny(期間未含任一可接受之寫法)、textMustNot(斷言仍含不得之寫法);回覆無該項、該項無
+//                    text 亦非 drop 或同編號多份(正式不採)→ 無裁決。可接受寫法之片語為案明定之集合(是否含某片語之確定判斷)
+//   orphan-check     supported／none／unsure;應然為 supported 者,所列筆記須非空且皆屬應然,否則 supported(出處不符)
+//   dispute-check    opposed／not／not-nofields(非對立而拆解欄位不可用:esCases 之 dissolveUsableOf,與正式之拆解同一路徑)／unsure
+//   synonym-check    same／different／unsure
+//   synonym-propose  ok／must(漏提應提之配對)／mustNot(提了不應提之配對);名單外之名、同名之配對為不合契約(正式略去,只列資訊)
+//   wf-*             ok／首個不成立之謂詞(案之 expect 所列者,依角色之謂詞序;各謂詞以正式之函數判,見各角色之 WF 定義)
+// 【分頁】ES 四角色依 esCases(--batch 可改每頁案數;失撐找支持恆一案一頁);修訂每頁 10 案(出處依頁內首次出現序去重標號,同正式);
+//   提議與工作流類一案一頁。同頁之案須同一份詞彙(核心之規則):自帶詞彙(input.vocab)不同之案分頁(抓取套件之 paginateByVocab)。
+// 【題組】內建通用題組 bench/cases/<角色 id>-generic.json(檔名依角色 id 推得;領域中立、合成材料、無外部連結);support-check／orphan-check／
+//   dispute-check／synonym-check 與檢定標準 ES9／ES8／ES14／ES11 之逐案題組同形(可以 --cases 原樣收)。
+// 【結構合規】工作流類第二批(wf-draft、wf-revise、wf-consolidate、wf-essence)之謂詞只驗格式、涵蓋與程式可判之性質(引用、去向、套用、不變式、
+//   長度、紮根),不驗「抓到該抓之要點」——評比表之「角色」欄標「結構合規」(WF_STRUCTURAL)。
+// 【命令列】runExtractBenchCli:--role <角色 id|all>(預設 all:依序十四角色)、--lang <BCP 47 語言代碼>(本套件之參數,全部角色共用)加核心之全部參數;
+//   --role 解析、--vocab-pick、全部角色之準備期與停測帶過為抓取套件之多角色命令列(defineBenchRoles)。各角色之列並存於同一評比表(--board)。
+//   bench/cli.mjs 為薄殼。
+
+import { fileURLToPath } from 'url'
+import isobj from 'wsemi/src/isobj.mjs'
+import isarr from 'wsemi/src/isarr.mjs'
+import isestr from 'wsemi/src/isestr.mjs'
+import isfun from 'wsemi/src/isfun.mjs'
+import {
+    oneline, textValueOf, textListOf, uniq, unknownKeysProblem, resolveLocale, STATUS,
+    defineBenchRole, defineBenchRoles, DEFAULT_FREE_MODELS, callJsonShapeOf, paginateByVocab, benchPintOf,
+    typeName, inputVocabProblemsOf, domainNeedsOf, noVerdict, batchOption, benchVoteMissingOf,
+} from '../core/capturePackage.mjs'
+import { PANEL_UNSURE } from '../core/summarizePackage.mjs'
+import { EXTRACT_DEFAULT } from '../core/extractSettings.mjs'
+import { pickExtractVocab } from '../core/vocab/extractVocab.mjs'
+import { createExtractDomain, SUPPORT_KINDS } from '../domain/extractDomain.mjs'
+import { extractAiCall, extractFanout } from '../workflow/aiCall.mjs'
+import { TERMINAL_SET, TERMINAL_OPS, DISPUTE_OPS, essenceNeedOf, findItem, checkInvariants } from '../stores/coreState.mjs'
+import { applyDelta, coverageOf, opLengthProblem } from '../stores/coreDelta.mjs'
+import { stateDigest } from '../stores/stateDigest.mjs'
+import { guardOps } from '../standards/opGuards.mjs'
+import { createOpStandards, opStandardsCtxOf, applyCtxOf, gateOps } from '../standards/opStandards.mjs'
+import { checkCore } from '../standards/coreStandards.mjs'
+import { parseDraft, checkDraft, parseAudit, checkAudit, parsePatch, checkPatch, parseVerdicts, checkVerdicts, normalizeDelta } from '../standards/parse.mjs'
+import { ES9, SUPPORT_VERDICTS, checkSupportVerdictOf, parseSupportChecks, checkSupportChecks } from '../standards/supportCheck.mjs'
+import { applySupportFixes, supportFixesOf, parseSupportRevise, checkSupportRevise } from '../standards/supportRevise.mjs'
+import { ES8, ORPHAN_VERDICTS, checkOrphanVerdictOf, parseOrphanChecks, checkOrphanChecks } from '../standards/orphanCheck.mjs'
+import { ES14, DISPUTE_VERDICTS, checkDisputeVerdictOf, parseDisputeChecks, checkDisputeChecks } from '../standards/disputeCheck.mjs'
+import { ES11, SYNONYM_VERDICTS, checkSynonymVerdictOf, parseSynonymChecks, checkSynonymChecks, parseSynonymProposals, checkSynonymProposals, proposedCandidatesOf, pairKeyOf } from '../standards/synonymCheck.mjs'
+import {
+    ES_CASE_PAGE_SIZE, ES_CASE_CONCEPT, REVISE_CASE_KINDS, esPageOf, esVotesOf, esSupportClassOf, esOrphanClassOf, esSynonymClassOf,
+    esExpectClassOf, esDisputeClassOf, esCaseInputProblems, esSuiteProblems, reviseCaseOf, reviseReasonsOf, reviseVotesProblems, coreStateOf,
+} from '../standards/esCases.mjs'
+import { applyVerdicts, pendingReviewOps, FIXABLE_FIELDS } from '../workflow/verdicts.mjs'
+import { ISSUE_TYPES, SEV_HIGH, issueOnOp, normalizeIssues, applyPatch, gateVerdicts } from '../workflow/reviewGuards.mjs'
+import { prefixCandidate, trialApply, voteOps, validateVia, droppedMajority, applyRefAliases, normalizeBareRefs, closeRefs, stripProgramFields } from '../workflow/candidates.mjs'
+import { stateView, rulesTextOf, touchedText, trimToLimit } from '../workflow/runPass.mjs'
+import { pendingReviewPromptOf } from '../workflow/pending.mjs'
+
+/** 提煉設定之預設(受測名單取此) */
+const EX = EXTRACT_DEFAULT
+
+/**
+ * 內建通用題組之檔(依角色 id 推得:bench/cases/<id>-generic.json;模組所在資料夾之檔案,以 fileURLToPath 解析)
+ *
+ * @param {String} id 輸入角色 id
+ * @returns {String} 回傳絕對路徑
+ */
+const casesFileOf = (id) => fileURLToPath(new URL(`./cases/${id}-generic.json`, import.meta.url))
+
+/**
+ * 預設受測名單:提煉之預設起草三席(extract.ai.drafters 之 use 與 fallback;依序)在前,其餘依核心之免費名單(DEFAULT_FREE_MODELS)
+ *
+ * @type {Array}
+ */
+export const EXTRACT_BENCH_MODELS = Object.freeze([...new Set([...EX.ai.drafters.flatMap((s) => [s.use, ...(isarr(s.fallback) ? s.fallback : [])]), ...DEFAULT_FREE_MODELS])])
+
+/** 修訂之應然謂詞(依判定之序) */
+const FIX_KEYS = Object.freeze(['conditionsAny', 'periodAny', 'textMustNot'])
+
+// ════════════════ 共用小件(角色作者之通用件——型別名、分頁、詞彙鍵、案詞彙之檢核、domain 之形狀檢核、無裁決、每頁案數選項、正整數參數、呼叫結果之轉換——
+//   取抓取套件之 benchKit 與調度層;回覆之文字值取其 textValueOf(與正式之判定同一份);本檔只放提煉專屬者)════════════════
+
+/**
+ * 非空字串陣列
+ *
+ * @param {*} v 輸入值
+ * @returns {Boolean} 回傳是否為非空之非空字串陣列
+ */
+const nonEmptyStrs = (v) => isarr(v) && v.length > 0 && v.every((x) => isestr(x) && x.trim() !== '')
+
+/**
+ * 案自帶詞彙之檢核(以本套件詞彙表之規格驗——以之建提煉 domain;未帶不驗;抓取套件之 inputVocabProblemsOf)
+ *
+ * @param {Object} c 輸入案
+ * @returns {Array} 回傳問題說明陣列
+ */
+const inputVocabProblems = (c) => inputVocabProblemsOf(c, (v) => createExtractDomain({ vocab: v }))
+
+/** domain → 其語言設定(以語言設定建之 domain 才登錄;未登錄者＝正式之預設) */
+const LOCALES = new WeakMap()
+
+/**
+ * 以詞彙建 domain 之函數(角色之 domainOf;詞彙只收本套件所讀之鍵——多段共用之詞彙表由 --vocab-pick 取子集);給了語言設定即以之建 domain 並登錄
+ *   (操作守門之正體轉換讀之,同正式之每輪依賴 deps.locale)
+ *
+ * @param {Object|null} locale 輸入語言設定(resolveLocale 之產物;null＝正式之預設)
+ * @returns {Function} 回傳 (vocab) => 提煉 domain
+ */
+const domainOfLocale = (locale) => (vocab) => {
+    const d = createExtractDomain({ vocab, ...(locale ? { locale } : {}) })
+    if (locale) LOCALES.set(d, locale)
+    return d
+}
+
+/** 預設語言設定之 domainOf */
+const domainOf = domainOfLocale(null)
+
+/**
+ * 該 domain 之語言設定(未登錄者 undefined——操作守門取正式之預設)
+ *
+ * @param {Object} d 輸入 domain
+ * @returns {Object|undefined} 回傳語言設定
+ */
+const localeOf = (d) => (isobj(d) ? LOCALES.get(d) : undefined)
+
+/**
+ * domain 之形狀檢核(角色之 domainProblem;抓取套件之 domainNeedsOf——須為物件、須具之提示詞函數):納入閘另讀主張種類、長度上限、證據判定與弱證據之說法
+ *
+ * @param {Array} fns 輸入須具之函數名
+ * @param {Object} [opt={}] 輸入 { gate:Boolean(須具 claimKinds、limits、evidence、weakEvidence——拆解、修訂與工作流之納入閘讀之) }
+ * @returns {Function} 回傳 (d) => String(問題說明;空字串＝合格)
+ */
+const domainNeeds = (fns, opt = {}) => domainNeedsOf(fns, (d) => {
+    if (!opt.gate) return ''
+    if (!isarr(d.claimKinds) || !d.claimKinds.length || !d.claimKinds.every(isestr)) return '之 claimKinds 須為非空字串陣列（納入閘讀之）'
+    if (!isobj(d.limits)) return '之 limits 須為物件（納入閘讀之）'
+    if (!isobj(d.evidence) || !isfun(d.evidence.apply)) return '之 evidence 須具 apply（納入閘之證據重算讀之）'
+    if (opt.weak && !isestr(d.weakEvidence)) return '之 weakEvidence 須為非空字串（納入閘之 ES13 讀之）'
+    return ''
+})
+
+/**
+ * 一筆驗證失敗之回覆之不合格原因(同正式之 parse 與 check 重判一次:解析不出含指定鍵之物件,或 check 回之說明)
+ *
+ * @param {*} stdout 輸入該次嘗試之回覆原文
+ * @param {Function} parse 輸入正式之解析器
+ * @param {Function} check 輸入交調度層之 check
+ * @returns {String} 回傳原因
+ */
+function replyRejectOf(stdout, parse, check) {
+    let j = null
+    try {
+        j = parse(String(stdout ?? ''))
+    }
+    catch { /* 解析拋錯同解析不出 */ }
+    if (j === null || j === undefined) return '回覆中無含指定鍵之物件（非 JSON 或缺鍵）'
+    let v
+    try {
+        v = check(j)
+    }
+    catch (e) {
+        v = `check 拋錯：${oneline(e?.message || e, 80)}`
+    }
+    return v === true ? '' : (isestr(v) ? v : '不合 check')
+}
+
+/**
+ * 逐次嘗試中驗證失敗者之不合格原因(依序;交 callJsonShapeOf 對應 tried 中之驗證失敗者)
+ *
+ * @param {Object} r 輸入單棒結果(取 tried)
+ * @param {Function} parse 輸入正式之解析器
+ * @param {Function} check 輸入交調度層之 check
+ * @returns {Array} 回傳原因陣列
+ */
+const rejectsOf = (r, parse, check) => (isarr(r?.tried) ? r.tried : []).filter((t) => t?.errorType === 'validation').map((t) => replyRejectOf(t?.stdout, parse, check))
+
+/**
+ * 角色之自訂呼叫(單棒):經 extractAiCall(正式之單棒呼叫包裝;席位＝核心給之受測席位,不遞補)
+ *
+ * @param {String} stage 輸入棒名(同正式之段名;逐棒紀錄用)
+ * @param {Function} parse 輸入正式之解析器
+ * @returns {Function} 回傳 async (adapter, prompt, ctx:{ spec, check, onEvent }) => callJson 之形狀
+ */
+const callVia = (stage, parse) => async (adapter, prompt, ctx) => {
+    const r = await extractAiCall(adapter, { stage, seat: ctx.spec, prompt, parse, check: ctx.check, onEvent: ctx.onEvent })
+    return callJsonShapeOf(r, rejectsOf(r, parse, ctx.check))
+}
+
+/** 起草三席之其餘兩席(凍結腳本;替身調度層據以回合法之空差量 { ops:[], skipped:[] }——只量受測席之候選,其餘席不影響類別) */
+const FROZEN_SEATS = Object.freeze([Object.freeze({ use: 'frozen:2' }), Object.freeze({ use: 'frozen:3' })])
+
+/**
+ * 替身調度層(起草三席之棒;正式之 extractFanout 不改):受測席經真調度層之工作流入口之單一名額呼叫(與 runFanout 之各席同一呼叫;調度事件轉交),
+ *   凍結席回合法之空差量、不送出、不記帳
+ *
+ * @param {Object} adapter 輸入真調度層(getWkf、seatSpec、recordCall?)
+ * @param {Function} [onEvent] 輸入調度事件之回呼(核心之失敗歸類讀之)
+ * @returns {Object} 回傳 { seatSpec, recordCall, getWkf }
+ */
+function fanoutAdapterOf(adapter, onEvent) {
+    const frozen = new WeakSet()
+    const isFrozen = (use) => FROZEN_SEATS.some((s) => s.use === use)
+    return {
+        seatSpec: (seat, len) => (FROZEN_SEATS.includes(seat) ? { use: seat.use, fallback: [], timeoutMs: 1, budgetMs: 1 } : adapter.seatSpec(seat, len)),
+        recordCall: (r) => {
+            if (isobj(r) && !frozen.has(r)) adapter.recordCall?.(r)
+        },
+        getWkf: () => ({
+            runFanout: async (o) => ({
+                ok: true,
+                agents: await Promise.all((isarr(o?.agents) ? o.agents : []).map(async (a) => {
+                    if (isFrozen(a.use)) {
+                        const r = { ok: true, json: { ops: [], skipped: [] }, providerId: a.use, ms: 0, tried: [] }
+                        frozen.add(r)
+                        return r
+                    }
+                    const { use, fallback, ...rest } = a
+                    return adapter.getWkf().callAi(o.task, { spec: { use, fallback }, ...rest, shouldStop: o?.callOpt?.shouldStop, ...(isfun(onEvent) ? { onEvent } : {}) })
+                })),
+            }),
+        }),
+    }
+}
+
+/**
+ * 角色之自訂呼叫(起草三席之棒:起草、整併、本質):經正式之 extractFanout,受測模型為第一席、其餘兩席為凍結腳本(fanoutAdapterOf);取第一席之結果
+ *
+ * @param {Function} parse 輸入正式之解析器(parseDraft)
+ * @returns {Function} 回傳 async (adapter, prompt, ctx:{ spec, check, onEvent }) => callJson 之形狀
+ */
+const fanoutVia = (parse) => async (adapter, prompt, ctx) => {
+    const ai = fanoutAdapterOf(adapter, ctx.onEvent)
+    const fan = await extractFanout(ai, { stages: ['draft1', 'draft2', 'draft3'], seats: [ctx.spec, ...FROZEN_SEATS], prompt, parse, check: ctx.check })
+    const own = fan.results.find((x) => x.k === 0)
+    if (!own) return callJsonShapeOf(fan.stopped ? { ok: false, error: 'stopped', stopped: true } : { ok: false, error: 'oversize', oversize: true })
+    return callJsonShapeOf(own.r, rejectsOf(own.r, parse, ctx.check))
+}
+
+/**
+ * 一席回覆中某編號之原樣(顯示用):裁決值與所列出處
+ *
+ * @param {*} raw 輸入回覆之單項
+ * @returns {String} 回傳顯示字串
+ */
+const rawVerdictText = (raw) => (isobj(raw) ? oneline(`${textValueOf(raw.verdict)}${isarr(raw.by) && raw.by.length ? `[${raw.by.map(String).join(',')}]` : ''}`, 60) : '')
+
+/**
+ * 回覆中某編號之項(checks 之項;依序)
+ *
+ * @param {*} data 輸入回覆({ checks })
+ * @param {Integer} k 輸入項編號
+ * @returns {Array} 回傳項陣列
+ */
+const rawsOf = (data, k) => (isarr(data?.checks) ? data.checks : []).filter((x) => Number(x?.index) === k)
+
+/**
+ * 缺票之原因(同編號之票皆不合格、互相矛盾或無此編號;字樣取核心之 benchVoteMissingOf——各套件同一份,本套件只加回覆容器之形狀)
+ *
+ * @param {*} data 輸入回覆
+ * @param {Integer} k 輸入項編號
+ * @param {Function} single 輸入正式之單票驗證 (raw) => 票|PANEL_UNSURE|null
+ * @returns {String} 回傳原因
+ */
+function voteMissingOf(data, k, single) {
+    if (!isarr(data?.checks)) return `回覆不含 checks 陣列（${typeName(data)}）`
+    return benchVoteMissingOf(rawsOf(data, k), k, single, { empty: data.checks.length ? '' : '回覆之 checks 為空' })
+}
+
+/**
+ * 頁之組法之快取(頁之案陣列 → { domain, page };promptOf 時記下、verdictOf 讀之——純效能:未命中即重算,頁組法只依案與 domain)
+ *
+ * @type {WeakMap}
+ */
+const PAGES = new WeakMap()
+
+/**
+ * 每頁案數(角色參數 roleOpt.batch;正整數之檢核取抓取套件之 benchPintOf;失撐找支持恆 1)
+ *
+ * @param {String} std 輸入標準 id
+ * @param {Object} [ctx] 輸入 paginate 之 ctx(取 roleOpt.batch)
+ * @returns {Integer} 回傳每頁案數
+ */
+const batchSizeOf = (std, ctx) => (std === ES8.std ? 1 : benchPintOf(ctx?.roleOpt?.batch, ES_CASE_PAGE_SIZE, 'batch'))
+
+/**
+ * 同詞彙之案依序每 batchSizeOf 案一頁(抓取套件之 paginateByVocab)
+ *
+ * @param {String} std 輸入標準 id
+ * @returns {Function} 回傳 paginate (cases, ctx) => 頁陣列
+ */
+const esPaginate = (std) => (cases, ctx) => paginateByVocab(cases, batchSizeOf(std, ctx))
+
+/**
+ * 一頁之組法(esCases 之 esPageOf;同頁同 domain 者取快取)
+ *
+ * @param {String} std 輸入標準 id
+ * @param {Array} cases 輸入同頁之案(核心傳入之同一陣列)
+ * @param {Object} domain 輸入該頁之 domain
+ * @returns {Object} 回傳 esPageOf 之產物
+ */
+function esPageAt(std, cases, domain) {
+    const hit = PAGES.get(cases)
+    if (hit && hit.domain === domain) return hit.page
+    const page = esPageOf(std, cases, { domain })
+    PAGES.set(cases, { domain, page })
+    return page
+}
+
+/**
+ * 應然之裁決值之檢核
+ *
+ * @param {*} e 輸入 expect
+ * @param {Array} verdicts 輸入合法裁決
+ * @returns {Array} 回傳問題說明陣列
+ */
+const verdictProblems = (e, verdicts) => (isobj(e) && verdicts.includes(e.verdict) ? [] : [`expect.verdict 須為 ${verdicts.join('／')}`])
+
+/**
+ * 應然之支持出處(by)之檢核:只用於 supported、須為非空且屬於所列 id 之陣列
+ *
+ * @param {Object} e 輸入 expect
+ * @param {Array} ids 輸入可列之 id
+ * @param {Object} o 輸入 { what:String(出處或筆記), required:Boolean(supported 須給) }
+ * @returns {Array} 回傳問題說明陣列
+ */
+function byProblems(e, ids, o) {
+    if (!isobj(e)) return []
+    if (e.by === undefined) return e.verdict === 'supported' && o.required ? [`expect.by 須給（supported 之支持${o.what} id）`] : []
+    if (e.verdict !== 'supported') return isarr(e.by) && !e.by.length ? [] : ['expect.by 只用於 supported']
+    if (!nonEmptyStrs(e.by)) return [`expect.by 須為非空之${o.what} id 陣列`]
+    const bad = e.by.filter((x) => !ids.includes(x))
+    return bad.length ? [`expect.by 之「${bad.join('、')}」不在本案之${o.what}`] : []
+}
+
+// ════════════════ 出處支持覆核(support-check;ES9) ════════════════
+
+/** 出處支持覆核之無回覆欄位 */
+const SUPPORT_BLANK = Object.freeze({ replied: '', by: '', reason: '' })
+
+/**
+ * 出處支持覆核之逐案檢核(與 ES9 題組同形;斷言種類取正式之 SUPPORT_KINDS——含存量之 claim)
+ *
+ * @param {Object} c 輸入案
+ * @returns {Array} 回傳問題說明陣列
+ */
+function supportCaseProblems(c) {
+    const p = esCaseInputProblems(ES9.std, c)
+    if (isestr(c?.input?.kind) && !SUPPORT_KINDS.includes(c.input.kind)) p.push(`input.kind 須為 ${SUPPORT_KINDS.join('／')}`)
+    const ids = (isarr(c?.input?.sources) ? c.input.sources : []).map((s) => s?.id)
+    return [...p, ...verdictProblems(c?.expect, SUPPORT_VERDICTS), ...byProblems(c?.expect, ids, { what: '出處', required: false }), ...inputVocabProblems(c)]
+}
+
+/**
+ * 出處支持覆核之逐案類別:正式之單票驗證(seatSupportVotesOf;by 須為該項所引之標號)→ supportClassOf;應然列了支持之出處者另比對所列
+ *
+ * @param {*} data 輸入該頁回覆(parseSupportChecks 之產物)
+ * @param {Object} c 輸入該案
+ * @param {Object} at 輸入 { index(頁內序), domain, cases }
+ * @returns {Object} 回傳 { cls, valid, problem, fields }
+ */
+function supportVerdictOf(data, c, at) {
+    const page = esPageAt(ES9.std, at.cases, at.domain)
+    const k = page.indices[at.index - 1]
+    const votes = esVotesOf(page, data)
+    const v = votes.has(k) ? votes.get(k) : null
+    if (v === null) return noVerdict(voteMissingOf(data, k, (x) => checkSupportVerdictOf(x, page.labelsOf.get(k))), SUPPORT_BLANK)
+    const raw = rawsOf(data, k)[0]
+    const by = isobj(v) && isarr(v.by) ? v.by.map((l) => page.idOf.get(l) || l).join(',') : ''
+    return { cls: esSupportClassOf(v, c.expect, page.idOf), valid: true, problem: '', fields: { replied: rawVerdictText(raw), by, reason: oneline(v === PANEL_UNSURE ? textValueOf(raw?.reason) : v.reason, 120) } }
+}
+
+/** 出處支持覆核之角色定義(一頁多案,預設 10;類別 supported／not／unsure(／supported(出處不符))) */
+const SUPPORT_CHECK_DEF = {
+    id: 'support-check',
+    name: '出處支持覆核(support-check)',
+    title: '出處支持覆核 AI 能力評分',
+    std: ES9.std,
+    v: ES9.v,
+    suiteProblems: esSuiteProblems,
+    caseProblems: supportCaseProblems,
+    expectOf: (c) => esExpectClassOf(ES9.std, c.expect),
+    caseFieldsOf: (c) => ({ kind: c.input.kind, text: oneline(c.input.text, 80), sources: c.input.sources.length }),
+    domainProblem: domainNeeds(['buildSupportCheckPrompt']),
+    paginate: esPaginate(ES9.std),
+    promptOf: (cases, domain) => esPageAt(ES9.std, cases, domain).prompt,
+    check: (data) => (checkSupportChecks(data) ? true : '回覆不含 { checks:[…] }（同正式之 check）'),
+    call: callVia('check1', parseSupportChecks),
+    verdictOf: supportVerdictOf,
+    blankFields: SUPPORT_BLANK,
+    detailOf: (r) => (r.reason ? `（${oneline(r.reason, 60)}）` : ''),
+    report: {
+        criteria: [
+            '判準：逐案各回之類別（supported／not／unsure；contradicted、insufficient、overclaim 同為 not——不受支持之原因不同而處置相同）皆＝應然才計通過（各回因而一致），不以比率放行；應然列了支持之出處（expect.by）者，受支持之票須分別列出（by）、非空且皆屬應然，否則記為 supported(出處不符)；unsure 為合法裁決',
+            `分頁：每頁 ${ES_CASE_PAGE_SIZE} 案共用一次呼叫（--batch 可改），項編號頁內重起；出處依頁內首次出現序以 id 去重標號 S1…（同正式之 runSupportCheck）；提示詞＝正式 buildSupportCheckPrompt（概念名「${ES_CASE_CONCEPT}」；證據性質未給者為未標）；票之驗證同正式（seatSupportVotesOf：非 supported 之理由至少 10 字、by 須為該項所引之標號、同編號矛盾者為缺票＝無裁決）`,
+            '合契約率：成功取得回覆之各回中，該案有合格之票者之比率；平均耗時取成功之呼叫',
+        ],
+        caseColumns: [{ name: '種類', key: 'kind', md: true }, { name: '斷言', key: 'text', md: true }, { name: '出處數', key: 'sources' }],
+        runColumns: [{ name: '回覆', key: 'replied' }, { name: '支持之出處', key: 'by' }, { name: '理由', key: 'reason' }],
+    },
+    cli: {
+        casesHelp: '題組檔(與 ES9 逐案題組同形:{ input:{ kind, text, basis?, sources:[{ id, title, text }] }, expect:{ verdict, by? } });未給＝內建通用題組(src/bench/cases/support-check-generic.json)',
+        options: [batchOption(ES_CASE_PAGE_SIZE, '檢定標準逐案題組之頁量')],
+    },
+}
+
+// ════════════════ 依出處收斂措辭之修訂(support-revise;ES9 之語氣超出證據) ════════════════
+
+/** 修訂之無回覆欄位 */
+const REVISE_BLANK = Object.freeze({ replied: '', conditions: '', period: '', why: '' })
+
+/**
+ * 修訂之逐案檢核(見 esCases 檔頭【修訂案】;覆核說明為結構化之 votes;應然 { drop:true } 或 { fix:{ conditionsAny?, periodAny?, textMustNot? } })
+ *
+ * @param {Object} c 輸入案
+ * @returns {Array} 回傳問題說明陣列
+ */
+function reviseCaseProblems(c) {
+    const inp = isobj(c?.input) ? c.input : {}
+    const p = []
+    const side = inp.kind === 'side'
+    if (!REVISE_CASE_KINDS.includes(inp.kind)) p.push(`input.kind 須為 ${REVISE_CASE_KINDS.join('／')}（改寫既有主張之 revise 不收：其操作與納入閘之材料取決於改寫前之條目）`)
+    if (!isestr(inp.text) || !inp.text.trim()) p.push('input.text 須為非空字串（判為語氣超出證據之斷言）')
+    if (inp.conditions !== undefined && !(isarr(inp.conditions) && inp.conditions.every((x) => typeof x === 'string'))) p.push('input.conditions 須為字串陣列')
+    if (inp.basis !== undefined && typeof inp.basis !== 'string') p.push('input.basis 須為字串')
+    if (side) {
+        if (inp.period !== undefined) p.push('input.period 不用於爭議之一方')
+        if (inp.annotation !== undefined) p.push('input.annotation 不用於爭議之一方')
+        if (inp.question !== undefined && typeof inp.question !== 'string') p.push('input.question 須為字串')
+    }
+    else {
+        if (inp.period !== undefined && typeof inp.period !== 'string') p.push('input.period 須為字串')
+        if (inp.question !== undefined) p.push('input.question 只用於爭議之一方')
+        const a = inp.annotation
+        if (!isobj(a) || !isestr(a.kind) || typeof a.critique !== 'string') p.push('input.annotation 須為 { kind(主張種類), critique, pros?, cons? }（新增主張之標注;納入閘之 ES4 以之驗修訂後之結果）')
+        else for (const k of ['pros', 'cons']) if (a[k] !== undefined && !(isarr(a[k]) && a[k].every((x) => typeof x === 'string'))) p.push(`input.annotation.${k} 須為字串陣列`)
+    }
+    const srcs = isarr(inp.sources) ? inp.sources : null
+    if (!srcs || !srcs.length) p.push('input.sources 須為非空陣列（所引出處）')
+    else {
+        srcs.forEach((s, k) => {
+            if (!isobj(s) || !isestr(s.id) || typeof s.title !== 'string' || typeof s.text !== 'string') p.push(`input.sources[${k}] 須為 { id, title, text }（id 非空字串）`)
+        })
+        const ids = srcs.map((s) => s?.id)
+        if (new Set(ids).size !== ids.length) p.push('input.sources 之 id 重複')
+    }
+    if (inp.reasons !== undefined) p.push('input.reasons 不收（覆核說明由 input.votes 經正式之 notSupportedReasonsOf 生成）')
+    p.push(...reviseVotesProblems(inp.votes))
+    const e = c?.expect
+    if (!isobj(e) || (e.drop === true) === isobj(e.fix)) p.push('expect 須恰為 { drop:true } 或 { fix:{ conditionsAny?, periodAny?, textMustNot? } } 之一')
+    else if (isobj(e.fix)) {
+        const extra = unknownKeysProblem(e.fix, FIX_KEYS, 'expect.fix')
+        if (extra) p.push(extra)
+        if (!Object.keys(e.fix).some((k) => FIX_KEYS.includes(k))) p.push('expect.fix 須至少給一個謂詞')
+        for (const k of FIX_KEYS) if (e.fix[k] !== undefined && !nonEmptyStrs(e.fix[k])) p.push(`expect.fix.${k} 須為非空字串陣列（可接受或不得之寫法）`)
+        if (side && e.fix.periodAny !== undefined) p.push('expect.fix.periodAny 不用於爭議之一方（方無期間）')
+    }
+    return [...p, ...inputVocabProblems(c)]
+}
+
+/**
+ * 修訂之頁(同正式 runSupportRevise:出處依頁內首次出現序去重標號 S1…;項之欄＝正式之 fieldsOf;覆核說明＝案之 votes 經正式之 notSupportedReasonsOf)
+ *
+ * @param {Array} cases 輸入同頁之案(核心傳入之同一陣列)
+ * @param {Object} domain 輸入該頁之 domain
+ * @returns {Object} 回傳 { items, prompt, gates:Array(各案之 reviseCaseOf 產物,依頁內序) }
+ * @throws {Error} 原操作未過閘、或標注之種類不在 domain 之主張種類時拋出(題組之缺陷:修訂後之不合格不可歸於模型)
+ */
+function revisePageAt(cases, domain) {
+    const hit = PAGES.get(cases)
+    if (hit && hit.domain === domain) return hit.page
+    const gates = cases.map((c) => reviseCaseOf(c.input, domain, { locale: localeOf(domain) }))
+    const problems = []
+    cases.forEach((c, j) => {
+        if (c.input.kind === 'add' && !domain.claimKinds.includes(textValueOf(c.input.annotation?.kind))) problems.push(`案 ${c.id} 之標注種類「${textValueOf(c.input.annotation?.kind)}」不在主張種類（${domain.claimKinds.join('、')}）`)
+        else {
+            const g = gates[j].gate(gates[j].op)
+            if (!g.ok) problems.push(`案 ${c.id} 之原操作未過納入閘（${g.why.join('；')}）`)
+        }
+    })
+    if (problems.length) throw new Error(`修訂之題組與詞彙不合（${problems.length} 項）：${problems.join('；')}`)
+    const notes = uniq(cases.flatMap((c) => c.input.sources.map((s) => s.id)))
+    const byId = new Map()
+    for (const c of cases) for (const s of c.input.sources) if (!byId.has(s.id)) byId.set(s.id, s)
+    const label = new Map(notes.map((n, i) => [n, `S${i + 1}`]))
+    const sources = notes.map((n) => ({ label: label.get(n), title: byId.get(n).title, text: byId.get(n).text }))
+    const items = cases.map((c, j) => ({ index: j + 1, kind: gates[j].it.kind, text: gates[j].fields.text, conditions: gates[j].fields.conditions, period: gates[j].fields.period, labels: c.input.sources.map((s) => label.get(s.id)), reasons: reviseReasonsOf(c.input.votes) }))
+    const page = { items, gates, prompt: domain.buildSupportRevisePrompt({ concept: ES_CASE_CONCEPT, sources, items }) }
+    PAGES.set(cases, { domain, page })
+    return page
+}
+
+/**
+ * 可接受寫法之謂詞(是否含任一片語之確定判斷)
+ *
+ * @param {Array} texts 輸入受檢之文字
+ * @param {Array} phrases 輸入片語
+ * @returns {Boolean} 回傳是否任一文字含任一片語
+ */
+const hasAny = (texts, phrases) => texts.some((t) => phrases.some((p) => t.includes(p)))
+
+/**
+ * 修訂之逐案類別:正式之 supportFixesOf(drop 或缺者不列、同編號多份不採)→ 改寫者以 applySupportFixes 套回原操作 → 操作守門＋納入閘 →
+ *   案明定之謂詞;類別＝'ok' 或首個不成立之謂詞
+ *
+ * @param {*} data 輸入該頁回覆(parseSupportRevise 之產物)
+ * @param {Object} c 輸入該案
+ * @param {Object} at 輸入 { index, domain, cases }
+ * @returns {Object} 回傳 { cls, valid, problem, fields }
+ */
+function reviseVerdictOf(data, c, at) {
+    if (!isarr(data?.fixes)) return noVerdict(`回覆不含 fixes 陣列（${typeName(data)}）`, REVISE_BLANK)
+    const page = revisePageAt(at.cases, at.domain)
+    const k = at.index
+    const raws = data.fixes.filter((f) => Number(f?.index) === k)
+    if (!raws.length) return noVerdict(data.fixes.length ? `回覆無 index ${k} 之項` : '回覆之 fixes 為空', REVISE_BLANK)
+    const got = supportFixesOf(data, new Set(page.items.map((x) => x.index)))
+    const g = page.gates[at.index - 1]
+    if (!got.has(k)) {
+        if (!raws.some((f) => f?.drop === true)) return noVerdict(raws.filter((f) => textValueOf(f?.text)).length > 1 ? `同編號 ${k} 之修訂多份（同正式不採）` : `index ${k} 之項無 text 亦非 drop`, REVISE_BLANK)
+        return { cls: c.expect.drop === true ? 'ok' : 'fix', valid: true, problem: '', fields: { ...REVISE_BLANK, replied: 'drop' } }
+    }
+    const fix = got.get(k)
+    const fields = { replied: oneline(fix.text, 80), conditions: oneline((fix.conditions || []).join('；'), 80), period: oneline(fix.period || '', 40), why: '' }
+    if (c.expect.drop === true) return { cls: 'drop', valid: true, problem: '', fields }
+    const gate = g.gate(applySupportFixes(g.op, [{ it: g.it, fix }]))
+    if (!gate.ok) return { cls: 'gate', valid: true, problem: '', fields: { ...fields, why: oneline(gate.why.join('；'), 160) } }
+    const op = gate.op
+    const sd = op.op === 'add' ? op : op.sides[0]
+    const text = textValueOf(op.op === 'add' ? op.text : sd.position)
+    const conds = (isarr(sd.conditions) ? sd.conditions : []).map(String)
+    const e = c.expect.fix
+    if (e.conditionsAny && !hasAny(conds, e.conditionsAny)) return { cls: 'conditionsAny', valid: true, problem: '', fields: { ...fields, why: `條件未含任一：${e.conditionsAny.join('／')}` } }
+    if (e.periodAny && !hasAny([textValueOf(op.period)], e.periodAny)) return { cls: 'periodAny', valid: true, problem: '', fields: { ...fields, why: `期間未含任一：${e.periodAny.join('／')}` } }
+    if (e.textMustNot && hasAny([text], e.textMustNot)) return { cls: 'textMustNot', valid: true, problem: '', fields: { ...fields, why: `斷言仍含：${e.textMustNot.filter((x) => text.includes(x)).join('／')}` } }
+    return { cls: 'ok', valid: true, problem: '', fields }
+}
+
+/** 依出處收斂措辭之修訂之角色定義(一頁多案,預設 10;類別 ok／drop／fix／gate／conditionsAny／periodAny／textMustNot,應然一律 ok;題組 std／v 同 ES9——以角色欄分辨) */
+const SUPPORT_REVISE_DEF = {
+    id: 'support-revise',
+    name: '出處修訂(support-revise)',
+    title: '依出處收斂措辭之修訂 AI 能力評分',
+    std: ES9.std,
+    v: ES9.v,
+    suiteProblems: esSuiteProblems,
+    caseProblems: reviseCaseProblems,
+    expectOf: () => 'ok',
+    caseFieldsOf: (c) => ({ kind: c.input.kind, text: oneline(c.input.text, 80), want: c.expect.drop === true ? 'drop' : 'fix' }),
+    domainProblem: domainNeeds(['buildSupportRevisePrompt'], { gate: true }),
+    paginate: esPaginate(ES9.std),
+    promptOf: (cases, domain) => revisePageAt(cases, domain).prompt,
+    check: (data) => (checkSupportRevise(data) ? true : '回覆不含 { fixes:[…] }（同正式之 check）'),
+    call: callVia('revise9', parseSupportRevise),
+    verdictOf: reviseVerdictOf,
+    blankFields: REVISE_BLANK,
+    detailOf: (r) => (r.why ? `（${oneline(r.why, 80)}）` : (r.replied && r.replied !== 'drop' ? `（${oneline(r.replied, 60)}）` : '')),
+    report: {
+        criteria: [
+            '判準：逐案各回之類別皆＝ok 才計通過（各回因而一致），不以比率放行。應然 drop 者：回 drop 為 ok，改寫為 drop（應改不成而改寫）；應然 fix 者：回 drop 為 fix，改寫者以正式之 applySupportFixes 套回原操作，過操作守門（正體）與納入閘（數字紮根、標注、principle 跨篇、不提及筆記、流程外洩；新增主張另驗套用不被拒收）才續判案明定之謂詞——conditionsAny（條件含任一可接受之寫法）、periodAny（期間含任一）、textMustNot（斷言不含任一不得之寫法），首個不成立者即為類別',
+            `分頁：每頁 ${ES_CASE_PAGE_SIZE} 案共用一次呼叫（--batch 可改）；出處依頁內首次出現序去重標號 S1…；提示詞＝正式 buildSupportRevisePrompt（項之欄＝正式之 fieldsOf；覆核說明＝案之 votes 經正式之 notSupportedReasonsOf；概念名「${ES_CASE_CONCEPT}」）；回覆經正式之 supportFixesOf（drop 或缺 text 者不列、同編號多份不採）；回覆無該項或該項無 text 亦非 drop 為無裁決`,
+            '合契約率：成功取得回覆之各回中，該案有合格之修訂或 drop 者之比率；平均耗時取成功之呼叫',
+        ],
+        caseColumns: [{ name: '種類', key: 'kind', md: true }, { name: '斷言', key: 'text', md: true }, { name: '應然', key: 'want', md: true }],
+        runColumns: [{ name: '修訂', key: 'replied' }, { name: '條件', key: 'conditions' }, { name: '期間', key: 'period' }, { name: '不成立之處', key: 'why' }],
+    },
+    cli: {
+        casesHelp: '題組檔({ input:{ kind:add|side, text, conditions?, period?, basis?, annotation?, question?, sources, votes:[{ verdict, reason }] }, expect:{ drop:true }|{ fix:{ conditionsAny?, periodAny?, textMustNot? } } });未給＝內建通用題組(src/bench/cases/support-revise-generic.json)',
+        options: [batchOption(ES_CASE_PAGE_SIZE, '檢定標準逐案題組之頁量')],
+    },
+}
+
+// ════════════════ 失撐主張找支持(orphan-check;ES8) ════════════════
+
+/** 失撐找支持之無回覆欄位 */
+const ORPHAN_BLANK = Object.freeze({ replied: '', by: '', reason: '' })
+
+/**
+ * 失撐找支持之逐案類別:正式之單票驗證(seatOrphanVotesOf;by 須為本頁之筆記標號)→ supported／none／unsure;應然為 supported 者另比對所列
+ *
+ * @param {*} data 輸入回覆(parseOrphanChecks 之產物)
+ * @param {Object} c 輸入該案
+ * @param {Object} at 輸入 { index, domain, cases }
+ * @returns {Object} 回傳 { cls, valid, problem, fields }
+ */
+function orphanVerdictOf(data, c, at) {
+    const page = esPageAt(ES8.std, at.cases, at.domain)
+    const votes = esVotesOf(page, data)
+    const v = votes.has(1) ? votes.get(1) : null
+    if (v === null) return noVerdict(voteMissingOf(data, 1, (x) => checkOrphanVerdictOf(x, page.labels)), ORPHAN_BLANK)
+    const raw = rawsOf(data, 1)[0]
+    const by = isobj(v) ? v.by.map((l) => page.idOf.get(l) || l).join(',') : ''
+    return { cls: esOrphanClassOf(v, c.expect, page.idOf), valid: true, problem: '', fields: { replied: rawVerdictText(raw), by, reason: oneline(v === PANEL_UNSURE ? textValueOf(raw?.reason) : v.reason, 120) } }
+}
+
+/** 失撐主張找支持之角色定義(一案一頁——候選只限本案;類別 supported／none／unsure(／supported(出處不符))) */
+const ORPHAN_CHECK_DEF = {
+    id: 'orphan-check',
+    name: '失撐找支持(orphan-check)',
+    title: '失撐主張找支持 AI 能力評分',
+    std: ES8.std,
+    v: ES8.v,
+    caseProblems: (c) => [...esCaseInputProblems(ES8.std, c), ...verdictProblems(c?.expect, ORPHAN_VERDICTS), ...byProblems(c?.expect, (isarr(c?.input?.candidates) ? c.input.candidates : []).map((x) => x?.id), { what: '候選筆記', required: true }), ...inputVocabProblems(c)],
+    expectOf: (c) => esExpectClassOf(ES8.std, c.expect),
+    caseFieldsOf: (c) => ({ claim: oneline(c.input.claim, 80), candidates: c.input.candidates.length }),
+    domainProblem: domainNeeds(['buildOrphanCheckPrompt']),
+    paginate: esPaginate(ES8.std),
+    promptOf: (cases, domain) => esPageAt(ES8.std, cases, domain).prompt,
+    check: (data) => (checkOrphanChecks(data) ? true : '回覆不含 { checks:[…] }（同正式之 check）'),
+    call: callVia('orphan1', parseOrphanChecks),
+    verdictOf: orphanVerdictOf,
+    blankFields: ORPHAN_BLANK,
+    detailOf: (r) => (r.by ? `（${r.by}）` : ''),
+    report: {
+        criteria: [
+            '判準：逐案各回之類別（supported／none／unsure）皆＝應然才計通過（各回因而一致），不以比率放行；應然為 supported 者，所列之支持筆記須非空且皆屬應然，否則記為 supported(出處不符)（正式以兩席所列之交集補出處，列錯即補錯）；unsure 為合法裁決',
+            `分頁：一案一頁（候選只限本案——同頁即他案之筆記亦成候選）；筆記標號 S1… 依本案候選之序；提示詞＝正式 buildOrphanCheckPrompt（項編號 1；概念名「${ES_CASE_CONCEPT}」）；票之驗證同正式（seatOrphanVotesOf：理由至少 10 字、supported 之 by 須為本頁之標號且非空、同編號矛盾者為缺票＝無裁決）`,
+            '合契約率：成功取得回覆之各回中，該案有合格之票者之比率；平均耗時取成功之呼叫',
+        ],
+        caseColumns: [{ name: '主張', key: 'claim', md: true }, { name: '候選數', key: 'candidates' }],
+        runColumns: [{ name: '回覆', key: 'replied' }, { name: '支持之筆記', key: 'by' }, { name: '理由', key: 'reason' }],
+    },
+    cli: {
+        casesHelp: '題組檔(與 ES8 逐案題組同形:{ input:{ claim, basis?, candidates:[{ id, title, text }] }, expect:{ verdict, by? } });未給＝內建通用題組(src/bench/cases/orphan-check-generic.json)',
+    },
+}
+
+// ════════════════ 爭議覆核(dispute-check;ES14) ════════════════
+
+/** 爭議覆核之無回覆欄位 */
+const DISPUTE_BLANK = Object.freeze({ replied: '', reason: '', dissolve: '' })
+
+/**
+ * 爭議覆核之逐案類別:正式之單票驗證(seatDisputeVotesOf;拆解欄位之長度依方數)→ 對立與否;非對立之票之拆解欄位經 dissolveUsableOf(語言設定同該頁之 domain)
+ *
+ * @param {*} data 輸入回覆(parseDisputeChecks 之產物)
+ * @param {Object} c 輸入該案
+ * @param {Object} at 輸入 { index, domain, cases }
+ * @returns {Object} 回傳 { cls, valid, problem, fields }
+ */
+function disputeVerdictOf(data, c, at) {
+    const page = esPageAt(ES14.std, at.cases, at.domain)
+    const k = page.indices[at.index - 1]
+    const votes = esVotesOf(page, data)
+    const v = votes.has(k) ? votes.get(k) : null
+    if (v === null) return noVerdict(voteMissingOf(data, k, (x) => checkDisputeVerdictOf(x, page.sidesOf.get(k))), DISPUTE_BLANK)
+    const raw = rawsOf(data, k)[0]
+    const r = esDisputeClassOf(v, c.input, at.domain, { locale: localeOf(at.domain) })
+    return { cls: r.cls, valid: true, problem: '', fields: { replied: rawVerdictText(raw), reason: oneline(v === PANEL_UNSURE ? textValueOf(raw?.reason) : v.reason, 120), dissolve: oneline(r.why.join('；'), 200) } }
+}
+
+/** 爭議覆核之角色定義(一頁多案,預設 10;類別 opposed／not／not-nofields／unsure) */
+const DISPUTE_CHECK_DEF = {
+    id: 'dispute-check',
+    name: '爭議覆核(dispute-check)',
+    title: '爭議覆核 AI 能力評分',
+    std: ES14.std,
+    v: ES14.v,
+    suiteProblems: esSuiteProblems,
+    caseProblems: (c) => [...esCaseInputProblems(ES14.std, c), ...verdictProblems(c?.expect, DISPUTE_VERDICTS), ...inputVocabProblems(c)],
+    expectOf: (c) => esExpectClassOf(ES14.std, c.expect),
+    caseFieldsOf: (c) => ({ question: oneline(c.input.question, 80), sides: c.input.sides.length }),
+    domainProblem: domainNeeds(['buildDisputeCheckPrompt'], { gate: true }),
+    paginate: esPaginate(ES14.std),
+    promptOf: (cases, domain) => esPageAt(ES14.std, cases, domain).prompt,
+    check: (data) => (checkDisputeChecks(data) ? true : '回覆不含 { checks:[…] }（同正式之 check）'),
+    call: callVia('dispute1', parseDisputeChecks),
+    verdictOf: disputeVerdictOf,
+    blankFields: DISPUTE_BLANK,
+    detailOf: (r) => (r.dissolve ? `（拆解欄位不可用：${oneline(r.dissolve, 80)}）` : ''),
+    report: {
+        criteria: [
+            '判準：逐案各回之類別（opposed／not／not-nofields／unsure；not-opposed 與 same-study 同為 not——處置相同）皆＝應然才計通過（各回因而一致），不以比率放行；非對立之票之拆解欄位須可用（與正式爭議覆核之拆解同一路徑：受檢項與各方之去處、dissolveOpOf、操作守門、納入閘〔數字紮根、標注、principle 跨篇、不提及筆記、流程外洩〕、套用不被拒收且不變式成立），不可用者記為 not-nofields（正式之拆解不成而轉待判）；unsure 為合法裁決',
+            `分頁：每頁 ${ES_CASE_PAGE_SIZE} 案共用一次呼叫（--batch 可改），項編號頁內重起；出處依頁內首次出現序以 id 去重標號 S1…；提示詞＝正式 buildDisputeCheckPrompt（各方之條件、證據性質、所引主張與去處同題組；概念名「${ES_CASE_CONCEPT}」）；票之驗證同正式（seatDisputeVotesOf：非對立之理由至少 10 字、拆解欄位之長度須等於方數、同編號矛盾者為缺票＝無裁決）`,
+            '合契約率：成功取得回覆之各回中，該案有合格之票者之比率；平均耗時取成功之呼叫',
+        ],
+        caseColumns: [{ name: '問題', key: 'question', md: true }, { name: '方數', key: 'sides' }],
+        runColumns: [{ name: '回覆', key: 'replied' }, { name: '理由', key: 'reason' }, { name: '拆解欄位不可用之原因', key: 'dissolve' }],
+    },
+    cli: {
+        casesHelp: '題組檔(與 ES14 逐案題組同形:{ input:{ question, doubt?, sides:[{ position, conditions?, basis?, claims?, toClaim?, sources }] }, expect:{ verdict } });未給＝內建通用題組(src/bench/cases/dispute-check-generic.json)',
+        options: [batchOption(ES_CASE_PAGE_SIZE, '檢定標準逐案題組之頁量')],
+    },
+}
+
+// ════════════════ 同義覆核(synonym-check;ES11) ════════════════
+
+/** 同義覆核之無回覆欄位 */
+const SYNONYM_BLANK = Object.freeze({ replied: '', reason: '' })
+
+/**
+ * 同義覆核之逐案類別:正式之單票驗證(seatSynonymVotesOf)→ same／different／unsure
+ *
+ * @param {*} data 輸入回覆(parseSynonymChecks 之產物)
+ * @param {Object} c 輸入該案
+ * @param {Object} at 輸入 { index, domain, cases }
+ * @returns {Object} 回傳 { cls, valid, problem, fields }
+ */
+function synonymVerdictOf(data, c, at) {
+    const page = esPageAt(ES11.std, at.cases, at.domain)
+    const k = page.indices[at.index - 1]
+    const votes = esVotesOf(page, data)
+    const v = votes.has(k) ? votes.get(k) : null
+    if (v === null) return noVerdict(voteMissingOf(data, k, (x) => checkSynonymVerdictOf(x)), SYNONYM_BLANK)
+    const raw = rawsOf(data, k)[0]
+    return { cls: esSynonymClassOf(v), valid: true, problem: '', fields: { replied: rawVerdictText(raw), reason: oneline(v === PANEL_UNSURE ? textValueOf(raw?.reason) : v.reason, 120) } }
+}
+
+/** 同義覆核之角色定義(一頁多案,預設 10;類別 same／different／unsure) */
+const SYNONYM_CHECK_DEF = {
+    id: 'synonym-check',
+    name: '同義覆核(synonym-check)',
+    title: '同義核心覆核 AI 能力評分',
+    std: ES11.std,
+    v: ES11.v,
+    caseProblems: (c) => [...esCaseInputProblems(ES11.std, c), ...verdictProblems(c?.expect, SYNONYM_VERDICTS), ...inputVocabProblems(c)],
+    expectOf: (c) => esExpectClassOf(ES11.std, c.expect),
+    caseFieldsOf: (c) => ({ a: c.input.a.concept, b: c.input.b.concept }),
+    domainProblem: domainNeeds(['buildSynonymCheckPrompt']),
+    paginate: esPaginate(ES11.std),
+    promptOf: (cases, domain) => esPageAt(ES11.std, cases, domain).prompt,
+    check: (data) => (checkSynonymChecks(data) ? true : '回覆不含 { checks:[…] }（同正式之 check）'),
+    call: callVia('synonym1', parseSynonymChecks),
+    verdictOf: synonymVerdictOf,
+    blankFields: SYNONYM_BLANK,
+    detailOf: (r) => (r.reason ? `（${oneline(r.reason, 60)}）` : ''),
+    report: {
+        criteria: [
+            '判準：逐案各回之類別（same／different／unsure）皆＝應然才計通過（各回因而一致），不以比率放行；unsure 為合法裁決',
+            `分頁：每頁 ${ES_CASE_PAGE_SIZE} 案共用一次呼叫（--batch 可改；預設與正式之同義專步同一頁量），項編號頁內重起；提示詞＝正式 buildSynonymCheckPrompt（甲乙各給概念名、本質、主要主張與主要出處之標題）；票之驗證同正式（seatSynonymVotesOf：理由至少 10 字、同編號矛盾者為缺票＝無裁決）`,
+            '合契約率：成功取得回覆之各回中，該案有合格之票者之比率；平均耗時取成功之呼叫',
+        ],
+        caseColumns: [{ name: '甲', key: 'a', md: true }, { name: '乙', key: 'b', md: true }],
+        runColumns: [{ name: '回覆', key: 'replied' }, { name: '理由', key: 'reason' }],
+    },
+    cli: {
+        casesHelp: '題組檔(與 ES11 逐案題組同形:{ input:{ a:{ concept, essence?, claims?, notes? }, b:{…} }, expect:{ verdict } });未給＝內建通用題組(src/bench/cases/synonym-check-generic.json)',
+        options: [batchOption(ES_CASE_PAGE_SIZE, '檢定標準逐案題組之頁量')],
+    },
+}
+
+// ════════════════ 同義提議(synonym-propose;ES11) ════════════════
+
+/** 同義提議之無回覆欄位 */
+const PROPOSE_BLANK = Object.freeze({ proposed: '', missing: '', wrong: '', offList: 0 })
+
+/**
+ * 配對之顯示(無序;字典序前者在前)
+ *
+ * @param {Array} p 輸入 [a, b]
+ * @returns {String} 回傳顯示字串
+ */
+const pairText = (p) => pairKeyOf(p[0], p[1])
+
+/**
+ * 同義提議之逐案檢核:名單為至少兩個不重複之非空概念名、依碼元序排列(提示詞同正式先排序——題組之序不得洩題);應然之配對皆在名單、兩名不同、
+ *   不重複、不同時列於 must 與 mustNot
+ *
+ * @param {Object} c 輸入案
+ * @returns {Array} 回傳問題說明陣列
+ */
+function proposeCaseProblems(c) {
+    const p = []
+    const names = c?.input?.names
+    if (!nonEmptyStrs(names) || names.length < 2) p.push('input.names 須為至少兩個非空字串之陣列（核心概念名）')
+    else if (new Set(names.map((x) => x.trim())).size !== names.length) p.push('input.names 有重複之概念名')
+    else if (names.some((x, i) => i > 0 && names[i - 1] > x)) p.push('input.names 須依碼元序排列（同正式之提議名單先排序；相鄰即洩題）')
+    const e = c?.expect
+    if (!isobj(e) || !isarr(e.must) || !isarr(e.mustNot)) return [...p, 'expect 須為 { must:[[a,b]…], mustNot:[[a,b]…] }', ...inputVocabProblems(c)]
+    const extra = unknownKeysProblem(e, ['must', 'mustNot'], 'expect')
+    if (extra) p.push(extra)
+    const set = new Set(nonEmptyStrs(names) ? names.map((x) => x.trim()) : [])
+    const keys = new Map()
+    for (const k of ['must', 'mustNot']) {
+        e[k].forEach((pair, i) => {
+            if (!isarr(pair) || pair.length !== 2 || !pair.every(isestr)) return p.push(`expect.${k}[${i}] 須為 [概念名, 概念名]`)
+            if (pair[0].trim() === pair[1].trim()) return p.push(`expect.${k}[${i}] 之兩名相同`)
+            const off = pair.filter((x) => !set.has(x.trim()))
+            if (off.length) return p.push(`expect.${k}[${i}] 之「${off.join('、')}」不在名單`)
+            const key = pairText(pair)
+            if (keys.has(key)) p.push(keys.get(key) === k ? `expect.${k} 之配對重複：${key}` : `配對 ${key} 同時列於 must 與 mustNot`)
+            else keys.set(key, k)
+        })
+    }
+    return [...p, ...inputVocabProblems(c)]
+}
+
+/**
+ * 同義提議之逐案類別:正式之 proposedCandidatesOf(名單內、不同名、去重)→ 應提之配對皆在(must)、不應提之配對皆不在(mustNot);
+ *   名單外之名或同名之配對為不合契約(正式略去)
+ *
+ * @param {*} data 輸入回覆(parseSynonymProposals 之產物)
+ * @param {Object} c 輸入該案
+ * @returns {Object} 回傳 { cls, valid, problem, fields }
+ */
+function proposeVerdictOf(data, c) {
+    if (!checkSynonymProposals(data)) return noVerdict(`回覆不含 pairs 陣列（${typeName(data)}）`, PROPOSE_BLANK)
+    const names = c.input.names.map((x) => x.trim())
+    const set = new Set(names)
+    const got = proposedCandidatesOf(data, names)
+    const keys = new Set(got.map((x) => pairKeyOf(x.a, x.b)))
+    const off = data.pairs.filter((x) => {
+        const [a, b] = [textValueOf(x?.a), textValueOf(x?.b)]
+        return !a || !b || a === b || !set.has(a) || !set.has(b)
+    })
+    const missing = c.expect.must.filter((pair) => !keys.has(pairText(pair)))
+    const wrong = c.expect.mustNot.filter((pair) => keys.has(pairText(pair)))
+    const fields = { proposed: oneline([...keys].join('、'), 200), missing: oneline(missing.map(pairText).join('、'), 160), wrong: oneline(wrong.map(pairText).join('、'), 160), offList: off.length }
+    return { cls: missing.length ? 'must' : (wrong.length ? 'mustNot' : 'ok'), valid: off.length === 0, problem: '', fields }
+}
+
+/** 同義提議之角色定義(一案一頁——一案＝一份核心概念名單;類別 ok／must／mustNot,應然一律 ok) */
+const SYNONYM_PROPOSE_DEF = {
+    id: 'synonym-propose',
+    name: '同義提議(synonym-propose)',
+    title: '同義核心提議 AI 能力評分',
+    std: ES11.std,
+    v: 1,
+    caseProblems: proposeCaseProblems,
+    expectOf: () => 'ok',
+    caseFieldsOf: (c) => ({ names: c.input.names.length, must: c.expect.must.length, mustNot: c.expect.mustNot.length }),
+    domainProblem: domainNeeds(['buildSynonymProposePrompt']),
+    // 名單先排序(同正式之同義專步:names 依碼元序)
+    promptOf: (cases, domain) => domain.buildSynonymProposePrompt(cases[0].input.names.map((x) => x.trim()).sort()),
+    check: (data) => (checkSynonymProposals(data) ? true : '回覆不含 { pairs:[…] }（同正式之 check）'),
+    call: callVia('synonymPropose', parseSynonymProposals),
+    verdictOf: proposeVerdictOf,
+    blankFields: PROPOSE_BLANK,
+    detailOf: (r) => (r.missing ? `（漏提：${r.missing}）` : (r.wrong ? `（誤提：${r.wrong}）` : '')),
+    mismatchNote: (r) => (r.cls === 'must' ? `漏提應提之配對（${r.missing}）` : (r.cls === 'mustNot' ? `提了不應提之配對（${r.wrong}）` : `判 ${r.cls}`)),
+    report: {
+        criteria: [
+            '判準：逐案各回之類別皆＝ok 才計通過（各回因而一致），不以比率放行；提議經正式之 proposedCandidatesOf（兩名皆在名單、不同名、去重），應提之配對（must：同義詞、譯名、簡稱或寫法不同）須皆在，否則為 must；不應提之配對（mustNot：子題、上位、同領域之不同主題、應用）須皆不在，否則為 mustNot；未列於應然之配對不判',
+            '分頁：一案一頁（一案＝一份核心概念名單；同正式之提議為全部核心名一次）；提示詞＝正式 buildSynonymProposePrompt（名單依碼元序，同正式）',
+            '合契約率：成功取得回覆之各回中，回覆之配對皆為名單中之兩個不同概念名者之比率（名單外之名、同名之配對為不合契約，正式略去）；平均耗時取成功之呼叫',
+        ],
+        caseColumns: [{ name: '名單數', key: 'names' }, { name: '應提數', key: 'must' }, { name: '不應提數', key: 'mustNot' }],
+        runColumns: [{ name: '提議之配對', key: 'proposed' }, { name: '漏提', key: 'missing' }, { name: '誤提', key: 'wrong' }, { name: '名單外或同名', key: 'offList' }],
+    },
+    cli: {
+        casesHelp: '題組檔({ input:{ names:[概念名…(碼元序)] }, expect:{ must:[[a,b]…], mustNot:[[a,b]…] } });未給＝內建通用題組(src/bench/cases/synonym-propose-generic.json)',
+    },
+}
+
+// ════════════════ 工作流類(wf-*;3+3 之各棒與待審裁決) ════════════════
+//
+// 【案】input:{ state?(合成核心狀態之描述;esCases 之 coreStateOf), sources:[{ id, title, text }](全部材料:本批與狀態所引之筆記), batch?:[出處 id](本批;
+//   依序為 N1…), …各角色之欄 };expect:{ 謂詞:值 }(只列要驗之謂詞;依角色之謂詞序取首個不成立者為類別)。
+// 【材料】本批之摘要＝「### 代號 標題」＋內文(合成材料;正式為筆記之摘要);出處之內容(檢定標準 ES2／ES16 之材料)＝標題＋內文;核心之概念名取狀態
+//   (預設 ES_CASE_CONCEPT)。規則表＝正式之 rulesTextOf;守門與納入閘同正式(gateOps;ref 別名於守門後改寫)。
+
+/** 工作流類之無回覆欄位 */
+const WF_BLANK = Object.freeze({ replied: '', why: '' })
+
+/** 第二批(結構合規:只驗格式、涵蓋與程式可判之性質)之角色 id */
+export const WF_STRUCTURAL = Object.freeze(['wf-draft', 'wf-revise', 'wf-consolidate', 'wf-essence'])
+
+/**
+ * 案之材料 → 工作流之脈絡(正式各棒所讀之件:狀態、本批、出處內容、規則表、套用脈絡、納入閘)
+ *
+ * @param {Object} inp 輸入案之 input
+ * @param {Object} domain 輸入提煉 domain
+ * @param {Object} [o={}] 輸入 { mode:'delta'|'consolidate'|'essence'(套用脈絡,同正式 runPass 之 applyCtx) }
+ * @returns {Object} 回傳 { state, problems, batch, contentOf, notesById, applyCtx, std, guard, gate, rulesText, concept }
+ */
+function wfCtxOf(inp, domain, o = {}) {
+    const { state, problems } = coreStateOf(inp?.state, { claimKinds: domain?.claimKinds })
+    const srcs = new Map((isarr(inp?.sources) ? inp.sources : []).filter((s) => isestr(s?.id)).map((s) => [s.id, s]))
+    const batch = textListOf(inp?.batch).map((id, k) => ({ code: `N${k + 1}`, id, digest: `### N${k + 1} ${textValueOf(srcs.get(id)?.title)}\n${String(srcs.get(id)?.text ?? '')}` }))
+    const srcTextOf = (id) => (srcs.has(id) ? `${textValueOf(srcs.get(id).title)}\n${String(srcs.get(id).text ?? '')}` : null)
+    const notesById = new Map([...srcs].map(([id, s]) => [id, { id, title: textValueOf(s.title) }]))
+    const mode = ['consolidate', 'essence'].includes(o.mode) ? o.mode : 'delta'
+    const applyCtx = applyCtxOf(domain, { batch, mode: mode === 'delta' ? 'delta' : 'consolidate', consolidate: mode === 'consolidate', step: mode, ...(mode === 'essence' ? { onlyOps: ['essence'] } : {}), at: '', self: state.concept })
+    const std = createOpStandards(opStandardsCtxOf({ state, batch: applyCtx.batch, contentOf: srcTextOf, notesById, applyCtx, domain }))
+    const locale = localeOf(domain)
+    const opGuard = (ops) => guardOps(ops, { state, visible: null, locale })
+    const gate = (ops, droppedRefs) => gateOps(ops, { guard: guardOps, state, visible: null, locale, std, droppedRefs, remap: applyRefAliases })
+    return { state, problems, batch, contentOf: srcTextOf, notesById, applyCtx, std, guard: opGuard, gate, rulesText: rulesTextOf(domain, state), concept: state.concept }
+}
+
+/**
+ * 工作流類之案之共通檢核(材料、本批、狀態之描述;角色之欄另驗)
+ *
+ * @param {Object} c 輸入案
+ * @param {Object} o 輸入 { keys:Array(角色之 input 欄), batch:Boolean(本批須至少一篇) }
+ * @returns {Array} 回傳問題說明陣列
+ */
+function wfInputProblems(c, o) {
+    const inp = c?.input
+    if (!isobj(inp)) return ['缺 input']
+    const p = []
+    const extra = unknownKeysProblem(inp, ['state', 'sources', 'batch', 'vocab', ...o.keys], 'input')
+    if (extra) p.push(extra)
+    if (inp.state !== undefined && !isobj(inp.state)) p.push('input.state 須為物件（合成核心狀態之描述；esCases 之 coreStateOf）')
+    else p.push(...coreStateOf(inp.state).problems.map((x) => `input.state ${x}`))
+    const srcs = isarr(inp.sources) ? inp.sources : null
+    if (!srcs) p.push('input.sources 須為陣列 [{ id, title, text }]（全部材料）')
+    else {
+        srcs.forEach((s, k) => {
+            if (!isobj(s) || !isestr(s.id) || typeof s.title !== 'string' || typeof s.text !== 'string') p.push(`input.sources[${k}] 須為 { id, title, text }（id 非空字串）`)
+        })
+        const ids = srcs.map((s) => s?.id)
+        if (new Set(ids).size !== ids.length) p.push('input.sources 之 id 重複')
+    }
+    const known = new Set((srcs || []).map((s) => s?.id))
+    if (inp.batch !== undefined && !(isarr(inp.batch) && inp.batch.every(isestr))) p.push('input.batch 須為出處 id 之字串陣列')
+    else {
+        const b = isarr(inp.batch) ? inp.batch : []
+        if (o.batch && !b.length) p.push('input.batch 須至少一篇（本批筆記）')
+        if (new Set(b).size !== b.length) p.push('input.batch 有重複之 id')
+        const off = b.filter((id) => !known.has(id))
+        if (off.length) p.push(`input.batch 之「${off.join('、')}」不在 input.sources`)
+    }
+    if (isobj(inp.state)) {
+        const st = coreStateOf(inp.state).state
+        const cited = uniq([...st.claims, ...st.disputes, ...st.parameters, ...st.questions].flatMap((x) => x.sources))
+        const off = cited.filter((id) => !known.has(id))
+        if (off.length) p.push(`input.state 所引之出處「${off.join('、')}」不在 input.sources（其內容為檢定標準之材料）`)
+    }
+    return p
+}
+
+/** 謂詞之值之檢核(依型別) */
+const PRED_TYPES = Object.freeze({
+    true: (v) => (v === true ? '' : '須為 true'),
+    bool: (v) => (typeof v === 'boolean' ? '' : '須為布林'),
+    ids: (v) => (nonEmptyStrs(v) ? '' : '須為非空字串陣列'),
+    int: (v) => (Number.isInteger(v) && v >= 0 ? '' : '須為非負整數'),
+    pairs: (v) => (isarr(v) && v.length && v.every((x) => isarr(x) && x.length === 2 && x.every(isestr)) ? '' : '須為 [[a,b]…] 之非空陣列'),
+    flagMap: (v) => (isobj(v) && Object.keys(v).length && Object.values(v).every(isestr) ? '' : '須為 { 操作 _oid: 意見類型 } 之非空物件'),
+    kinds: (v) => (nonEmptyStrs(v) ? '' : '須為非空之主張種類陣列'),
+    indexes: (v) => (isarr(v) && v.length && v.every((i) => Number.isInteger(i) && i >= 0) ? '' : '須為非空之操作 i 陣列'),
+})
+
+/**
+ * 工作流類之應然檢核:鍵須為角色之謂詞(打錯之謂詞名即拋——unknownKeysProblem)、至少一個、值合型別
+ *
+ * @param {*} e 輸入 expect
+ * @param {Object} preds 輸入角色之謂詞表 { 名: 型別(PRED_TYPES 之鍵) }
+ * @returns {Array} 回傳問題說明陣列
+ */
+function wfExpectProblems(e, preds) {
+    if (!isobj(e)) return [`expect 須為物件 { ${Object.keys(preds).join('、')} 之任意子集 }`]
+    const p = []
+    const extra = unknownKeysProblem(e, Object.keys(preds), 'expect')
+    if (extra) p.push(extra)
+    const keys = Object.keys(e).filter((k) => k in preds)
+    if (!keys.length) p.push(`expect 須至少給一個謂詞（${Object.keys(preds).join('、')}）`)
+    for (const k of keys) {
+        const bad = PRED_TYPES[preds[k]](e[k])
+        if (bad) p.push(`expect.${k} ${bad}`)
+    }
+    return p
+}
+
+/**
+ * 依謂詞序判類別:案之 expect 所列之謂詞逐一判(judge[名](值) → { ok, why }),首個不成立者即類別;皆成立 → 'ok'
+ *
+ * @param {Object} expect 輸入案之應然
+ * @param {Array} order 輸入謂詞序
+ * @param {Object} judge 輸入 { 名: (值) => { ok:Boolean, why:String } }
+ * @param {String} replied 輸入回覆之摘要(顯示)
+ * @returns {Object} 回傳 verdictOf 之形狀
+ */
+function wfClassOf(expect, order, judge, replied) {
+    for (const k of order) {
+        if (expect[k] === undefined) continue
+        const r = judge[k](expect[k])
+        if (!r.ok) return { cls: k, valid: true, problem: '', fields: { replied: oneline(replied, 160), why: oneline(r.why, 200) } }
+    }
+    return { cls: 'ok', valid: true, problem: '', fields: { replied: oneline(replied, 160), why: '' } }
+}
+
+/**
+ * 操作之 _oid 之檢核(守門後之操作皆帶 _oid、不重複)
+ *
+ * @param {*} ops 輸入操作陣列
+ * @param {String} where 輸入欄名
+ * @returns {Array} 回傳問題說明陣列
+ */
+function oidProblems(ops, where) {
+    if (!isarr(ops) || !ops.length) return [`${where} 須為非空之操作陣列`]
+    const p = []
+    ops.forEach((op, k) => {
+        if (!isobj(op) || !isestr(op.op) || !isestr(op._oid)) p.push(`${where}[${k}] 須為帶 op 與 _oid 之操作`)
+    })
+    const ids = ops.map((op) => op?._oid)
+    if (new Set(ids).size !== ids.length) p.push(`${where} 之 _oid 重複`)
+    return p
+}
+
+/**
+ * 工作流類之角色定義之共通部分(一案一頁、應然恆 ok、無回覆欄位、報表欄)
+ *
+ * @param {Object} d 輸入 { id, name, title, preds, order, keys, batch, check, call, promptOf, judgeOf, criteria, help }
+ * @returns {Object} 回傳角色定義
+ */
+function wfRoleDef(d) {
+    const fns = d.fns
+    return {
+        id: d.id,
+        name: WF_STRUCTURAL.includes(d.id) ? `${d.name}〔結構合規〕` : d.name,
+        title: d.title,
+        caseProblems: (c) => {
+            const p = wfInputProblems(c, { keys: d.keys, batch: d.batch })
+            if (!p.length && isfun(d.inputProblems)) p.push(...d.inputProblems(c.input, c.expect))
+            return [...p, ...wfExpectProblems(c?.expect, d.preds), ...inputVocabProblems(c)]
+        },
+        expectOf: () => 'ok',
+        caseFieldsOf: (c) => ({ preds: Object.keys(c.expect).filter((k) => k in d.preds).join('、') }),
+        domainProblem: domainNeeds(fns, { gate: true, weak: true }),
+        promptOf: (cases, domain) => d.promptOf(cases[0].input, domain),
+        check: (data) => (d.check(data) ? true : `回覆不合 ${d.shape}（同正式之 check）`),
+        call: d.call,
+        verdictOf: (data, c, at) => {
+            if (!d.check(data)) return noVerdict(`回覆不合 ${d.shape}（${typeName(data)}）`, WF_BLANK)
+            return d.judgeOf(data, c, at.domain)
+        },
+        blankFields: WF_BLANK,
+        detailOf: (r) => (r.why ? `（${oneline(r.why, 80)}）` : ''),
+        mismatchNote: (r) => (r.cls === null ? '' : `謂詞 ${r.cls} 不成立${r.why ? `（${oneline(r.why, 100)}）` : ''}`),
+        report: {
+            criteria: [
+                `判準：逐案各回之類別皆＝ok 才計通過（各回因而一致），不以比率放行；類別＝案之 expect 所列之謂詞依序（${d.order.join('、')}）首個不成立者${WF_STRUCTURAL.includes(d.id) ? '；結構合規：只驗格式、涵蓋與程式可判之性質，不驗是否抓到該抓之要點' : ''}`,
+                ...d.criteria,
+                '合契約率：成功取得回覆之各回中，回覆合正式之 check 者之比率；平均耗時取成功之呼叫',
+            ],
+            caseColumns: [{ name: '所驗謂詞', key: 'preds', md: true }],
+            runColumns: [{ name: '回覆', key: 'replied' }, { name: '不成立之處', key: 'why' }],
+        },
+        cli: { casesHelp: `題組檔({ input:{ state?, sources, batch?, ${d.keys.join(', ')} }, expect:{ ${d.order.join('?, ')}? } });未給＝內建通用題組(src/bench/cases/${d.id}-generic.json)` },
+    }
+}
+
+/** 意見類型中由審計席判之類型(超限與檢定標準為程式意見,不以之為植入之缺陷) */
+const AUDIT_FLAG_TYPES = Object.freeze([ISSUE_TYPES.fabricated, ISSUE_TYPES.offTopic, ISSUE_TYPES.duplicate])
+
+// ── wf-audit 審計(stage audit) ──
+
+/** 審計之角色定義:謂詞 flags(植入之缺陷皆有高嚴重度且類型相符之意見)、clean(乾淨之操作無高嚴重度意見) */
+const WF_AUDIT_DEF = wfRoleDef({
+    id: 'wf-audit',
+    name: '審計(wf-audit)',
+    title: '提煉審計 AI 能力評分',
+    fns: ['buildAuditPrompt'],
+    keys: ['ops', 'flags', 'missing'],
+    batch: true,
+    preds: { flags: 'flagMap', clean: 'ids' },
+    order: ['flags', 'clean'],
+    shape: '{ issues:[…] }',
+    check: checkAudit,
+    call: callVia('audit', parseAudit),
+    inputProblems: (inp, e) => {
+        const p = oidProblems(inp.ops, 'input.ops')
+        if (inp.flags !== undefined && !(isarr(inp.flags) && inp.flags.every((x) => typeof x === 'string'))) p.push('input.flags 須為字串陣列（程式旗標）')
+        if (inp.missing !== undefined && !isarr(inp.missing)) p.push('input.missing 須為操作陣列（多數支持卻未收之候選）')
+        if (p.length) return p
+        const oids = inp.ops.map((op) => op._oid)
+        const ctx = wfCtxOf(inp, createExtractDomain())
+        const g = ctx.guard(inp.ops)
+        if (g.rejected.length) p.push(`input.ops 須為守門後之操作（守門拒收：${g.rejected.map((x) => `${x.op?._oid} ${x.reason}`).join('；')}）`)
+        if (isobj(e?.flags)) for (const [oid, t] of Object.entries(e.flags)) {
+            if (!oids.includes(oid)) p.push(`expect.flags 之「${oid}」不在 input.ops`)
+            if (!AUDIT_FLAG_TYPES.includes(t)) p.push(`expect.flags.${oid} 須為 ${AUDIT_FLAG_TYPES.join('／')}（超限與檢定標準為程式意見，非審計席之責）`)
+        }
+        for (const oid of isarr(e?.clean) ? e.clean : []) {
+            if (!oids.includes(oid)) p.push(`expect.clean 之「${oid}」不在 input.ops`)
+            if (isobj(e?.flags) && oid in e.flags) p.push(`expect.clean 之「${oid}」亦列於 expect.flags`)
+        }
+        return p
+    },
+    promptOf: (inp, domain) => {
+        const x = wfCtxOf(inp, domain)
+        return domain.buildAuditPrompt({ concept: x.concept, rulesText: x.rulesText, ops: inp.ops, flags: inp.flags || [], missing: inp.missing || [], touched: touchedText(x.state, inp.ops), batch: x.batch, relations: '' })
+    },
+    judgeOf: (data, c) => {
+        const issues = normalizeIssues(data.issues)
+        const opOf = (oid) => c.input.ops.find((op) => op._oid === oid)
+        const high = (op) => issues.filter((x) => issueOnOp(x, op) && SEV_HIGH.has(x.severity))
+        return wfClassOf(c.expect, ['flags', 'clean'], {
+            flags: (m) => {
+                const miss = Object.entries(m).filter(([oid, t]) => !high(opOf(oid)).some((x) => x.type.includes(t)))
+                return { ok: !miss.length, why: miss.length ? `未以高嚴重度之「類型」指出：${miss.map(([oid, t]) => `${oid}（${t}）`).join('、')}` : '' }
+            },
+            clean: (ids) => {
+                const bad = ids.filter((oid) => high(opOf(oid)).length)
+                return { ok: !bad.length, why: bad.length ? `乾淨之操作被列高嚴重度意見：${bad.join('、')}` : '' }
+            },
+        }, issues.map((x) => `${x.ref}:${x.severity}${x.type}`).join('、'))
+    },
+    criteria: ['提示詞＝正式 buildAuditPrompt（ops＝案之守門後操作、flags、missing、被觸及之既有條目＝正式之 touchedText；無重審段——同正式無重審筆記時）；意見經正式之 normalizeIssues；「高」嚴重度＝正式之 SEV_HIGH、意見指向操作＝正式之 issueOnOp；植入之缺陷由案標註（只收捏造／離題／重複）'],
+})
+
+// ── 終審與待審裁決之共用判定件(正式之 applyVerdicts 之去向:剔除／保留／存待審) ──
+
+/**
+ * 逐操作之去向:剔除(applyVerdicts 之 dropped)、存待審(未得有效裁決之不可逆操作——同正式之 _withhold)、保留(其餘;含 fix 與存疑)
+ *
+ * @param {Array} ops 輸入送裁決之操作(序即 i)
+ * @param {Object} av 輸入 applyVerdicts 之回傳
+ * @returns {Array} 回傳 'drop'｜'withheld'｜'keep' 之陣列(依 i)
+ */
+function verdictOutcomesOf(ops, av) {
+    const dropped = new Set(av.dropped.map((x) => x.index))
+    const unv = new Set(av.unverdicted)
+    return ops.map((op, i) => (dropped.has(i) ? 'drop' : (unv.has(i) && TERMINAL_OPS.includes(op.op) ? 'withheld' : 'keep')))
+}
+
+/**
+ * 去向之謂詞(drop／keep／withheld:所列之 i 之去向皆為該去向)
+ *
+ * @param {Array} out 輸入 verdictOutcomesOf 之產物
+ * @param {String} want 輸入去向
+ * @returns {Function} 回傳 (i 之陣列) => { ok, why }
+ */
+const outcomeIs = (out, want) => (list) => {
+    const bad = list.filter((i) => out[i] !== want)
+    return { ok: !bad.length, why: bad.length ? bad.map((i) => `i=${i} 為 ${out[i] ?? '?'}`).join('、') : '' }
+}
+
+/**
+ * 操作之 i 之檢核(應然所列之 i 須在範圍內、不重複、不跨去向)
+ *
+ * @param {Object} e 輸入 expect
+ * @param {Integer} n 輸入操作數
+ * @param {Array} keys 輸入去向之謂詞名
+ * @returns {Array} 回傳問題說明陣列
+ */
+function outcomeIndexProblems(e, n, keys) {
+    const p = []
+    const seen = new Map()
+    for (const k of keys) {
+        if (e?.[k] === undefined) continue
+        if (!isarr(e[k]) || !e[k].every((i) => Number.isInteger(i) && i >= 0 && i < n)) {
+            p.push(`expect.${k} 須為操作之 i 陣列（0～${n - 1}）`)
+            continue
+        }
+        for (const i of e[k]) {
+            if (seen.has(i)) p.push(`i=${i} 同時列於 expect.${seen.get(i)} 與 expect.${k}`)
+            else seen.set(i, k)
+        }
+    }
+    return p
+}
+
+// ── wf-accept 終審(stage accept) ──
+
+/**
+ * 終審之輸入 → 送裁決之操作(去程式欄位;序即 i)與正規化之意見
+ *
+ * @param {Object} inp 輸入案之 input
+ * @returns {Object} 回傳 { ops(帶 _oid), reviewOps, issues }
+ */
+const acceptOpsOf = (inp) => ({ ops: inp.ops, reviewOps: inp.ops.map(stripProgramFields), issues: normalizeIssues(inp.issues) })
+
+/** 終審之角色定義:謂詞 drop(該剔者剔除)、keep(該留者保留)、irreversibleListed(不可逆操作皆明列裁決) */
+const WF_ACCEPT_DEF = wfRoleDef({
+    id: 'wf-accept',
+    name: '終審(wf-accept)',
+    title: '提煉終審 AI 能力評分',
+    fns: ['buildReviewPrompt', 'buildAcceptAppendix'],
+    keys: ['ops', 'issues', 'patchLog', 'mode'],
+    batch: false,
+    preds: { drop: 'indexes', keep: 'indexes', irreversibleListed: 'true' },
+    order: ['drop', 'keep', 'irreversibleListed'],
+    shape: '{ verdicts:[…] }',
+    check: checkVerdicts,
+    call: callVia('accept', parseVerdicts),
+    inputProblems: (inp, e) => {
+        const p = oidProblems(inp.ops, 'input.ops')
+        if (inp.issues !== undefined && !isarr(inp.issues)) p.push('input.issues 須為意見陣列 [{ ref, severity, type, detail, fix }]')
+        if (inp.patchLog !== undefined && !isarr(inp.patchLog)) p.push('input.patchLog 須為補丁紀錄陣列 [{ act, ref, ok, why }]')
+        if (inp.mode !== undefined && !['delta', 'consolidate'].includes(inp.mode)) p.push('input.mode 須為 delta／consolidate')
+        if (p.length) return p
+        return outcomeIndexProblems(e, inp.ops.length, ['drop', 'keep'])
+    },
+    promptOf: (inp, domain) => {
+        const x = wfCtxOf(inp, domain)
+        const { ops, reviewOps, issues } = acceptOpsOf(inp)
+        return domain.buildReviewPrompt({ concept: x.concept, scope: 'concept', mode: inp.mode || 'delta', ops: reviewOps, batch: x.batch, touched: touchedText(x.state, ops), rulesText: x.rulesText }) + domain.buildAcceptAppendix({ issues, patchLog: isarr(inp.patchLog) ? inp.patchLog : [] })
+    },
+    judgeOf: (data, c, domain) => {
+        const x = wfCtxOf(c.input, domain)
+        const { ops, reviewOps, issues } = acceptOpsOf(c.input)
+        const gv = gateVerdicts(ops, data.verdicts, { state: x.state, issues })
+        if (!gv.verdicts.length && reviewOps.length) return noVerdict('回覆無有效裁決（同正式：等同終審失敗）', WF_BLANK)
+        const av = applyVerdicts({ ops: reviewOps }, gv.verdicts)
+        const out = verdictOutcomesOf(reviewOps, av)
+        return wfClassOf(c.expect, ['drop', 'keep', 'irreversibleListed'], {
+            drop: outcomeIs(out, 'drop'),
+            keep: outcomeIs(out, 'keep'),
+            irreversibleListed: () => {
+                const miss = reviewOps.map((op, i) => ({ op, i })).filter(({ op, i }) => TERMINAL_OPS.includes(op.op) && av.unverdicted.includes(i))
+                return { ok: !miss.length, why: miss.length ? `不可逆操作未得有效裁決：${miss.map((m) => `i=${m.i}（${m.op.op}）`).join('、')}` : '' }
+            },
+        }, out.map((o, i) => `${i}:${o}`).join(' ') + (gv.blocked.length ? `；程式擋下剔除 ${gv.blocked.length}` : ''))
+    },
+    criteria: ['提示詞＝正式 buildReviewPrompt（mode＝案之 mode，預設 delta；ops＝案之操作去程式欄位）＋buildAcceptAppendix（意見、補丁紀錄）；裁決經正式之 gateVerdicts（剔除建設性操作須合補丁守門）→ applyVerdicts；去向：剔除、保留（含 fix、存疑）、存待審（未得有效裁決之不可逆操作，同正式）；無有效裁決為無裁決（同正式之終審失敗）'],
+})
+
+// ── wf-pending 待審裁決(stage accept;與 wf-accept 同席) ──
+
+/** 待審裁決之角色定義:謂詞 drop、keep(保留且過正式之定稿篩選)、withheld(未得有效裁決之不可逆操作留待審) */
+const WF_PENDING_DEF = wfRoleDef({
+    id: 'wf-pending',
+    name: '待審裁決(wf-pending)',
+    title: '提煉待審裁決 AI 能力評分',
+    fns: ['buildReviewPrompt'],
+    keys: [],
+    batch: true,
+    preds: { drop: 'indexes', keep: 'indexes', withheld: 'indexes' },
+    order: ['drop', 'keep', 'withheld'],
+    shape: '{ verdicts:[…] }',
+    check: checkVerdicts,
+    call: callVia('accept', parseVerdicts),
+    inputProblems: (inp, e) => {
+        const ctx = wfCtxOf(inp, createExtractDomain())
+        const pend = pendingReviewOps(ctx.state)
+        if (!pend.ops.length) return ['input.state 須含仍有效之待審（pendingReview；目標非終態、出處未全撤）']
+        if (pend.stale.length) return [`input.state 之待審含陳舊項 ${pend.stale.length} 項（正式於本步清除、不送審——題組不收）`]
+        return outcomeIndexProblems(e, pend.ops.length, ['drop', 'keep', 'withheld'])
+    },
+    promptOf: (inp, domain) => {
+        const x = wfCtxOf(inp, domain)
+        return pendingReviewPromptOf({ state: x.state, pend: pendingReviewOps(x.state), concept: x.concept, scope: 'concept', batch: x.batch, domain }).prompt
+    },
+    judgeOf: (data, c, domain) => {
+        const x = wfCtxOf(c.input, domain)
+        const { ops } = pendingReviewPromptOf({ state: x.state, pend: pendingReviewOps(x.state), concept: x.concept, scope: 'concept', batch: x.batch, domain })
+        const av = applyVerdicts({ ops }, data.verdicts)
+        const out = verdictOutcomesOf(ops, av)
+        // 保留者過正式之定稿篩選(操作守門＋納入閘;同 runPending 之套用脈絡與閘——無 ref 別名之改寫):未過者為 gateOut
+        const unv = new Set(av.unverdicted)
+        const delta = av.delta.ops.map((op) => (unv.has(op._i) && TERMINAL_OPS.includes(op.op) ? { ...op, _withhold: true } : op))
+        const applyCtx = applyCtxOf(domain, { batch: x.batch, mode: 'delta', step: 'pending', at: '', self: x.concept, droppedRefs: av.droppedRefs })
+        const std = createOpStandards(opStandardsCtxOf({ state: x.state, batch: applyCtx.batch, contentOf: x.contentOf, notesById: x.notesById, applyCtx, domain }))
+        const g = gateOps(delta, { guard: guardOps, state: x.state, visible: null, locale: localeOf(domain), std, droppedRefs: av.droppedRefs })
+        const passed = new Set(g.ops.map((op) => op._i))
+        const final = out.map((o, i) => (o === 'keep' && !passed.has(i) ? 'gateOut' : o))
+        return wfClassOf(c.expect, ['drop', 'keep', 'withheld'], {
+            drop: outcomeIs(final, 'drop'),
+            keep: outcomeIs(final, 'keep'),
+            withheld: outcomeIs(final, 'withheld'),
+        }, final.map((o, i) => `${i}:${o}`).join(' '))
+    },
+    criteria: ['提示詞＝正式之待審裁決提示詞（workflow/pending 之 pendingReviewPromptOf：仍有效之待審操作、出處換本批代號、buildReviewPrompt mode pending）；裁決經正式之 applyVerdicts（同 runPending，無剔除之閘）；去向：剔除、存待審（未得有效裁決之不可逆操作）、保留——保留者另過正式之定稿篩選（操作守門＋納入閘），未過者記 gateOut；不含其後之 ES9 重判'],
+})
+
+// ── wf-integrate 整合(stage integrate) ──
+
+/**
+ * 整合之候選(同正式 runPass:normalizeDelta → prefixCandidate → trialApply;計票 voteOps)
+ *
+ * @param {Object} inp 輸入案之 input(candidates)
+ * @param {Object} x 輸入 wfCtxOf 之產物
+ * @returns {Object} 回傳 { cands, votes, byOid, refNames }
+ */
+function integrateCandsOf(inp, x) {
+    const cands = inp.candidates.map((c0, k) => {
+        const seat = k + 1
+        const c = prefixCandidate(normalizeDelta(c0), seat)
+        trialApply(x.state, c.ops, x.applyCtx)
+        return { seat, provider: textValueOf(c0.provider) || `seat${seat}`, ops: c.ops, skipped: c.skipped, conflicts: c.conflicts }
+    })
+    const votes = voteOps(cands)
+    return { cands, votes, byOid: new Map(cands.flatMap((c) => c.ops.map((op) => [op._oid, op]))), refNames: new Set(cands.flatMap((c) => c.ops.map((op) => textValueOf(op.ref)).filter(Boolean))) }
+}
+
+/** 整合之角色定義:謂詞 viaValid(各條以 via 指回候選且合正式之 validateVia)、keepsMajority(多數支持者皆收)、refsClosed(@ref 皆自足,不需程式閉包)、applies(過守門且套用不被拒收) */
+const WF_INTEGRATE_DEF = wfRoleDef({
+    id: 'wf-integrate',
+    name: '整合(wf-integrate)',
+    title: '提煉整合 AI 能力評分',
+    fns: ['buildIntegratePrompt'],
+    keys: ['candidates'],
+    batch: true,
+    preds: { viaValid: 'true', keepsMajority: 'true', refsClosed: 'true', applies: 'true' },
+    order: ['viaValid', 'keepsMajority', 'refsClosed', 'applies'],
+    shape: '{ ops:[…] }',
+    check: checkDraft,
+    call: callVia('integrate', parseDraft),
+    inputProblems: (inp) => {
+        if (!isarr(inp.candidates) || inp.candidates.length < 2 || inp.candidates.length > 3) return ['input.candidates 須為 2～3 份候選差量 [{ provider?, ops, skipped? }]（只一份時正式跳過整合）']
+        const p = []
+        inp.candidates.forEach((c, k) => {
+            if (!isobj(c) || !checkDraft(c)) p.push(`input.candidates[${k}] 須為 { ops:[…] }`)
+        })
+        return p
+    },
+    promptOf: (inp, domain) => {
+        const x = wfCtxOf(inp, domain)
+        const { cands, votes } = integrateCandsOf(inp, x)
+        return domain.buildIntegratePrompt({ concept: x.concept, rulesText: x.rulesText, cands, votes, digestIndex: stateDigest(x.state, { only: new Set() }), batchCodes: x.batch.map((b) => b.code) })
+    },
+    judgeOf: (data, c, domain) => {
+        const x = wfCtxOf(c.input, domain)
+        const { cands, votes, byOid, refNames } = integrateCandsOf(c.input, x)
+        const j = normalizeDelta(data)
+        const v = validateVia(j.ops, byOid)
+        let integrated = v.ops.map((op) => ({ ...op, _votes: Math.max(...op._via.map((y) => votes.get(y)?.votes || 1)) }))
+        normalizeBareRefs(integrated, refNames)
+        const cl = closeRefs(integrated, cands)
+        integrated = cl.ops.map((op, n) => (op._oid ? op : { ...op, _oid: `i_${n + 1}` }))
+        const missing = droppedMajority(cands, votes, integrated)
+        const g = x.guard(integrated)
+        const ap = applyDelta(x.state, { ops: applyRefAliases(g.ops) }, x.applyCtx)
+        return wfClassOf(c.expect, ['viaValid', 'keepsMajority', 'refsClosed', 'applies'], {
+            viaValid: () => ({ ok: v.ops.length > 0 && !v.rejected.length, why: v.rejected.length ? v.rejected.map((r) => r.reason).join('；') : (v.ops.length ? '' : '無操作') }),
+            keepsMajority: () => ({ ok: !missing.length, why: missing.length ? `多數支持而未收：${missing.map((op) => op._oid).join('、')}` : '' }),
+            refsClosed: () => ({ ok: !cl.added.length, why: cl.added.length ? `程式補閉包：${cl.added.map((a) => `@${a.ref}（${a.how}）`).join('、')}` : '' }),
+            applies: () => ({ ok: !g.rejected.length && !ap.rejected.length, why: [...g.rejected.map((r) => `守門：${r.reason}`), ...ap.rejected.map((r) => `套用：${r.reason}`)].join('；') }),
+        }, `${v.ops.length} 條（拒收 ${v.rejected.length}）`)
+    },
+    criteria: ['提示詞＝正式 buildIntegratePrompt（候選＝案之 2～3 份差量經正式之 normalizeDelta → prefixCandidate → trialApply、計票 voteOps、狀態索引）；判定同正式 runPass 之整合後段：validateVia → normalizeBareRefs → closeRefs → droppedMajority → 操作守門 → applyDelta（皆程式可判）'],
+})
+
+// ── wf-draft 起草(extractFanout 之受測席) ──
+
+/**
+ * 起草之提示詞(同正式 runPass 之增量起草:stateView 依預算給全文或索引;無重審段)
+ *
+ * @param {Object} inp 輸入案之 input(relations?)
+ * @param {Object} domain 輸入提煉 domain
+ * @param {Object} x 輸入 wfCtxOf 之產物
+ * @returns {String} 回傳提示詞
+ */
+function draftPromptOf(inp, domain, x) {
+    const draftOf = (digest) => domain.buildProposePrompt({ concept: x.concept, scope: 'concept', digest, batch: x.batch, rulesText: x.rulesText, relations: textValueOf(inp.relations) })
+    const view = stateView(x.state, x.batch.map((b) => b.digest).join('\n\n'), (d) => draftOf(d).length, 29_000)
+    return draftOf(view.digest)
+}
+
+/** 起草之角色定義(結構合規):謂詞 cites(所列筆記皆被引為出處)、skips(所列筆記皆以合法理由略過)、covered(本批皆涵蓋)、dispute(有／無爭議類操作)、grounded(過納入閘)、noRejected(無守門與套用之拒收)、kinds(所列種類皆出現) */
+const WF_DRAFT_DEF = wfRoleDef({
+    id: 'wf-draft',
+    name: '起草(wf-draft)',
+    title: '提煉起草 AI 能力評分',
+    fns: ['buildProposePrompt'],
+    keys: ['relations'],
+    batch: true,
+    preds: { cites: 'ids', skips: 'ids', covered: 'true', dispute: 'bool', grounded: 'true', noRejected: 'true', kinds: 'kinds' },
+    order: ['cites', 'skips', 'covered', 'dispute', 'grounded', 'noRejected', 'kinds'],
+    shape: '{ ops:[…] }',
+    check: checkDraft,
+    call: fanoutVia(parseDraft),
+    inputProblems: (inp, e) => {
+        const p = []
+        if (inp.relations !== undefined && typeof inp.relations !== 'string') p.push('input.relations 須為字串（關聯脈絡）')
+        const b = isarr(inp.batch) ? inp.batch : []
+        for (const k of ['cites', 'skips']) for (const id of isarr(e?.[k]) ? e[k] : []) if (!b.includes(id)) p.push(`expect.${k} 之「${id}」不在 input.batch`)
+        if (isarr(e?.cites) && isarr(e?.skips)) for (const id of e.cites) if (e.skips.includes(id)) p.push(`「${id}」同時列於 expect.cites 與 expect.skips`)
+        const kinds = createExtractDomain().claimKinds
+        for (const k of isarr(e?.kinds) ? e.kinds : []) if (!kinds.includes(k)) p.push(`expect.kinds 之「${k}」不在主張種類（${kinds.join('、')}）`)
+        return p
+    },
+    promptOf: (inp, domain) => draftPromptOf(inp, domain, wfCtxOf(inp, domain)),
+    judgeOf: (data, c, domain) => {
+        const x = wfCtxOf(c.input, domain)
+        const cand = prefixCandidate(normalizeDelta(data), 1)
+        trialApply(x.state, cand.ops, x.applyCtx)
+        // 只一份候選:試套被拒收者不入(同正式 runPass 之跳過整合)
+        const g = x.guard(cand.ops.filter((op) => !op._trial))
+        const sc = x.std.screen(applyRefAliases(g.ops))
+        const ap = applyDelta(x.state, { ops: sc.ops }, x.applyCtx)
+        const cov = coverageOf({ batch: x.applyCtx.batch, applied: ap.applied, skipped: cand.skipped })
+        const skipped = new Set(cov.skipped.map((s) => s.note))
+        const appliedKinds = new Set(ap.applied.filter((a) => a.op === 'add').map((a) => findItem(ap.state, a.id)?.item?.kind).filter(Boolean))
+        const disputed = ap.applied.some((a) => DISPUTE_OPS.has(a.op))
+        return wfClassOf(c.expect, ['cites', 'skips', 'covered', 'dispute', 'grounded', 'noRejected', 'kinds'], {
+            cites: (ids) => ({ ok: ids.every((id) => cov.used.includes(id)), why: `未被引為出處：${ids.filter((id) => !cov.used.includes(id)).join('、')}` }),
+            skips: (ids) => ({ ok: ids.every((id) => skipped.has(id)), why: `未以合法理由略過：${ids.filter((id) => !skipped.has(id)).join('、')}` }),
+            covered: () => ({ ok: !cov.uncovered.length, why: `未涵蓋：${cov.uncovered.join('、')}` }),
+            dispute: (want) => ({ ok: disputed === want, why: want ? '無爭議類操作落地' : '有爭議類操作落地' }),
+            grounded: () => ({ ok: !sc.rejected.length, why: sc.rejected.map((r) => `${r.op?.op}：${(r.why || []).slice(0, 2).join('；')}`).join('／') }),
+            noRejected: () => ({ ok: !g.rejected.length && !ap.rejected.length && cand.ops.every((op) => !op._trial), why: [...g.rejected.map((r) => `守門：${r.reason}`), ...ap.rejected.map((r) => `套用：${r.reason}`)].join('；') || '試套被拒收' }),
+            kinds: (ks) => ({ ok: ks.every((k) => appliedKinds.has(k)), why: `未出現之種類：${ks.filter((k) => !appliedKinds.has(k)).join('、')}` }),
+        }, `${cand.ops.length} 條、略過 ${cand.skipped.length}`)
+    },
+    criteria: ['提示詞＝正式 buildProposePrompt（狀態視圖＝正式之 stateView、預算 29000；關聯脈絡＝案之 relations；無重審段）；呼叫＝正式之 extractFanout（受測模型為起草第一席，其餘兩席為凍結腳本）；判定同正式 runPass 之起草後段（只取受測席之候選）：normalizeDelta → prefixCandidate → trialApply → 操作守門 → 納入閘 → applyDelta → coverageOf'],
+})
+
+// ── wf-revise 修訂(stage revise;與 support-revise 同席) ──
+
+/**
+ * 操作之檢定標準問題之總數(正式之 problemsOf;補丁不得使之變多)
+ *
+ * @param {Object} std 輸入納入閘
+ * @param {Array} ops 輸入操作
+ * @returns {Integer} 回傳問題數
+ */
+const problemCountOf = (std, ops) => [...std.problemsOf(ops).values()].reduce((a, ps) => a + (isarr(ps) ? ps.length : 0), 0)
+
+/** 修訂之角色定義(結構合規):謂詞 fixed(所列操作被補丁改正或依合法理由移除)、untouched(所列操作逐字保留)、notWorse(檢定標準問題不增)、blockedNone(補丁皆合補丁守門) */
+const WF_REVISE_DEF = wfRoleDef({
+    id: 'wf-revise',
+    name: '修訂(wf-revise)',
+    title: '提煉修訂 AI 能力評分',
+    fns: ['buildRevisePrompt'],
+    keys: ['ops', 'issues'],
+    batch: true,
+    preds: { fixed: 'ids', untouched: 'ids', notWorse: 'true', blockedNone: 'true' },
+    order: ['fixed', 'untouched', 'notWorse', 'blockedNone'],
+    shape: '{ edits／adds／removes:[…] }',
+    check: checkPatch,
+    call: callVia('revise', parsePatch),
+    inputProblems: (inp, e) => {
+        const p = oidProblems(inp.ops, 'input.ops')
+        if (!isarr(inp.issues) || !inp.issues.length) p.push('input.issues 須為非空之意見陣列 [{ ref, severity, type, detail, fix }]（程式意見與審計意見）')
+        if (p.length) return p
+        const oids = inp.ops.map((op) => op._oid)
+        for (const k of ['fixed', 'untouched']) for (const oid of isarr(e?.[k]) ? e[k] : []) if (!oids.includes(oid)) p.push(`expect.${k} 之「${oid}」不在 input.ops`)
+        if (isarr(e?.fixed) && isarr(e?.untouched)) for (const oid of e.fixed) if (e.untouched.includes(oid)) p.push(`「${oid}」同時列於 expect.fixed 與 expect.untouched`)
+        return p
+    },
+    promptOf: (inp, domain) => {
+        const x = wfCtxOf(inp, domain)
+        return domain.buildRevisePrompt({ concept: x.concept, rulesText: x.rulesText, ops: inp.ops, issues: normalizeIssues(inp.issues), fixable: FIXABLE_FIELDS, touched: touchedText(x.state, inp.ops), batch: x.batch })
+    },
+    judgeOf: (data, c, domain) => {
+        const x = wfCtxOf(c.input, domain)
+        const ops = c.input.ops
+        const issues = normalizeIssues(c.input.issues)
+        const refNames = new Set(ops.map((op) => textValueOf(op.ref)).filter(Boolean))
+        const pt = applyPatch(ops, data, { state: x.state, issues, guard: x.guard, limits: domain.limits, problemsOf: (xs) => x.std.problemsOf(xs) })
+        const out = applyRefAliases(normalizeBareRefs(pt.ops, refNames))
+        const okRefs = new Set(pt.log.filter((l) => l.ok && (l.act === 'edit' || l.act === 'remove')).map((l) => l.ref))
+        const sameOp = (oid) => {
+            const before = ops.find((op) => op._oid === oid)
+            const after = out.find((op) => op._oid === oid)
+            return !!after && JSON.stringify(before) === JSON.stringify(after)
+        }
+        return wfClassOf(c.expect, ['fixed', 'untouched', 'notWorse', 'blockedNone'], {
+            fixed: (ids) => ({ ok: ids.every((oid) => okRefs.has(oid)), why: `未改正：${ids.filter((oid) => !okRefs.has(oid)).join('、')}` }),
+            untouched: (ids) => ({ ok: ids.every(sameOp), why: `被改動：${ids.filter((oid) => !sameOp(oid)).join('、')}` }),
+            notWorse: () => {
+                const [a, b] = [problemCountOf(x.std, ops), problemCountOf(x.std, out)]
+                return { ok: b <= a, why: `檢定標準問題 ${a} → ${b}` }
+            },
+            blockedNone: () => {
+                const bad = pt.log.filter((l) => !l.ok)
+                return { ok: !bad.length, why: bad.map((l) => `${l.act} ${l.ref || ''}：${l.why}`).join('；') }
+            },
+        }, pt.log.map((l) => `${l.act}${l.ref ? ` ${l.ref}` : ''}${l.ok ? '' : '✗'}`).join('、'))
+    },
+    criteria: ['提示詞＝正式 buildRevisePrompt（ops＝案之操作、意見經正式之 normalizeIssues、可改欄位＝正式之 FIXABLE_FIELDS、被觸及之既有條目＝正式之 touchedText；無重審段）；判定同正式 runPass 之修訂後段：applyPatch（補丁守門：移除合 removalAllowed、改寫保有原文過半、新增須對應意見、不得新增檢定標準問題）→ normalizeBareRefs → applyRefAliases'],
+})
+
+// ── wf-consolidate 整併(extractFanout 之受測席) ──
+
+/**
+ * 有效主張數(非終態;同正式 runPass 之 live)
+ *
+ * @param {Object} s 輸入狀態
+ * @returns {Integer} 回傳數
+ */
+const liveClaimsOf = (s) => s.claims.filter((c) => !TERMINAL_SET.has(c.status)).length
+
+/**
+ * 兩條目是否已合併(一方併入另一方,或兩方併入同一條)
+ *
+ * @param {Object} s 輸入套用後之狀態
+ * @param {String} a 輸入條目 id
+ * @param {String} b 輸入條目 id
+ * @returns {Boolean} 回傳是否合併
+ */
+function mergedPair(s, a, b) {
+    const into = (id) => textValueOf(findItem(s, id)?.item?.mergedInto)
+    const ia = into(a)
+    const ib = into(b)
+    return ia === b || ib === a || (!!ia && ia === ib)
+}
+
+/** 整併之角色定義(結構合規):謂詞 merges(所列之兩條皆已合併)、noLoss(套用不被拒收、守門無拒收且不變式成立)、liveAtMost(有效主張數不逾) */
+const WF_CONSOLIDATE_DEF = wfRoleDef({
+    id: 'wf-consolidate',
+    name: '整併(wf-consolidate)',
+    title: '提煉整併 AI 能力評分',
+    fns: ['buildConsolidatePrompt'],
+    keys: ['cap'],
+    batch: false,
+    preds: { merges: 'pairs', noLoss: 'true', liveAtMost: 'int' },
+    order: ['merges', 'noLoss', 'liveAtMost'],
+    shape: '{ ops:[…] }',
+    check: checkDraft,
+    call: fanoutVia(parseDraft),
+    inputProblems: (inp, e) => {
+        const p = []
+        if (!Number.isInteger(inp.cap) || inp.cap <= 0) p.push('input.cap 須為正整數（有效主張上限）')
+        if (inp.batch !== undefined && inp.batch.length) p.push('input.batch 不用於整併（整併不處理筆記）')
+        const st = coreStateOf(inp.state).state
+        if (Number.isInteger(inp.cap) && liveClaimsOf(st) <= inp.cap) p.push(`input.state 之有效主張（${liveClaimsOf(st)}）須逾 input.cap（正式之整併只在逾上限時跑）`)
+        for (const pair of isarr(e?.merges) ? e.merges : []) for (const id of isarr(pair) ? pair : []) if (!findItem(st, id)) p.push(`expect.merges 之「${id}」不在 input.state`)
+        return p
+    },
+    promptOf: (inp, domain) => {
+        const x = wfCtxOf(inp, domain, { mode: 'consolidate' })
+        return domain.buildConsolidatePrompt({ concept: x.concept, scope: 'concept', digest: stateDigest(x.state, { full: true }), live: liveClaimsOf(x.state), cap: inp.cap, rulesText: x.rulesText })
+    },
+    judgeOf: (data, c, domain) => {
+        const x = wfCtxOf(c.input, domain, { mode: 'consolidate' })
+        const cand = prefixCandidate(normalizeDelta(data), 1)
+        const g = x.guard(cand.ops)
+        const sc = x.std.screen(applyRefAliases(g.ops))
+        const ap = applyDelta(x.state, { ops: sc.ops }, x.applyCtx)
+        const inv = checkInvariants(x.state, ap.state, { touched: ap.touched })
+        return wfClassOf(c.expect, ['merges', 'noLoss', 'liveAtMost'], {
+            merges: (pairs) => ({ ok: pairs.every(([a, b]) => mergedPair(ap.state, a, b)), why: `未合併：${pairs.filter(([a, b]) => !mergedPair(ap.state, a, b)).map((pr) => pr.join('＋')).join('、')}` }),
+            noLoss: () => ({ ok: !g.rejected.length && !sc.rejected.length && !ap.rejected.length && !inv.length, why: [...g.rejected.map((r) => `守門：${r.reason}`), ...sc.rejected.map((r) => `納入閘：${(r.why || []).slice(0, 1).join('')}`), ...ap.rejected.map((r) => `套用：${r.reason}`), ...inv.map((v) => `不變式：${v}`)].join('；') }),
+            liveAtMost: (n) => ({ ok: liveClaimsOf(ap.state) <= n, why: `有效主張 ${liveClaimsOf(ap.state)} 條` }),
+        }, `${cand.ops.length} 條（${cand.ops.map((op) => textValueOf(op.op)).join('、')}）`)
+    },
+    criteria: ['提示詞＝正式 buildConsolidatePrompt（完整狀態摘要、有效主張數、上限＝案之 cap）；呼叫＝正式之 extractFanout（受測模型為第一席，其餘兩席為凍結腳本）；判定：prefixCandidate → 操作守門 → 納入閘 → applyDelta（整併模式，同正式之套用脈絡）→ checkInvariants（皆程式可判；「該併哪兩條」為案之標註）'],
+})
+
+// ── wf-essence 本質(extractFanout 之受測席;本質專步) ──
+
+/** 本質之角色定義(結構合規):謂詞 essenceOk(套用後 ES6 合格且 ES16 數字紮根)、withinLimit(本質未逾硬上限——不靠程式截短) */
+const WF_ESSENCE_DEF = wfRoleDef({
+    id: 'wf-essence',
+    name: '本質(wf-essence)',
+    title: '提煉本質 AI 能力評分',
+    fns: ['buildEssencePrompt'],
+    keys: [],
+    batch: false,
+    preds: { essenceOk: 'true', withinLimit: 'true' },
+    order: ['essenceOk', 'withinLimit'],
+    shape: '{ ops:[…] }',
+    check: checkDraft,
+    call: fanoutVia(parseDraft),
+    inputProblems: (inp) => {
+        const p = []
+        if (inp.batch !== undefined && inp.batch.length) p.push('input.batch 不用於本質專步（不處理筆記）')
+        if (!essenceNeedOf(coreStateOf(inp.state).state).need) p.push('input.state 須有本質之需求（有效主張而無本質，或本質待重寫——正式之 essenceNeedOf）')
+        return p
+    },
+    promptOf: (inp, domain) => {
+        const x = wfCtxOf(inp, domain, { mode: 'essence' })
+        const need = essenceNeedOf(x.state)
+        return domain.buildEssencePrompt({ concept: x.concept, scope: 'concept', digest: stateDigest(x.state, { full: true }), live: liveClaimsOf(x.state), need: need.need, why: need.staleWhy, rulesText: x.rulesText })
+    },
+    judgeOf: (data, c, domain) => {
+        const x = wfCtxOf(c.input, domain, { mode: 'essence' })
+        const cand = prefixCandidate(normalizeDelta(data), 1)
+        const ess = cand.ops.filter((op) => op.op === 'essence')
+        const over = ess.map((op) => opLengthProblem(op, domain.limits)).filter(Boolean)
+        // 尚無本質之核心:定稿前仍逾硬上限者截至句界(同正式 runPass 之最後防線)——withinLimit 量的是模型之輸出,essenceOk 量的是落地之結果
+        const limit = domain.limits?.essence
+        const ops = textValueOf(x.state.essence?.text) ? cand.ops : cand.ops.map((op) => (op.op === 'essence' && opLengthProblem(op, domain.limits) ? { ...op, text: trimToLimit(op.text, limit) } : op))
+        const g = x.guard(ops)
+        const sc = x.std.screen(applyRefAliases(g.ops))
+        const ap = applyDelta(x.state, { ops: sc.ops }, x.applyCtx)
+        const rs = checkCore(ap.state, { contentOf: x.contentOf, limits: domain.limits, locale: localeOf(domain) })
+        const es6 = rs.find((r) => r.std === 'ES6')
+        const es16 = rs.filter((r) => r.std === 'ES16')
+        return wfClassOf(c.expect, ['essenceOk', 'withinLimit'], {
+            essenceOk: () => ({ ok: es6?.status === STATUS.PASS && es16.every((r) => r.status === STATUS.PASS), why: [es6?.status !== STATUS.PASS ? `ES6：${es6?.detail || es6?.status}` : '', ...es16.filter((r) => r.status !== STATUS.PASS).map((r) => `ES16：${r.detail}`), ...ap.rejected.map((r) => `套用：${r.reason}`)].filter(Boolean).join('；') }),
+            withinLimit: () => ({ ok: ess.length > 0 && !over.length, why: ess.length ? over.join('；') : '無 essence 操作' }),
+        }, ess.map((op) => oneline(op.text, 60)).join('｜') || `${cand.ops.length} 條（無 essence）`)
+    },
+    criteria: ['提示詞＝正式 buildEssencePrompt（完整狀態摘要；需求＝正式之 essenceNeedOf）；呼叫＝正式之 extractFanout（受測模型為第一席，其餘兩席為凍結腳本）；判定：essence 之長度＝正式之 opLengthProblem；落地＝（尚無本質者截至句界，同正式）→ 操作守門 → 納入閘 → applyDelta（只收 essence）→ checkCore 之 ES6、ES16'],
+})
+
+// ════════════════ 角色組裝、執行器與命令列 ════════════════
+
+/**
+ * 角色定義(依 --role all 之執行序):判定類六角色在前,工作流類第一批(可確定)、第二批(結構合規)在後
+ *
+ * @type {Array}
+ */
+const ROLE_DEFS = Object.freeze([
+    SUPPORT_CHECK_DEF, SUPPORT_REVISE_DEF, ORPHAN_CHECK_DEF, DISPUTE_CHECK_DEF, SYNONYM_CHECK_DEF, SYNONYM_PROPOSE_DEF,
+    WF_AUDIT_DEF, WF_ACCEPT_DEF, WF_PENDING_DEF, WF_INTEGRATE_DEF, WF_DRAFT_DEF, WF_REVISE_DEF, WF_CONSOLIDATE_DEF, WF_ESSENCE_DEF,
+])
+
+/**
+ * 定義之共通部分(執行器名、內建題組檔〔依 id 推得〕、受測名單、domainOf、命令列之指令)——角色 id 只寫在定義一處
+ *
+ * @param {Object} def 輸入角色定義
+ * @param {Function} dOf 輸入以詞彙建 domain 之函數(語言設定所綁)
+ * @returns {Object} 回傳 defineBenchRole 之產物
+ */
+const roleOfDef = (def, dOf) => defineBenchRole({
+    runnerName: `runExtractBench(${def.id})`, casesFile: casesFileOf(def.id), models: EXTRACT_BENCH_MODELS, domainOf: dOf, ...def,
+    cli: { command: `node src/bench/cli.mjs --role ${def.id}`, ...def.cli },
+})
+
+/**
+ * 提煉之評分角色(依 --role all 之執行順序;預設語言設定)
+ *
+ * @type {Array}
+ */
+export const EXTRACT_BENCH_ROLES = Object.freeze(ROLE_DEFS.map((d) => roleOfDef(d, domainOf)))
+
+/**
+ * 角色 id(依 --role all 之執行序;由角色定義導出)
+ *
+ * @type {Array}
+ */
+export const EXTRACT_BENCH_ROLE_IDS = Object.freeze(EXTRACT_BENCH_ROLES.map((r) => r.id))
+
+/**
+ * 內建通用題組之檔(角色 id → 絕對路徑;依 id 推得 bench/cases/<id>-generic.json)
+ *
+ * @type {Object}
+ */
+export const EXTRACT_BENCH_CASES_FILES = Object.freeze(Object.fromEntries(EXTRACT_BENCH_ROLES.map((r) => [r.id, r.casesFile])))
+
+/** 依 id 取預設語言設定之角色(轉出之具名角色) */
+const roleById = (id) => EXTRACT_BENCH_ROLES.find((r) => r.id === id)
+
+/** 出處支持覆核之評分角色 */
+export const supportCheckBenchRole = roleById('support-check')
+/** 依出處收斂措辭之修訂之評分角色 */
+export const supportReviseBenchRole = roleById('support-revise')
+/** 失撐主張找支持之評分角色 */
+export const orphanCheckBenchRole = roleById('orphan-check')
+/** 爭議覆核之評分角色 */
+export const disputeCheckBenchRole = roleById('dispute-check')
+/** 同義覆核之評分角色 */
+export const synonymCheckBenchRole = roleById('synonym-check')
+/** 同義提議之評分角色 */
+export const synonymProposeBenchRole = roleById('synonym-propose')
+/** 審計之評分角色 */
+export const wfAuditBenchRole = roleById('wf-audit')
+/** 終審之評分角色 */
+export const wfAcceptBenchRole = roleById('wf-accept')
+/** 待審裁決之評分角色 */
+export const wfPendingBenchRole = roleById('wf-pending')
+/** 整合之評分角色 */
+export const wfIntegrateBenchRole = roleById('wf-integrate')
+/** 起草之評分角色(結構合規) */
+export const wfDraftBenchRole = roleById('wf-draft')
+/** 修訂之評分角色(結構合規) */
+export const wfReviseBenchRole = roleById('wf-revise')
+/** 整併之評分角色(結構合規) */
+export const wfConsolidateBenchRole = roleById('wf-consolidate')
+/** 本質之評分角色(結構合規) */
+export const wfEssenceBenchRole = roleById('wf-essence')
+
+/**
+ * 多角色之命令列(抓取套件之 defineBenchRoles:--role 解析、--vocab-pick、準備期、停測帶過)
+ *
+ * @param {Array} roles 輸入角色
+ * @returns {Object} 回傳 defineBenchRoles 之產物
+ */
+const cliOf = (roles) => defineBenchRoles({ roles, pickVocab: pickExtractVocab, pickName: 'pickExtractVocab', vocabPrefix: 'extract' })
+
+/** 預設語言設定之命令列 */
+const CLI = cliOf(EXTRACT_BENCH_ROLES)
+
+/**
+ * 依 id 取角色
+ *
+ * @param {String} id 輸入角色 id(EXTRACT_BENCH_ROLE_IDS 之一)
+ * @returns {Object} 回傳角色(defineBenchRole 之產物)
+ * @throws {Error} 不認得之 id 時拋出(列出可用者)
+ * @example
+ * console.log(extractBenchRoleOf('dispute-check').name)
+ * // => 爭議覆核(dispute-check)
+ */
+export function extractBenchRoleOf(id) {
+    return CLI.roleOf(id)
+}
+
+/**
+ * 語言設定之 opt(opt.lang 給了即以之建 domain:未給 domain／vocab 者另給其餘案之 domain;給了 domain 者原樣——注入之 domain 由安裝方負責)
+ *
+ * @param {Object} opt 輸入 runExtractBench／planExtractBench 之設定物件
+ * @param {String} runner 輸入執行器名(錯誤訊息用)
+ * @returns {Object} 回傳交核心之設定物件(不含 lang)
+ * @throws {Error} lang 不合時拋出
+ */
+function langOptOf(opt, runner) {
+    if (!isobj(opt) || opt.lang === undefined || opt.lang === null) return isobj(opt) ? opt : {}
+    const { lang, ...rest } = opt
+    const dOf = domainOfLocale(resolveLocale(lang, `${runner} 之 opt.lang`))
+    return { ...rest, domainOf: dOf, ...(rest.domain !== undefined && rest.domain !== null ? {} : (rest.vocab !== undefined && rest.vocab !== null ? {} : { domain: dOf(null) })) }
+}
+
+/**
+ * 提煉之 AI 能力評分(單一角色;判準、分頁、失敗與停測、回傳形狀見核心之 runBench)
+ *
+ * @param {String} roleId 輸入角色 id
+ * @param {Object} opt 輸入核心 runBench 之設定物件(models、cases、runs、aiAdapter｜adapterOf(調度層須具工作流入口 getWkf／seatSpec)、vocab｜domain、
+ *   domainOf、roleOpt、timeoutMs、concurrency、stopAfterFails、onProgress、clock、timeZone)＋lang(BCP 47 語言代碼;預設同正式);roleOpt 之鍵為 batch
+ *   (每頁案數;失撐找支持、同義提議與工作流類不收)
+ * @returns {Promise} 回傳 Promise，resolve 回傳核心 runBench 之結果 { meta, models }
+ * @throws {Error} 角色 id 不認得、lang 不合,或核心於任何呼叫之前之檢核(題組、詞彙、分頁、提示詞)不合時拋出
+ * @example
+ * need test in nodejs.
+ *
+ * let r = await runExtractBench('synonym-check', { models: ['oc:opencode/mimo-v2.6-flash-free'], aiAdapter: ai })
+ * console.log(r.models[0].score)
+ */
+export async function runExtractBench(roleId, opt = {}) {
+    return CLI.run(roleId, langOptOf(opt, `runExtractBench(${roleId})`))
+}
+
+/**
+ * 評分之準備(不呼叫 AI):驗題組、建 domain、分頁、組各頁提示詞並算指紋(核心之 planBench)
+ *
+ * @param {String} roleId 輸入角色 id
+ * @param {Object} [opt={}] 輸入設定物件(cases、vocab、domain、domainOf、roleOpt、lang)
+ * @returns {Object} 回傳 { set, pages:[{ ids, prompt, base }], promptFp }
+ * @throws {Error} 角色 id 不認得、lang 不合,或題組、詞彙、分頁、提示詞不合時拋出
+ * @example
+ * console.log(planExtractBench('orphan-check').pages.length > 0)
+ * // => true
+ */
+export function planExtractBench(roleId, opt = {}) {
+    return CLI.plan(roleId, langOptOf(opt, `planExtractBench(${roleId})`))
+}
+
+/** --lang 之說明行(用法說明) */
+const LANG_HELP = '  --lang         語言設定(BCP 47 語言代碼,如 zh-TW、en;本套件之參數,全部角色共用):提示詞之輸出語言句與操作守門之字形政策同正式(cfg.lang);未給＝zh-TW'
+
+/**
+ * 命令列用法說明(--role 與各角色之參數;核心之多角色命令列所組,另加本套件之 --lang)
+ *
+ * @type {String}
+ */
+export const EXTRACT_BENCH_USAGE = (() => {
+    const [head, ...tail] = CLI.usage.split('\n')
+    return [head.replace(' [共用參數…]', ' [--lang <語言代碼>] [共用參數…]'), LANG_HELP, ...tail].join('\n')
+})()
+
+/**
+ * 自參數取出 --lang(「--lang 值」與「--lang=值」;缺值、重複即拋)
+ *
+ * @param {Array} argv 輸入參數陣列
+ * @returns {Object} 回傳 { lang:String(未給為空字串), rest:Array(其餘參數) }
+ * @throws {Error} --lang 缺值或重複時拋出
+ */
+function splitLang(argv) {
+    const list = isarr(argv) ? argv.map(String) : []
+    const rest = []
+    let lang = ''
+    for (let i = 0; i < list.length; i++) {
+        const a = list[i]
+        if (a !== '--lang' && !a.startsWith('--lang=')) {
+            rest.push(a)
+            continue
+        }
+        const v = a === '--lang' ? list[++i] : a.slice('--lang='.length)
+        if (v === undefined || v === '' || v.startsWith('--')) throw new Error('--lang 缺值')
+        if (lang) throw new Error('--lang 重複給定')
+        lang = v
+    }
+    return { lang, rest }
+}
+
+/**
+ * 解析 --role 並取出其餘參數(其餘參數交核心逐角色解析;--role 缺值、重複、不認得即拋;all 時給 --cases 或角色專屬參數即拋);--lang 由本套件取出
+ *
+ * @param {Array} argv 輸入參數陣列(不含 node 與腳本路徑);支援「--role 值」與「--role=值」
+ * @returns {Object} 回傳 { role:String(角色 id 或 'all'), roles:Array(依序之角色;help 時為 []), rest:Array(其餘參數), help:Boolean,
+ *   pick:Boolean(--vocab-pick;不留在 rest), lang:String(--lang 之值;未給為空字串;不留在 rest) }
+ * @throws {Error} --role 缺值、重複、不認得,all 時給 --cases 或角色專屬參數,--vocab-pick 帶值、重複或未配 --vocab,或 --lang 缺值、重複、不合時拋出
+ * @example
+ * let a = parseExtractBenchArgs(['--role=orphan-check', '--runs', '1'])
+ * console.log(a.role, a.roles.length, a.rest, a.pick, a.lang)
+ * // => orphan-check 1 [ '--runs', '1' ] false
+ */
+export function parseExtractBenchArgs(argv) {
+    const { lang, rest } = splitLang(argv)
+    if (lang) resolveLocale(lang, '--lang')
+    return { ...CLI.parseArgs(rest), lang }
+}
+
+/**
+ * 命令列主流程:解析 --role(與 --lang)→ 各角色之準備期檢核(全部角色皆過才開始)→ 依序交核心之 runBenchCli(逐回進度檔、報表、--board 評比表;
+ *   內建調度層另開工作流入口,角色之 call 經之)。多角色時,前面角色已停測之模型不再於後續角色受測;受測模型皆已停測即略過其餘角色
+ *
+ * @param {Array} argv 輸入參數陣列(不含 node 與腳本路徑;選項見 EXTRACT_BENCH_USAGE)
+ * @param {Object} [inject={}] 輸入注入物件
+ * @param {Object} [inject.aiAdapter] 輸入調度層(各角色共用;須具工作流入口 getWkf／seatSpec),給了即不建內建調度層
+ * @param {Object} [inject.log] 輸入輸出物件 { info(msg), error(msg) }，預設 console
+ * @returns {Promise} 回傳 Promise，resolve 回傳 { role:String, runs:Array<{ role(角色 id), result, report, progressFile, board }>,
+ *   stopped:Array(本次停測之模型), skipped:Array(因受測模型皆已停測而未跑之角色 id) }；--help 時回 { help:true }
+ * @throws {Error} 參數不合、題組不合、詞彙檔不存在或不合、提示詞組不出,或核心之評分前檢核失敗時拋出(--role all 時皆在任何呼叫之前)
+ * @example
+ * need test in nodejs.
+ *
+ * let r = await runExtractBenchCli(['--role', 'all', '--models', 'oc:opencode/mimo-v2.6-flash-free', '--board', './模型評比.csv', '--out', 'D:/bench-out'])
+ * console.log(r.runs.map((x) => x.role))
+ */
+export async function runExtractBenchCli(argv, inject = {}) {
+    const { lang, rest } = splitLang(argv)
+    if (rest.includes('--help') || rest.includes('-h')) {
+        const log = isobj(inject?.log) && isfun(inject.log.info) ? inject.log : { info: (m) => console.log(m) }
+        log.info(EXTRACT_BENCH_USAGE)
+        return { help: true }
+    }
+    if (!lang) return CLI.runCli(rest, inject)
+    const dOf = domainOfLocale(resolveLocale(lang, '--lang'))
+    return cliOf(ROLE_DEFS.map((d) => roleOfDef(d, dOf))).runCli(rest, inject)
+}
+
+export default runExtractBench

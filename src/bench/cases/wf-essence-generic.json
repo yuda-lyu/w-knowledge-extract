@@ -1,0 +1,342 @@
+{
+  "v": 1,
+  "note": "工作流類(本質 wf-essence;結構合規)之通用題組:每案給有效主張而無本質(或本質待重寫:所引主張已被撤回)之合成核心狀態與材料;應然 essenceOk＝套用後核心標準 ES6(有本質且非待重寫)與 ES16(本質之數字紮根於所引主張之出處)皆合格、withinLimit＝本質未逾長度硬上限(模型自己寫短,不靠程式截短)。含數字之主張(本質若用數字須見於所引主張之出處)、有爭議之核心(本質須並陳兩方而不偏取一方)、主張多至六條以上之長度壓力、本質待重寫(須依存活之主張重寫並附理由)。不驗本質是否精準。各案情境各自獨立,材料皆為合成之中立情境。",
+  "cases": [
+    {
+      "id": "e01",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "社區圖書館週末開放後，週末借閱量約占全週兩成", "conditions": ["某社區圖書館之統計"], "critique": "僅單一館之觀察", "pros": ["擴大服務時段"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "延長開放時段若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "社區圖書館週末開放", "text": "某社區圖書館自去年起週末開放，週末之借閱量約占全週兩成。" },
+          { "id": "n2", "title": "圖書館人力說明", "text": "館方表示，延長開放時段若未增派人力，閉館後之整理時間不足。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "兩條有效主張而無本質，本質須綜合兩條（週末開放之使用與人力之限制）且不逾上限"
+    },
+    {
+      "id": "e02",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "社區圖書館於週末開放，借閱量多於平日", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "另一社區圖書館之週末借閱量亦多於平日", "conditions": ["另一社區圖書館"], "critique": "僅兩館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "pitfall", "text": "延長開放時段若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n3"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "圖書館平日與週末", "text": "某社區圖書館之統計顯示，週末之借閱量較平日多。" },
+          { "id": "n2", "title": "另一館之週末統計", "text": "另一社區圖書館之統計亦顯示，週末之借閱量較平日多。" },
+          { "id": "n3", "title": "圖書館人力說明", "text": "館方表示，延長開放時段若未增派人力，閉館後之整理時間不足。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "三條有效主張而無本質，本質須綜合兩館之一致觀察與人力之限制"
+    },
+    {
+      "id": "e03",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "觀葉植物每月施肥一次，肥料須稀釋後使用", "conditions": ["某園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["避免肥傷"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "施肥後 2 小時內陽光直射易使葉片灼傷", "conditions": ["施肥後 2 小時內"], "critique": "僅單一社團之說明", "sources": ["n1"] },
+            { "id": "C3", "kind": "rule", "text": "盆栽土表乾燥後再澆水，較不易爛根", "conditions": ["某園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["降低爛根風險"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C4", "kind": "pitfall", "text": "夏季午後澆水易使根部受熱", "conditions": ["夏季午後"], "critique": "僅單一社團之說明", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "盆栽施肥", "text": "某園藝社建議，觀葉植物每月施肥一次，肥料須稀釋後使用；施肥後 2 小時內避免陽光直射，以免葉片灼傷。" },
+          { "id": "n2", "title": "盆栽澆水", "text": "某園藝社建議，盆栽土表乾燥後再澆水，較每日固定澆水不易爛根；夏季午後澆水易使根部受熱。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "四條有效主張而無本質，本質須綜合施肥與澆水之要點；若引用數字（如 2 小時）須見於所引主張之出處"
+    },
+    {
+      "id": "e04",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "冷氣設定 26 度較省電", "conditions": ["某維修行之建議"], "critique": "僅單一維修行之建議", "pros": ["較省電"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "冷氣設定 24 度較舒適", "conditions": ["另一家電行之建議"], "critique": "僅單一店家之建議", "pros": ["夜間睡眠較佳"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "冷氣濾網每月清洗一次可維持出風順暢", "conditions": ["某維修行之建議"], "critique": "僅單一維修行之建議", "pros": ["維持出風順暢"], "cons": ["出處未載"], "sources": ["n3"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "冷氣宜設定 26 度或 24 度？", "sides": [{ "position": "設定 26 度較省電", "claims": ["C1"], "sources": ["n1"] }, { "position": "設定 24 度較舒適", "claims": ["C2"], "sources": ["n2"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "冷氣溫度設定(維修行)", "text": "某維修行建議，冷氣設定 26 度較省電，並可減少壓縮機啟停。" },
+          { "id": "n2", "title": "冷氣溫度設定(家電行)", "text": "另一家電行建議，冷氣設定 24 度較舒適，夜間睡眠品質較佳。" },
+          { "id": "n3", "title": "冷氣濾網", "text": "某維修行指出，冷氣濾網每月清洗一次，可維持出風順暢。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "核心含爭議 D1（26 度較省電對 24 度較舒適），本質須並陳兩方、不偏取一方；數字須見於所引主張之出處；另須含濾網之主張"
+    },
+    {
+      "id": "e05",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "公車站牌加裝電子看板顯示到站時間", "conditions": ["某市之站牌"], "critique": "僅單一城市之觀察", "pros": ["乘客可掌握到站時間"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "老舊站牌尚待更新", "conditions": ["老舊站牌"], "critique": "僅單一城市之觀察", "sources": ["n1"] },
+            { "id": "C3", "kind": "rule", "text": "站牌增設座椅與遮雨棚使候車較舒適", "conditions": ["某市部分站牌"], "critique": "僅使用者之反映", "pros": ["候車較舒適"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C4", "kind": "rule", "text": "夜間班次班距較長，乘客建議增加夜間班次", "conditions": ["某市之夜間班次"], "critique": "僅乘客之建議", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C5", "kind": "rule", "text": "設置公車專用道使尖峰時段之行駛時間縮短", "conditions": ["某市一條路線"], "critique": "僅單一路線之觀察", "pros": ["縮短行駛時間"], "cons": ["出處未載"], "sources": ["n4"] },
+            { "id": "C6", "kind": "pitfall", "text": "專用道遭違規占用時，改善幅度縮小", "conditions": ["專用道遭違規占用時"], "critique": "僅單一路線之說明", "sources": ["n4"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "站牌資訊", "text": "某市公車站牌加裝電子看板顯示到站時間；老舊站牌尚待更新。" },
+          { "id": "n2", "title": "候車設施", "text": "某市部分站牌增設座椅與遮雨棚，使用者反映候車較舒適。" },
+          { "id": "n3", "title": "夜間班次", "text": "某市夜間班次之班距較長，乘客建議增加夜間班次。" },
+          { "id": "n4", "title": "專用道成效", "text": "某市一條公車路線設置專用道後，尖峰時段之行駛時間縮短；專用道遭違規占用時，改善幅度縮小。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "六條有效主張而無本質，本質須在長度上限內綜合資訊、設施、班次與專用道各面向（有利與有弊並陳），不可逐條照抄而逾上限"
+    },
+    {
+      "id": "e06",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "新月夜觀星可見較多暗星", "conditions": ["某天文社之觀察"], "critique": "僅單一社團之觀察", "pros": ["暗星較多"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "觀星地點遠離路燈與車道，可看見較多暗星", "conditions": ["某天文社之建議"], "critique": "僅單一社團之建議", "pros": ["減少光害干擾"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "公園之落葉須每週清掃", "conditions": ["某公園"], "critique": "出處與主張不符", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"], "status": "retracted", "retractReason": "離題", "statusNote": "與觀星無關" }
+          ],
+          "essence": { "text": "觀星宜選新月夜並避開光害，另須每週清掃公園落葉", "claims": ["C1", "C2"], "stale": { "from": "C3" } }
+        },
+        "sources": [
+          { "id": "n1", "title": "新月夜觀星", "text": "某天文社觀察到，新月夜天空較暗，可見之暗星較多。" },
+          { "id": "n2", "title": "觀星地點選擇", "text": "某天文社建議，觀星應避開路燈與車道，遠離光害之地點可看見較多暗星。" },
+          { "id": "n3", "title": "公園落葉清掃", "text": "某公園之落葉清掃改為每週一次，由志工輪值。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "本質所引之 C3 已因離題撤回而待重寫；須依存活之 C1、C2 重寫本質（不再含公園落葉）並附理由，重寫後不再待重寫"
+    },
+    {
+      "id": "e07",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "煮白米飯時米與水之體積比約為 1 比 1.2", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["口感較佳"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "浸泡 30 分鐘後再煮，口感較佳", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["口感較佳"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C3", "kind": "rule", "text": "煮好後悶 10 分鐘再翻鬆，飯粒較分明", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["飯粒較分明"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C4", "kind": "pitfall", "text": "保溫過久飯粒會變硬", "conditions": ["保溫過久時"], "critique": "僅單一教室之說明", "sources": ["n2"] },
+            { "id": "C5", "kind": "rule", "text": "洗米以輕搓方式即可", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["保持米粒完整"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C6", "kind": "pitfall", "text": "用力搓洗會使米粒破碎", "conditions": ["用力搓洗時"], "critique": "僅單一教室之說明", "sources": ["n3"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "煮飯水量", "text": "某烹飪教室指出，煮白米飯時米與水之體積比約為 1 比 1.2，浸泡 30 分鐘後再煮，口感較佳。" },
+          { "id": "n2", "title": "煮好後之處理", "text": "某烹飪教室指出，煮好後悶 10 分鐘再翻鬆，飯粒較分明；保溫過久飯粒會變硬。" },
+          { "id": "n3", "title": "洗米", "text": "某烹飪教室指出，洗米以輕搓方式即可，用力搓洗會使米粒破碎。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "六條有效主張含多個數字（1 比 1.2、30 分鐘、10 分鐘），本質若引用數字須見於所引主張之出處，且須在長度上限內綜合水量、浸泡、悶蒸與洗米"
+    },
+    {
+      "id": "e08",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "下坡時使用登山杖可減輕膝蓋負擔", "conditions": ["某登山社之建議"], "critique": "僅單一社團之建議", "pros": ["減輕膝蓋負擔"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "過度依賴登山杖會使腿部肌力退化", "conditions": ["過度依賴時"], "critique": "僅單一社團之看法", "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "登山鞋須合腳且鞋底紋路完整", "conditions": ["某登山社之建議"], "critique": "僅單一社團之建議", "pros": ["避免濕滑失足"], "cons": ["出處未載"], "sources": ["n3"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "登山是否宜使用登山杖？", "sides": [{ "position": "下坡使用可減輕膝蓋負擔", "claims": ["C1"], "sources": ["n1"] }, { "position": "過度依賴會使肌力退化", "claims": ["C2"], "sources": ["n2"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "登山杖使用(甲社)", "text": "某登山社建議，下坡時使用登山杖可減輕膝蓋負擔。" },
+          { "id": "n2", "title": "登山杖使用(乙社)", "text": "另一登山社認為，過度依賴登山杖會使腿部肌力退化。" },
+          { "id": "n3", "title": "登山鞋", "text": "某登山社建議，登山鞋須合腳且鞋底紋路完整，以免濕滑時失足。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "核心含爭議 D1（登山杖減輕膝蓋負擔對過度依賴使肌力退化），本質須並陳兩面、不偏取一方；另須含登山鞋之主張"
+    },
+    {
+      "id": "e09",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "導覽以 60 分鐘為宜，參觀者較能全程專注", "conditions": ["某博物館之主張"], "critique": "僅單一館之主張", "pros": ["參觀者較能專注"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "團體過大時後排聽不清楚", "conditions": ["團體過大時"], "critique": "僅單一館之說明", "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "導覽限 20 分鐘", "conditions": ["某博物館之舊規定"], "critique": "出處未載此主張", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"], "status": "retracted", "retractReason": "無出處支持", "statusNote": "出處並無此主張" }
+          ],
+          "essence": { "text": "導覽以 20 分鐘為限，團體過大時後排聽不清楚", "claims": ["C2"], "stale": { "from": "C3" } }
+        },
+        "sources": [
+          { "id": "n1", "title": "導覽時間", "text": "某博物館主張導覽以 60 分鐘為宜，參觀者較能全程專注。" },
+          { "id": "n2", "title": "導覽人數", "text": "某博物館之導覽員表示，團體過大時後排聽不清楚。" },
+          { "id": "n3", "title": "舊規定之說明", "text": "某博物館之導覽規定已廢止，現行作法另行公告。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "本質所引之 C3 已因無出處支持而撤回、其數字 20 分鐘不再有出處；須依存活之 C1（60 分鐘）、C2 重寫本質並附理由，數字須見於所引主張之出處"
+    },
+    {
+      "id": "e10",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "幼犬每日分次餵食，較一次餵食不易腹瀉", "conditions": ["某動物醫院之建議"], "critique": "僅單一醫院之建議", "pros": ["不易腹瀉"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "換糧時須逐步混合新舊飼料", "conditions": ["某動物醫院之建議"], "critique": "僅單一醫院之建議", "pros": ["腸胃較不易不適"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "幼犬須隨時有乾淨飲水可用", "conditions": ["某動物醫院之建議"], "critique": "僅單一醫院之建議", "pros": ["避免脫水"], "cons": ["出處未載"], "sources": ["n3"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "幼犬餵食", "text": "某動物醫院建議，幼犬每日分次餵食，較一次餵食不易腹瀉。" },
+          { "id": "n2", "title": "換糧注意", "text": "某動物醫院建議，換糧時須逐步混合新舊飼料，腸胃較不易不適。" },
+          { "id": "n3", "title": "幼犬飲水", "text": "某動物醫院建議，幼犬須隨時有乾淨飲水可用。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "三條有效主張而無本質，本質須綜合餵食次數、換糧與飲水三面，不增添出處所無之內容"
+    },
+    {
+      "id": "e11",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "寶特瓶須倒空並壓扁後投入", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["便於後續處理"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "瓶蓋須另外投放", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C3", "kind": "rule", "text": "紙類須壓平並捆紮後投入", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["便於後續處理"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C4", "kind": "pitfall", "text": "潮濕或沾油之紙類不予回收", "conditions": ["紙類潮濕或沾油時"], "critique": "僅單一社區之規定", "sources": ["n2"] },
+            { "id": "C5", "kind": "rule", "text": "廚餘須瀝乾後投入專用桶", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["便於後續處理"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C6", "kind": "rule", "text": "廚餘專用桶每週收集兩次", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "寶特瓶回收", "text": "某社區回收站規定，寶特瓶須倒空並壓扁後投入；瓶蓋須另外投放。" },
+          { "id": "n2", "title": "紙類回收", "text": "某社區回收站規定，紙類須壓平並捆紮後投入；潮濕或沾油之紙類不予回收。" },
+          { "id": "n3", "title": "廚餘回收", "text": "某社區回收站規定，廚餘須瀝乾後投入專用桶；專用桶每週收集兩次。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "六條有效主張而無本質，本質須在長度上限內綜合三類回收物投放前之整理要求，不可逐條照抄而逾上限"
+    },
+    {
+      "id": "e12",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "每日固定練習 20 分鐘，比偶爾長時間練習更易進步", "conditions": ["某音樂教室之建議"], "critique": "僅單一教室之建議", "pros": ["更易進步"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "練習時記錄困難之小節，下次優先處理", "conditions": ["某音樂教室之建議"], "critique": "僅單一教室之建議", "pros": ["針對弱點練習"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C3", "kind": "rule", "text": "練習前先以調音器確認音準", "conditions": ["某音樂教室之建議"], "critique": "僅單一教室之建議", "pros": ["音準較穩定"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C4", "kind": "pitfall", "text": "弦線更換後須重新調音數次", "conditions": ["弦線更換後"], "critique": "僅單一教室之說明", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "練習習慣", "text": "某音樂教室建議每日固定練習 20 分鐘，比偶爾長時間練習更易進步；練習時記錄困難之小節，下次優先處理。" },
+          { "id": "n2", "title": "調音習慣", "text": "某音樂教室指出，練習前先以調音器確認音準；弦線更換後須重新調音數次。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "四條有效主張含數字 20 分鐘，本質若引用數字須見於所引主張之出處；須綜合練習規律與音準兩面"
+    },
+    {
+      "id": "eh1",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "洗手須先濕手、搓出泡沫、搓洗約 20 秒後沖淨", "conditions": ["某幼兒園之教導"], "critique": "僅單一園所之教導", "pros": ["洗得較乾淨"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "戶外活動前先補充水分", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["避免脫水"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "活動後洗手再進教室", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["維持教室清潔"], "cons": ["出處未載"], "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "洗手步驟", "text": "某幼兒園教導洗手須先濕手、搓出泡沫、搓洗約 20 秒後沖淨。" },
+          { "id": "n2", "title": "戶外活動", "text": "某幼兒園規定戶外活動前先補充水分；活動後洗手再進教室。" }
+        ]
+      },
+      "expect": { "essenceOk": true },
+      "why": "三條有效主張含數字 20 秒，本質若引用數字須見於所引主張之出處；須綜合洗手與戶外活動之習慣"
+    },
+    {
+      "id": "eh2",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "pitfall", "text": "池水濁度偏高時須暫停開放並換水", "conditions": ["濁度偏高時"], "critique": "僅單一泳池之作法", "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "開放時段內須有救生員在場", "conditions": ["某游泳池之規定"], "critique": "僅單一泳池之規定", "pros": ["確保安全"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "開放時段無須救生員在場", "conditions": ["某游泳池之舊規定"], "critique": "出處與主張不符", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"], "status": "retracted", "retractReason": "同篇誤配", "statusNote": "出處與主張不符" }
+          ],
+          "essence": { "text": "游泳池濁度偏高時須暫停開放並換水，且開放時段無須救生員在場", "claims": ["C1", "C2"], "stale": { "from": "C3" } }
+        },
+        "sources": [
+          { "id": "n1", "title": "泳池水質", "text": "某游泳池每日開放前檢測水質；池水濁度偏高時須暫停開放並換水。" },
+          { "id": "n2", "title": "救生員配置", "text": "某游泳池規定開放時段內須有救生員在場。" },
+          { "id": "n3", "title": "舊規定說明", "text": "某游泳池已修訂其開放規定，修訂前之內容另行公告。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "本質所引之 C3 已因同篇誤配而撤回，舊本質含與出處不符之說法而待重寫；須依存活之 C1、C2 重寫（開放時段內須有救生員）並附理由"
+    },
+    {
+      "id": "eh3",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "同住成員亦可代收掛號郵件", "conditions": ["某郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "掛號郵件不得由他人代收", "conditions": ["另一郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "pitfall", "text": "無人簽收時投遞員留下通知單，郵件改存郵局", "conditions": ["無人簽收時"], "critique": "僅單一郵局之說明", "sources": ["n3"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "掛號郵件可否由同住成員代收？", "sides": [{ "position": "同住成員亦可代收", "claims": ["C1"], "sources": ["n1"] }, { "position": "不得由他人代收", "claims": ["C2"], "sources": ["n2"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "同住成員代收", "text": "某郵局表示，同住成員亦可代收掛號郵件。" },
+          { "id": "n2", "title": "不得代收", "text": "另一郵局表示，掛號郵件不得由他人代收。" },
+          { "id": "n3", "title": "無人簽收之處理", "text": "無人簽收時，投遞員留下通知單，郵件改存郵局。" }
+        ]
+      },
+      "expect": { "essenceOk": true },
+      "why": "核心含爭議 D1（同住成員可否代收，兩郵局說法相反），本質須並陳兩方、不偏取一方；並須含無人簽收之處理"
+    },
+    {
+      "id": "eh4",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "候車時須站在黃線後方", "conditions": ["某車站之提醒"], "critique": "僅單一車站之提醒", "pros": ["保持安全距離"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "列車進站時靠近月台邊緣有危險", "conditions": ["列車進站時"], "critique": "僅單一車站之提醒", "sources": ["n1"] },
+            { "id": "C3", "kind": "rule", "text": "平交道柵欄放下時不得闖越", "conditions": ["某鐵道單位之提醒"], "critique": "僅單一單位之提醒", "pros": ["避免與列車衝突"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C4", "kind": "pitfall", "text": "通過平交道前未確認前方空間，可能無法完全駛離", "conditions": ["通過平交道前"], "critique": "僅單一單位之提醒", "sources": ["n2"] },
+            { "id": "C5", "kind": "temporal", "text": "某鐵道線每 5 分鐘一班車", "period": "尖峰時段", "critique": "僅單一單位之公告", "sources": ["n3"] },
+            { "id": "C6", "kind": "temporal", "text": "某鐵道線每 15 分鐘一班車", "period": "離峰時段", "critique": "僅單一單位之公告", "sources": ["n3"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "候車安全", "text": "某車站提醒旅客候車時須站在黃線後方；列車進站時勿靠近月台邊緣。" },
+          { "id": "n2", "title": "平交道通過注意", "text": "某鐵道單位提醒，平交道柵欄放下時不得闖越；車輛通過前須先確認前方有足夠空間可完全駛離。" },
+          { "id": "n3", "title": "班次時刻", "text": "某鐵道線尖峰時段每 5 分鐘一班車，離峰時段每 15 分鐘一班車。" }
+        ]
+      },
+      "expect": { "essenceOk": true, "withinLimit": true },
+      "why": "六條有效主張含兩個班次數字（5 分鐘、15 分鐘），本質若引用數字須見於所引主張之出處，且須在長度上限內綜合候車、平交道與班次三面"
+    }
+  ]
+}

@@ -1,22 +1,23 @@
 // noteSelection.mjs — 提煉選篇(純函數,可經錨點置換):自選題項之候選中挑出本批筆記並配發批內代號 N1…Nk
 //
-// 【為何不再取「最新 N 篇」】1.x 選篇＝全概念最新 8 篇:兩次更新間新進 >8 篇時較舊者永不再被選、主標籤筆記被順帶掛標者擠掉、
-//   內容時期集中於最近(安裝方〈建議w-knowledge-extract優化〉§1.3、§2.3)。2.0 起(2026-09-29 雙審定案 §11.1 A22):
+// 【為何不取「最新 N 篇」】只取全概念最新 N 篇時,兩次更新間新進 >N 篇則較舊者永不再被選、主標籤筆記被順帶掛標者擠掉、
+//   內容時期集中於最近。選篇規則:
 //   ①候選＝本核心未用過且已可提煉者(選題已排除);②主標籤優先,不足一批才以次標籤補位(主標籤是待提煉之義務,次標籤只補位;
-//     主標籤足量但集中於少數來源時,先放寬主標籤之來源上限,仍不足才輪到次標籤——1.0.4 曾讓次標籤先於放寬之主標籤,
-//     實測排乾批數多 1.4～4.3 倍、殘餘主標籤要再等 30 天或閒置輪,2026-09-29 三獨立審定案 P1);
+//     主標籤足量但集中於少數來源時,先放寬主標籤之來源上限,仍不足才輪到次標籤——反之則排乾所需批數倍增、殘餘主標籤久候);
 //   ③依內容時期(發布年)分層、自最新之年起輪流取,使各時期之觀點都有機會進入;
 //   ④同層內:有衝突邊者、證據等級高者、有樣本期者先,再依建立時間(先來先用);
 //   ⑤同一來源每批至多 sourceCap 篇——先施於同一層(主標籤、次標籤各自)內;該層依上限取不足時先放寬該層,再往下一層取
 //     (不因多樣性要求而讓批次變小,也不讓多樣性凌駕主次);衝突成對(⑥)為例外,不受來源上限與主次限制;
 //   ⑥選中之筆記若有「同概念、未用過」之衝突另一端,緊接成對入批——爭議之兩方才都有本批出處可引;
-//   ⑦每批先保留 ⌈篇數／4⌉ 給最新建立之候選——依年分層時年數多則當年新料每批只分到約 1／年數,遷移積壓期間樞紐概念之新料
-//     要等數月,與「活體回顧:新證據到來即增量更新」相違(第二輪判識 A Q7);
-//   ⑧曾被送過而未被涵蓋之筆記(重送)排在同層最後,不擠掉新筆記(判識 B Q2)。
+//   ⑦每批先保留 ⌈篇數／4⌉ 給最新建立之候選——依年分層時年數多則當年新料每批只分到約 1／年數,積壓期間樞紐概念之新料
+//     要等數月,與「活體回顧:新證據到來即增量更新」相違;
+//   ⑧曾被送過而未被涵蓋之筆記(重送)排在同層最後,不擠掉新筆記。
 // 【批內代號】模型以 N1…Nk 引用出處,程式對回筆記 id:長中文 slug 抄寫誤差常見(關聯段曾為此加尾碼容錯),代號根除之。
 
 import isarr from 'wsemi/src/isarr.mjs'
 import isobj from 'wsemi/src/isobj.mjs'
+import { cmp } from '../core/capturePackage.mjs'
+import { EXTRACT_DEFAULT } from '../core/extractSettings.mjs'
 
 /**
  * 由字串取年份(19xx／20xx 之第一個;取不到回 null)
@@ -39,9 +40,9 @@ export function yearOf(v, last = false) {
  *
  * @param {Array} candidates 輸入候選 [{ note, primary:Boolean }](選題項之 candidates)，非陣列視為空
  * @param {Object} [opt={}] 輸入設定物件，非物件視為{}
- * @param {Integer} [opt.limit=12] 輸入本批篇數上限
- * @param {Integer} [opt.sourceCap=2] 輸入同一來源每批上限(不足一批時放寬)
- * @param {Function} [opt.publishedOf] 輸入 (note) => 發布時間字串(如由 docs.publishedAt 以 docId 對照)；取不到年份則退樣本期末年、再退建立年
+ * @param {Integer} [opt.limit] 輸入本批篇數上限(預設＝設定預設之 notesPerConcept;≤0 即不選)
+ * @param {Integer} [opt.sourceCap] 輸入同一來源每批上限(不足一批時放寬;預設＝設定預設之 sourceCap)
+ * @param {Function} [opt.publishedOf] 輸入 (note) => 發布時間字串(如由 docs.publishedAt 以 docId 對照)；未給或取不到年份則退樣本期末年、再退建立年
  * @param {Function} [opt.sourceOf] 輸入 (note) => 來源識別字串，預設 note.sourceName
  * @param {Map} [opt.conflicts] 輸入 筆記 id → 衝突另一端 id 陣列(已限同概念與否不拘,本函數只取候選內者)
  * @param {Array} [opt.levels=['高','中','低']] 輸入證據等級(由高到低,用於同層排序)
@@ -51,14 +52,15 @@ export function yearOf(v, last = false) {
  * @example
  * const c = [1, 2, 3].map((i) => ({ note: { id: `n${i}`, createdAt: `2026-09-0${i}`, sourceName: 'S' }, primary: true }))
  * console.log(selectNotes(c, { limit: 2 }).map((x) => x.code + ':' + x.id).join(','))
- * // => N1:n1,N2:n2
+ * // => N1:n3,N2:n1
  */
 export function selectNotes(candidates, opt = {}) {
     if (!isarr(candidates)) candidates = []
     if (!isobj(opt)) opt = {}
-    const limit = Number.isInteger(opt.limit) && opt.limit > 0 ? opt.limit : 12
-    const sourceCap = Number.isInteger(opt.sourceCap) && opt.sourceCap > 0 ? opt.sourceCap : 2
-    const publishedOf = typeof opt.publishedOf === 'function' ? opt.publishedOf : (n) => n?.published || ''
+    const limit = Number.isInteger(opt.limit) ? Math.max(0, opt.limit) : EXTRACT_DEFAULT.notesPerConcept
+    if (limit === 0) return []
+    const sourceCap = Number.isInteger(opt.sourceCap) && opt.sourceCap > 0 ? opt.sourceCap : EXTRACT_DEFAULT.sourceCap
+    const publishedOf = typeof opt.publishedOf === 'function' ? opt.publishedOf : () => ''
     const sourceOf = typeof opt.sourceOf === 'function' ? opt.sourceOf : (n) => n?.sourceName || ''
     const conflicts = opt.conflicts instanceof Map ? opt.conflicts : new Map()
     const levels = isarr(opt.levels) && opt.levels.length ? opt.levels : ['高', '中', '低']
@@ -80,7 +82,7 @@ export function selectNotes(candidates, opt = {}) {
             if (!by.has(y)) by.set(y, [])
             by.get(y).push(c)
         }
-        for (const arr of by.values()) arr.sort((a, b) => retried(a.note) - retried(b.note) || weight(b.note) - weight(a.note) || String(a.note.createdAt || '').localeCompare(String(b.note.createdAt || '')) || String(a.note.id).localeCompare(String(b.note.id)))
+        for (const arr of by.values()) arr.sort((a, b) => retried(a.note) - retried(b.note) || weight(b.note) - weight(a.note) || cmp(String(a.note.createdAt || ''), String(b.note.createdAt || '')) || cmp(String(a.note.id), String(b.note.id)))
         return [...by.keys()].sort((a, b) => b - a).map((y) => by.get(y))
     }
 
@@ -127,7 +129,7 @@ export function selectNotes(candidates, opt = {}) {
     const secondary = candidates.filter((c) => c?.note?.id && !c.primary)
     // 最新保留:主標籤中最新建立、未曾重送者先取 ⌈limit×比例⌉ 篇(套同來源上限)
     const reserve = Math.min(limit, Math.ceil(limit * newestShare))
-    const newest = primary.filter((c) => !retried(c.note)).sort((a, b) => String(b.note.createdAt || '').localeCompare(String(a.note.createdAt || '')) || String(a.note.id).localeCompare(String(b.note.id)))
+    const newest = primary.filter((c) => !retried(c.note)).sort((a, b) => cmp(String(b.note.createdAt || ''), String(a.note.createdAt || '')) || cmp(String(a.note.id), String(b.note.id)))
     for (const c of newest) {
         if (picked.length >= reserve) break
         take(c, true)

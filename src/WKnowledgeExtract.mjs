@@ -1,350 +1,210 @@
-// WKnowledgeExtract.mjs — 主入口:通用知識之抓取、萃取、關聯與提煉套件
+// WKnowledgeExtract.mjs — 主入口:通用知識提煉套件
 //
-// 安裝即用(僅 workDir 必填),六層擴充入口(cfg 覆寫/pipeline 重排/stages 重組/tap 掛載/mw opts/plugins),
-// 全部積木具名匯出——安裝方依自己的管線自由組裝,不需改套件。領域(主題範圍、分類詞彙、prompt、抓取器)皆可注入。
-// 排程任務執行殼(設定載入/時鐘/每次一檔日誌/runTask/行程安全網/Telegram/AI 接線/子進程隔離)另有輕量入口
-// ./taskRunner.mjs(不載入本管線;本入口亦含其全部成員,同名即同一實作)。
+// 安裝即用(僅 workDir 必填);設定、詞彙、提示詞皆有通用預設,安裝方逐鍵覆寫即可收斂到自己的主題。
+// 全部積木具名匯出,並預設匯出同一物件——安裝方依自己的管線自由組裝,不需改套件。
+//
+// 【匯出單一來源:模組清單】各公開模組於下方各列一次「命名空間匯入＋export *」;預設匯出物件由同一組命名空間合成,
+//   具名匯出與預設物件必然同一組名稱(不另手寫名稱清單——三處各寫一份必然漂移)。
+// 【名稱衝突即拋】兩模組匯出同名而不同實體時,export * 會靜默剔除該名(以具名匯入取用時才爆),故載入時即檢查並拋錯(合成之規則取抓取套件之
+//   composeNamespaces,四套件同一份)。
+// 【不轉出抓取、摘要與關聯套件之件】core/capturePackage.mjs(抓取埠)、core/summarizePackage.mjs(摘要埠)與 core/relatePackage.mjs(關聯埠)
+//   為取用三套件之單一匯入點,不是本套件之公開模組;三套件之件請自其套件取用。
 
-import { createKnowledgeExtract } from './core/createKnowledgeExtract.mjs'
-import { createFetchObject, createOrganizeObject, createRelateObject, createDistillObject } from './core/objects.mjs'
-import { defineMw, defineFirstMw, applyTaps, makeMsg, count, composeChain, runChainOverMsgs, stdReport, MwContractError } from './core/kernel.mjs'
-import { resolvePlugins, mergeTaps } from './core/plugins.mjs'
-import { acquireLock, inspectLock } from './core/lock.mjs'
-import { resolveSettings, FETCH_DEFAULT, KNOWLEDGE_DEFAULT, SOURCE_POLICY_DEFAULT, AI_DEFAULT, SKIP_TITLE_PATTERNS_DEFAULT } from './core/settingsDefault.mjs'
-// ── 子階段工廠與 mw 積木 ──
-import { stageSeedSync, mwSyncSeeds, mwCullSources } from './stages/seedSyncStage.mjs'
-import { stageListFetch, mwFetchList, mwNormalizeItems, mwFilterItems, mwAdmitPersist, mwAccountSource } from './stages/listFetchStage.mjs'
-import { stageDetailFetch, mwTitleSkip, mwRouteFetcher, mwFetchDetail, mwTranscodeLinks, mwFeedFallback, mwPersistOutcome } from './stages/detailFetchStage.mjs'
-import { stageDocMaintain, mwSlim } from './stages/docMaintainStage.mjs'
-import { stageExpand, mwProbe, mwSettleClue, probeSiteFeed, probeSearchEndpoints } from './stages/expandStage.mjs'
-import { stageTriage, mwSettleTriage } from './stages/triageStage.mjs'
-import { stageExtract, mwSaveClues, mwSkipGate, mwRenderNote, mwPersistNote, mwMarkDoc } from './stages/extractStage.mjs'
-import { stageRelate, stageRelationIndex, mwBuildEdges, mwPersistEdges, mwApplyToNote, mwConflictDualWrite, mwMarkRelated, mwRebuildRelationIndex, pickCandidates, makeSlugResolver, applyRelationsToNote, markConflict, rebuildRelationIndex } from './stages/relateStage.mjs'
-import { stageDistill, distillTarget, mwLoadState, mwSelectNotes, mwPropose, mwReview, mwApplyDelta, mwRenderState, mwPersistState, coreAuxDirs, createDistillLedger, newCoreIdOf } from './stages/distillStage.mjs'
-import { stageKnowledgeIndex, mwRebuildKnowledgeIndex, rebuildKnowledgeIndex } from './stages/indexStage.mjs'
-import { runAiBatchStage } from './stages/aiBatchStage.mjs'
-import { judgeFromDocs } from './stages/collectHelpers.mjs'
-// ── 生命週期政策 ──
-import { ensureSeedSources, isLowYield, pickDueSources, recordSourceOutcome, cullZeroYieldSources } from './stores/sourcePolicy.mjs'
-import { slimTerminalDocs, byRetryTierFifo } from './stores/docPolicy.mjs'
-import { clueKey, legacyClueKey, cluePriority, saveClues, pickClues, enforceFrontierCap, settleClue } from './stores/frontierPolicy.mjs'
-import { normalizeFeedItems, filterFeedItems, admitFeedItems, ingestFeedItems } from './stores/ingestGate.mjs'
-import { conceptVocabulary, pickConcepts, pickCategories, orphanNotes, coreForKey, twinsOf, isReady, groupByConcept, suggestConceptRenames, tagSuspects } from './stores/conceptGroups.mjs'
-import {
-    emptyState, upgradeState, findItem, deriveStatus, applyDelta, applyVerdicts, coverageOf, commitBatch, checkInvariants, stateDigest, renderRules,
-    queuePendingReview, pendingReviewOps, STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, TERMINAL_OPS, RETRACT_REASONS, DROP_REASONS, NEW_ITEM_DROP_REASONS,
-    DISPUTE_DROP_REASONS, DOUBT_REASONS, DISSOLVE_DROP_REASONS, SKIP_REASONS, PENDING_REVIEW_CAP, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, FIXABLE_FIELDS
-} from './stores/coreState.mjs'
-import { makeEvidence, UNASSESSED } from './stores/evidence.mjs'
-import { createCoreStore, mdHashOf } from './stores/coreStore.mjs'
-import { selectNotes, yearOf } from './stores/noteSelection.mjs'
-// ── 內建領域預設 ──
-import { createExtractDomain } from './domain/extractDomain.mjs'
-import { createTriageDomain } from './domain/triageDomain.mjs'
-import { createRelateDomain } from './domain/relateDomain.mjs'
-import { createDistillDomain, defaultRules, KIND_LABELS, NOTE_SECTIONS } from './domain/distillDomain.mjs'
-import { VOCAB_DEFAULT, GUIDE_FIELDS, guideDefaultOf, resolveVocab, kbLabelOf, evidenceCapsWarning } from './domain/vocabDefault.mjs'
-// ── 內建抓取器與端點 ──
-import { createDefaultFetchers, mergeFetchers } from './fetchers/defaultFetchers.mjs'
-import { DEFAULT_SITE_ADAPTERS, mergeSiteAdapters } from './fetchers/siteAdapters.mjs'
-import { fetchArticle, fetchArticleLinks, discoverFeed } from './fetchers/articleParse.mjs'
-import { gridSourceUrl, bingNewsSearchUrl, arxivSearchUrl, expandSeeds } from './fetchers/endpoints.mjs'
-// ── AI 調度與營運配套 ──
-import { createAiAdapter } from './ai/adapter.mjs'
-import { createProviderHealth } from './ai/providerHealth.mjs'
-import { KIND_MAX_PROMPT_CHARS, maxPromptCharsOf, fitChain } from './ai/capability.mjs'
-import { createLogger } from './ops/logger.mjs'
-import { createPatrol, PATROL_MARK_HEAD, PATROL_MARK_TAIL } from './ops/patrol.mjs'
-import { buildRunSummary, writeRunSummary, readRunSummary, writeRunStart, readRunStart, subReportOf, RUN_SUMMARY_VERSION } from './ops/runSummary.mjs'
-import { regenCore, listCores } from './ops/regenCore.mjs'
-import { ingestNotes } from './ops/ingestNotes.mjs'
-import { reviveDeadDocs, deadMatcher } from './ops/reviveDocs.mjs'
-// ── 工具 ──
-import { renderFrontmatter, parseFrontmatter, writeMd, mdText, readMd, section, sectionOf, dropSection } from './md/md.mjs'
-import { createClock } from './util/clock.mjs'
-import { sha1, normalizeConcept, normalizeClue, checkNameMap, slugify, setConceptFold } from './util/text.mjs'
-import { normalizeUrl, unwrapNewsUrl } from './util/web.mjs'
-import { oneline, readJson, writeJson, writeFileAtomic, queueAge } from './util/misc.mjs'
-import { sourceId, docRecord, defaultToRecord, defaultToLinkedRecord } from './util/records.mjs'
-import { normalizeWorkDir, expandDirs } from './core/dirs.mjs'
-import { budgetOf } from './core/budget.mjs'
-import taskRunner from './taskRunner.mjs'
+import { composeNamespaces } from './core/capturePackage.mjs'
+import * as createKnowledgeExtractNs from './createKnowledgeExtract.mjs'
+import * as extractObjectNs from './extractObject.mjs'
+// ── 提煉執行期件之組裝(總組裝共用)與日誌／報告契約 ──
+import * as extractRuntimeNs from './extractRuntime.mjs'
+import * as logContractNs from './logContract.mjs'
+// ── 設定預設與詞彙(本套件自有;三套件無之模組)──
+import * as extractSettingsNs from './core/extractSettings.mjs'
+import * as extractVocabNs from './core/vocab/extractVocab.mjs'
+// ── stores:核心狀態(主張庫)與差量之套用、狀態摘要、其檔、投影寫入器、證據等級、待判之字樣與期限、失敗帳、帳檔與檔名、出處之快取、筆記之提煉面事實、選篇、選題 ──
+import * as coreStateNs from './stores/coreState.mjs'
+import * as coreDeltaNs from './stores/coreDelta.mjs'
+import * as stateDigestNs from './stores/stateDigest.mjs'
+import * as coreStoreNs from './stores/coreStore.mjs'
+import * as coreProjectionNs from './stores/coreProjection.mjs'
+import * as evidenceNs from './stores/evidence.mjs'
+import * as extractHoldsNs from './stores/extractHolds.mjs'
+import * as extractLedgerNs from './stores/extractLedger.mjs'
+import * as extractFilesNs from './stores/extractFiles.mjs'
+import * as contentCacheNs from './stores/contentCache.mjs'
+import * as rebaselineNs from './stores/rebaseline.mjs'
+import * as regenIntentNs from './stores/regenIntent.mjs'
+import * as noteFactsNs from './stores/noteFacts.mjs'
+import * as noteSelectionNs from './stores/noteSelection.mjs'
+import * as conceptSelectionNs from './stores/conceptSelection.mjs'
+// ── domain:內建領域預設(規則表、提示詞、筆記分節摘要、核心 md 版型)──
+import * as extractDomainNs from './domain/extractDomain.mjs'
+import * as promptsNs from './domain/prompts.mjs'
+// ── guards:守門共用之文字相似度 ──
+import * as similarityNs from './guards/similarity.mjs'
+// ── ops:維運(重審、打掉重練、還原撤回)──
+import * as recheckOpsNs from './ops/recheckOps.mjs'
+import * as regenCoreNs from './ops/regenCore.mjs'
+import * as reviveClaimsNs from './ops/reviveClaims.mjs'
+// ── standards:檢定標準(解析、守門、納入閘、核心之確定性檢定、各覆核、全集、符合度掃描、核心之存量處置與其修法、重審項、關聯變更之影響、待判之登錄與結案、逐案題組之頁組法與類別)──
+import * as parseNs from './standards/parse.mjs'
+import * as opGuardsNs from './standards/opGuards.mjs'
+import * as conflictDispositionNs from './standards/conflictDisposition.mjs'
+import * as coreStandardsNs from './standards/coreStandards.mjs'
+import * as disputeCheckNs from './standards/disputeCheck.mjs'
+import * as opStandardsNs from './standards/opStandards.mjs'
+import * as orphanCheckNs from './standards/orphanCheck.mjs'
+import * as panelVotesNs from './standards/panelVotes.mjs'
+import * as supportCheckNs from './standards/supportCheck.mjs'
+import * as supportReviseNs from './standards/supportRevise.mjs'
+import * as supportStockNs from './standards/supportStock.mjs'
+import * as synonymCheckNs from './standards/synonymCheck.mjs'
+import * as registryNs from './standards/registry.mjs'
+import * as auditNs from './standards/audit.mjs'
+import * as stockFixNs from './standards/stockFix.mjs'
+import * as coreStockFixNs from './standards/coreStockFix.mjs'
+import * as recheckNs from './standards/recheck.mjs'
+import * as relationImpactNs from './standards/relationImpact.mjs'
+import * as holdSettleNs from './standards/holdSettle.mjs'
+import * as esCasesNs from './standards/esCases.mjs'
+// ── stages:提煉子階段與其逐核心動作鏈、步驟序列與專步排程、無 AI 之維護、同義核心專步 ──
+import * as extractStageNs from './stages/extractStage.mjs'
+import * as extractChainNs from './stages/extractChain.mjs'
+import * as extractStepsNs from './stages/extractSteps.mjs'
+import * as extractMaintainNs from './stages/extractMaintain.mjs'
+import * as synonymStepNs from './stages/synonymStep.mjs'
+// ── workflow:3+3 工作流(AI 呼叫之單一包裝、起草候選、終審裁決、守門之閘、關聯脈絡)與各專步 ──
+import * as aiCallNs from './workflow/aiCall.mjs'
+import * as applyWithInvariantsNs from './workflow/applyWithInvariants.mjs'
+import * as candidatesNs from './workflow/candidates.mjs'
+import * as disputePassNs from './workflow/disputePass.mjs'
+import * as relationContextNs from './workflow/relationContext.mjs'
+import * as orphanPassNs from './workflow/orphanPass.mjs'
+import * as pendingNs from './workflow/pending.mjs'
+import * as reviewGuardsNs from './workflow/reviewGuards.mjs'
+import * as runPassNs from './workflow/runPass.mjs'
+import * as supportGateNs from './workflow/supportGate.mjs'
+import * as supportStockPassNs from './workflow/supportStockPass.mjs'
+import * as verdictsNs from './workflow/verdicts.mjs'
+// ── bench:AI 能力評分(判定類六角色;核心為抓取套件之 benchKit;命令列 bench/cli.mjs 被 import 時不執行,只轉出同一實體)──
+import * as extractBenchNs from './bench/extractBench.mjs'
+import * as benchCliNs from './bench/cli.mjs'
 
+export * from './createKnowledgeExtract.mjs'
+export * from './extractObject.mjs'
+export * from './extractRuntime.mjs'
+export * from './logContract.mjs'
+export * from './core/extractSettings.mjs'
+export * from './core/vocab/extractVocab.mjs'
+export * from './stores/coreState.mjs'
+export * from './stores/coreDelta.mjs'
+export * from './stores/stateDigest.mjs'
+export * from './stores/coreStore.mjs'
+export * from './stores/coreProjection.mjs'
+export * from './stores/evidence.mjs'
+export * from './stores/extractHolds.mjs'
+export * from './stores/extractLedger.mjs'
+export * from './stores/extractFiles.mjs'
+export * from './stores/contentCache.mjs'
+export * from './stores/rebaseline.mjs'
+export * from './stores/regenIntent.mjs'
+export * from './stores/noteFacts.mjs'
+export * from './stores/noteSelection.mjs'
+export * from './stores/conceptSelection.mjs'
+export * from './domain/extractDomain.mjs'
+export * from './domain/prompts.mjs'
+export * from './guards/similarity.mjs'
+export * from './ops/recheckOps.mjs'
+export * from './ops/regenCore.mjs'
+export * from './ops/reviveClaims.mjs'
+export * from './standards/parse.mjs'
+export * from './standards/opGuards.mjs'
+export * from './standards/conflictDisposition.mjs'
+export * from './standards/coreStandards.mjs'
+export * from './standards/disputeCheck.mjs'
+export * from './standards/opStandards.mjs'
+export * from './standards/orphanCheck.mjs'
+export * from './standards/panelVotes.mjs'
+export * from './standards/supportCheck.mjs'
+export * from './standards/supportRevise.mjs'
+export * from './standards/supportStock.mjs'
+export * from './standards/synonymCheck.mjs'
+export * from './standards/registry.mjs'
+export * from './standards/audit.mjs'
+export * from './standards/stockFix.mjs'
+export * from './standards/coreStockFix.mjs'
+export * from './standards/recheck.mjs'
+export * from './standards/relationImpact.mjs'
+export * from './standards/holdSettle.mjs'
+export * from './standards/esCases.mjs'
+export * from './stages/extractStage.mjs'
+export * from './stages/extractChain.mjs'
+export * from './stages/extractSteps.mjs'
+export * from './stages/extractMaintain.mjs'
+export * from './stages/synonymStep.mjs'
+export * from './workflow/aiCall.mjs'
+export * from './workflow/applyWithInvariants.mjs'
+export * from './workflow/candidates.mjs'
+export * from './workflow/disputePass.mjs'
+export * from './workflow/relationContext.mjs'
+export * from './workflow/orphanPass.mjs'
+export * from './workflow/pending.mjs'
+export * from './workflow/reviewGuards.mjs'
+export * from './workflow/runPass.mjs'
+export * from './workflow/supportGate.mjs'
+export * from './workflow/supportStockPass.mjs'
+export * from './workflow/verdicts.mjs'
+export * from './bench/extractBench.mjs'
+export * from './bench/cli.mjs'
 
 /**
- * 通用知識之抓取、萃取、關聯與提煉套件
+ * 公開模組之命名空間(預設匯出物件之來源;與上方 export * 為同一組模組)
  *
- * 提供四段式知識管線(抓取 → 彙整(預篩→萃取) → 關聯 → 提煉,結束後自動重建索引):
- * ① 安裝即用:createKnowledgeExtract({ workDir }) 零注入即完整管線,內建萃取 prompt、筆記/核心版型、
- *    rss/grid/article/links 抓取器、feed/Bing/arXiv 線索探測、AI 調度層(w-dispatch-ai)與巡檢
- * ② 逐層可覆寫:cfg 設定覆寫、pipeline 物件重排、物件內 stages 重組、動作鏈 tap/chain 掛載、mw opts 注入、跨階段 plugins
- * ③ 領域可注入:主題範圍與分類詞彙(cfg.data.vocab)、prompt 與版型(各物件之 domain)、抓取器(cfg.fetchers)皆由安裝方決定
- * ④ 全部積木具名匯出,並含第二入口 taskRunner 之全部成員(同名即同一實作)
+ * @type {Array}
+ */
+const NAMESPACES = [
+    createKnowledgeExtractNs, extractObjectNs, extractRuntimeNs, logContractNs,
+    extractSettingsNs, extractVocabNs,
+    coreStateNs, coreDeltaNs, stateDigestNs, coreStoreNs, coreProjectionNs, evidenceNs, extractHoldsNs, extractLedgerNs, extractFilesNs, contentCacheNs, rebaselineNs, regenIntentNs, noteFactsNs, noteSelectionNs, conceptSelectionNs,
+    extractDomainNs, promptsNs,
+    similarityNs,
+    recheckOpsNs, regenCoreNs, reviveClaimsNs,
+    parseNs, opGuardsNs, conflictDispositionNs, coreStandardsNs, disputeCheckNs, opStandardsNs, orphanCheckNs, panelVotesNs, supportCheckNs, supportReviseNs, supportStockNs, synonymCheckNs, registryNs, auditNs, stockFixNs, coreStockFixNs, recheckNs, relationImpactNs, holdSettleNs, esCasesNs,
+    extractStageNs, extractChainNs, extractStepsNs, extractMaintainNs, synonymStepNs,
+    aiCallNs, applyWithInvariantsNs, candidatesNs, disputePassNs, orphanPassNs, pendingNs, relationContextNs, reviewGuardsNs, runPassNs, supportGateNs, supportStockPassNs, verdictsNs,
+    extractBenchNs, benchCliNs,
+]
+
+/**
+ * 通用知識提煉套件
  *
- * @returns {Object} 回傳套件物件,含 createKnowledgeExtract、四物件工廠(createFetchObject 等)、子階段工廠(stage*)、
- *     mw 積木(mw*)、middleware 核心(defineMw、applyTaps、runChainOverMsgs 等)、內建領域預設(create*Domain、VOCAB_DEFAULT 等)、
- *     內建設定(resolveSettings、*_DEFAULT)、抓取器與端點、AI 調度(createAiAdapter 等)、營運配套(createPatrol、regenCore 等)、
- *     生命週期政策(pickDueSources、saveClues 等)與工具(md、clock、text、web、misc、records)等函數
+ * 提供一輪提煉之完整管線(選題 → 逐概念之 3+3 提煉與各檢定標準之專步 → 核心 md 之投影):
+ * ① 安裝即用:createKnowledgeExtract({ workDir }) 零注入即可跑,讀摘要套件交出之筆記與關聯套件交出之邊,預設席位為免金鑰之免費模型
+ * ② 逐層可覆寫:cfg 設定逐鍵覆寫(resolveExtractSettings;ai、extract 兩段,錯誤一律拋錯)、cfg.data.vocab 知識庫稱呼與主題範圍、證據封頂、
+ *    推論類與提示詞之領域句(resolveExtractVocab;pickExtractVocab 自共用之詞彙表取子集)、cfg.prompts 提示詞與規則表、cfg.domains 整組 domain、
+ *    cfg.stages／stageOpts 子階段與動作鏈 tap、cfg.aiAdapter 調度層;他總組裝以 createExtractRuntime 組出同一組提煉件
+ * ③ 領域中立:主題範圍、知識庫稱呼、內容類型之證據封頂、主張之推論類皆由安裝方決定
+ * ④ 知識之加入、變更與刪除:新筆記之提煉、筆記內容變更之重審、出處撤回與恢復、關聯變更之影響、同義核心之核對;維運(存量處置、
+ *    打掉重練、還原撤回)
+ * ⑤ 檢定標準:納入閘、核心之確定性檢定、各判定小組之覆核(出處支持、失撐、爭議、同義)、標準之登記(EXTRACT_STANDARDS)、
+ *    符合度掃描(auditExtractStandards)與存量處置,供測試與維運檢查功能是否正常
+ * ⑥ 免費 AI 能力評分:判定類六角色(出處支持覆核、出處修訂、失撐找支持、爭議覆核、同義覆核、同義提議)與工作流類八角色(3+3 之各棒、待審裁決、本質、整併),共十四角色(runExtractBench、runExtractBenchCli)
+ * ⑦ 日誌與報告契約:外部巡檢判讀提煉段之字樣與 report 鍵(EXTRACT_LOG_KNOWN、EXTRACT_LOG_MUST_SEE、EXTRACT_LOG_PARSE、EXTRACT_REPORT_KEYS)
+ *
+ * @returns {Object} 回傳套件物件,含 createKnowledgeExtract、createExtractObject、createExtractRuntime、子階段工廠、設定預設
+ *     (resolveExtractSettings、EXTRACT_*)、詞彙(resolveExtractVocab 等)、domain 工廠、檢定標準、存量掃描與處置、維運件、AI 能力評分與
+ *     日誌契約等(與具名匯出同一組)
+ * @throws {Error} 兩個公開模組匯出同名而不同實體時於載入期拋出
  * @example
- * import WKnowledgeExtract from 'w-knowledge-extract'
+ * import WKnowledgeExtract from 'w-knowledge-extract/src/WKnowledgeExtract.mjs'
  *
- * //零注入:僅 workDir 必填(金鑰放 workDir/.env)
+ * //零注入:僅 workDir 必填(金鑰放 workDir/.env;預設 AI 席位為免金鑰之免費模型)
  * let flow = WKnowledgeExtract.createKnowledgeExtract({
- *     workDir: './my-kb',
- *     data: {
- *         seedSources: [{ kind: 'rss', tier: 1, name: '範例來源', url: 'https://example.com/feed', lang: 'en' }],
- *         vocab: { domain: '機器學習' }, //主題範圍(選填), 未給即不限主題
- *     },
+ *     workDir: './my-kb', //notes 集合中之筆記(摘要套件交出)與 relations 集合中之邊(關聯套件交出)即本套件之輸入
+ *     data: { vocab: { domain: '天文學' } }, //主題範圍(選填), 未給即不限主題
  * })
- * let report = await flow.run() //抓取→彙整→關聯→提煉→索引, 結束後寫 log/<day>/<stamp>-run.json 再巡檢
+ * let report = await flow.run() //提煉一輪, my-kb/knowledge/core 之核心 md 隨之更新, 結束後寫 log/<day>/<stamp>-run.json
  * console.log(report.ok)
  */
-let WKnowledgeExtract = {
-
-    //執行殼(第二入口 ./taskRunner.mjs 之全部成員;泛用秩序,他專案之排程任務只 import 該入口即可)
-    ...taskRunner,
-
-    //總組裝(僅 workDir 必填;零注入即完整管線)
-    createKnowledgeExtract,
-
-    //預設四物件(可增減/重排/混入自寫物件)
-    createFetchObject,
-    createOrganizeObject,
-    createRelateObject,
-    createDistillObject,
-
-    //子階段工廠(物件內 stages 重組用)
-    stageSeedSync,
-    stageListFetch,
-    stageDetailFetch,
-    stageDocMaintain,
-    stageExpand,
-    stageTriage,
-    stageExtract,
-    stageRelate,
-    stageRelationIndex,
-    stageDistill,
-    distillTarget,
-    stageKnowledgeIndex,
-
-    //mw 積木(動作鏈 chain 重排/tap 置換用;具名=hook 錨點)
-    mwSyncSeeds,
-    mwCullSources,
-    mwFetchList,
-    mwNormalizeItems,
-    mwFilterItems,
-    mwAdmitPersist,
-    mwAccountSource,
-    mwTitleSkip,
-    mwRouteFetcher,
-    mwFetchDetail,
-    mwTranscodeLinks,
-    mwFeedFallback,
-    mwPersistOutcome,
-    mwSlim,
-    mwProbe,
-    mwSettleClue,
-    probeSiteFeed,
-    probeSearchEndpoints,
-    mwSettleTriage,
-    mwSaveClues,
-    mwSkipGate,
-    mwRenderNote,
-    mwPersistNote,
-    mwMarkDoc,
-    mwBuildEdges,
-    mwPersistEdges,
-    mwApplyToNote,
-    mwConflictDualWrite,
-    mwMarkRelated,
-    mwRebuildRelationIndex,
-    mwLoadState,
-    mwSelectNotes,
-    mwPropose,
-    mwReview,
-    mwApplyDelta,
-    mwRenderState,
-    mwPersistState,
-    mwRebuildKnowledgeIndex,
-
-    //middleware 核心(自寫單元/插件用)
-    defineMw,
-    defineFirstMw,
-    applyTaps,
-    makeMsg,
-    count,
-    composeChain,
-    runChainOverMsgs,
-    stdReport,
-    MwContractError,
-    resolvePlugins,
-    mergeTaps,
-
-    //內建預設(領域/設定/抓取器;安裝方組自訂管線時可原件取用)
-    createTriageDomain,
-    createExtractDomain,
-    createRelateDomain,
-    createDistillDomain,
-    defaultRules,
-    KIND_LABELS,
-    NOTE_SECTIONS,
-    VOCAB_DEFAULT,
-    GUIDE_FIELDS,
-    guideDefaultOf,
-    resolveVocab,
-    kbLabelOf,
-    evidenceCapsWarning,
-    resolveSettings,
-    FETCH_DEFAULT,
-    KNOWLEDGE_DEFAULT,
-    SOURCE_POLICY_DEFAULT,
-    AI_DEFAULT,
-    SKIP_TITLE_PATTERNS_DEFAULT,
-    createDefaultFetchers,
-    mergeFetchers,
-    defaultToRecord,
-    defaultToLinkedRecord,
-    DEFAULT_SITE_ADAPTERS,
-    mergeSiteAdapters,
-    fetchArticle,
-    fetchArticleLinks,
-    discoverFeed,
-    gridSourceUrl,
-    bingNewsSearchUrl,
-    arxivSearchUrl,
-    expandSeeds,
-    createAiAdapter,
-    createProviderHealth,
-    KIND_MAX_PROMPT_CHARS,
-    maxPromptCharsOf,
-    fitChain,
-    createLogger,
-
-    //營運配套(巡檢/維運/執行摘要;CLI 殼由執行端提供)
-    createPatrol,
-    PATROL_MARK_HEAD,
-    PATROL_MARK_TAIL,
-    regenCore,
-    listCores,
-    ingestNotes,
-    reviveDeadDocs,
-    deadMatcher,
-    buildRunSummary,
-    writeRunSummary,
-    readRunSummary,
-    writeRunStart,
-    readRunStart,
-    subReportOf,
-    RUN_SUMMARY_VERSION,
-
-    //機制(生命週期政策/批次 AI harness/關聯與提煉機制/入庫閘門/時間預算)
-    runAiBatchStage,
-    judgeFromDocs,
-    budgetOf,
-    ensureSeedSources,
-    isLowYield,
-    pickDueSources,
-    recordSourceOutcome,
-    cullZeroYieldSources,
-    slimTerminalDocs,
-    byRetryTierFifo,
-    clueKey,
-    legacyClueKey,
-    cluePriority,
-    saveClues,
-    pickClues,
-    enforceFrontierCap,
-    settleClue,
-    normalizeFeedItems,
-    filterFeedItems,
-    admitFeedItems,
-    ingestFeedItems,
-    conceptVocabulary,
-    pickConcepts,
-    pickCategories,
-    orphanNotes,
-    coreForKey,
-    twinsOf,
-    isReady,
-    groupByConcept,
-    suggestConceptRenames,
-    tagSuspects,
-    //提煉之主張庫(2.0:狀態＋差量＋程式套用;純函數)與其 IO
-    emptyState,
-    upgradeState,
-    findItem,
-    deriveStatus,
-    applyDelta,
-    applyVerdicts,
-    coverageOf,
-    commitBatch,
-    checkInvariants,
-    stateDigest,
-    renderRules,
-    queuePendingReview,
-    pendingReviewOps,
-    STATE_VERSION,
-    DELTA_OPS,
-    CONSOLIDATE_OPS,
-    TERMINAL_OPS,
-    RETRACT_REASONS,
-    DROP_REASONS,
-    NEW_ITEM_DROP_REASONS,
-    DISPUTE_DROP_REASONS,
-    DOUBT_REASONS,
-    DISSOLVE_DROP_REASONS,
-    SKIP_REASONS,
-    PENDING_REVIEW_CAP,
-    DEFAULT_CLAIM_KINDS,
-    DEFAULT_LIMITS,
-    FIXABLE_FIELDS,
-    makeEvidence,
-    UNASSESSED,
-    createCoreStore,
-    mdHashOf,
-    selectNotes,
-    yearOf,
-    coreAuxDirs,
-    createDistillLedger,
-    newCoreIdOf,
-    pickCandidates,
-    makeSlugResolver,
-    applyRelationsToNote,
-    markConflict,
-    rebuildRelationIndex,
-    rebuildKnowledgeIndex,
-
-    //工具
-    acquireLock,
-    inspectLock,
-    renderFrontmatter,
-    parseFrontmatter,
-    writeMd,
-    mdText,
-    readMd,
-    section,
-    sectionOf,
-    dropSection,
-    createClock,
-    sha1,
-    normalizeConcept,
-    normalizeClue,
-    checkNameMap,
-    slugify,
-    setConceptFold,
-    normalizeUrl,
-    unwrapNewsUrl,
-    oneline,
-    readJson,
-    writeJson,
-    writeFileAtomic,
-    queueAge,
-    sourceId,
-    docRecord,
-    normalizeWorkDir,
-    expandDirs,
-
-}
+const WKnowledgeExtract = composeNamespaces('WKnowledgeExtract', NAMESPACES)
 
 
 export default WKnowledgeExtract

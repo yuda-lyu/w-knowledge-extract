@@ -1,0 +1,302 @@
+{
+  "v": 1,
+  "note": "工作流類(終審 wf-accept)之通用題組:每案給修訂後之操作(帶 _oid;送終審時去程式欄位,序即 i)、意見與補丁紀錄、合成之核心狀態與材料;應然 expect.drop＝該剔除之操作(經正式之剔除閘——建設性操作只准以「重複」或引用高嚴重度之離題／捏造意見剔除;破壞性操作之剔除不受閘)、expect.keep＝該保留者(保留、fix、存疑皆算;含意見不成立或只是中嚴重度而不該剔者、爭議類操作之存疑)、expect.irreversibleListed＝不可逆操作(取代、撤回、合併、拆解、拆分)皆須明列有效裁決,未列即不套用而存待審。同一不可逆操作在待審裁決題組亦有對應案,兩處之應然一致。各案情境各自獨立,材料皆為合成之中立情境。",
+  "cases": [
+    {
+      "id": "c01",
+      "holdout": false,
+      "input": {
+        "state": { "claims": [{ "id": "C1", "kind": "rule", "text": "社區圖書館週末開放時借閱量較平日多", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n0"] }] },
+        "sources": [
+          { "id": "n0", "title": "圖書館平日與週末", "text": "某社區圖書館之統計顯示，週末之借閱量較平日多。" },
+          { "id": "n1", "title": "社區圖書館週末開放", "text": "某社區圖書館自去年起週末開放，週末之借閱量約占全週兩成；館方表示，若未增派人力，閉館後之整理時間不足。" }
+        ],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "社區圖書館週末開放後，週末借閱量約占全週兩成", "conditions": ["某社區圖書館之統計"], "critique": "僅單一館之觀察", "pros": ["擴大服務時段"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_1" },
+          { "op": "add", "kind": "rule", "text": "延長開放時間必使各地圖書館之借閱量倍增", "conditions": [], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_2" },
+          { "op": "confirm", "id": "C1", "sources": ["N1"], "_oid": "i_3" }
+        ],
+        "issues": [{ "ref": "i_2", "severity": "高", "type": "捏造", "detail": "出處未載倍增，亦未及各地圖書館", "fix": "刪除" }]
+      },
+      "expect": { "drop": [1], "keep": [0, 2] },
+      "why": "i=1 經審計以高嚴重度指為捏造，剔除合剔除閘；i=0 與出處相符、i=2 以新出處確認既有主張，皆應保留"
+    },
+    {
+      "id": "c02",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "pitfall", "text": "週末開放若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "未增派人力而週末開放時，閉館整理之時間會不夠", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] }
+          ]
+        },
+        "sources": [{ "id": "n1", "title": "社區圖書館週末開放", "text": "某社區圖書館自去年起週末開放，週末之借閱量約占全週兩成；館方表示，若未增派人力，閉館後之整理時間不足。" }],
+        "batch": [],
+        "ops": [
+          { "op": "retract", "id": "C2", "reason": "重複", "into": "C1", "_oid": "i_1" }
+        ]
+      },
+      "expect": { "keep": [0], "irreversibleListed": true },
+      "why": "C2 與 C1 同義，以重複撤回成立；撤回不可逆，須明列裁決（未列即不套用）；與待審案 p01 之第一項為同一撤回，應然一致"
+    },
+    {
+      "id": "c03",
+      "holdout": false,
+      "input": {
+        "state": { "claims": [{ "id": "C1", "kind": "rule", "text": "盆栽每週澆水兩次即足夠", "conditions": ["某園藝社之經驗"], "critique": "僅單一社團之經驗", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n0"] }] },
+        "sources": [
+          { "id": "n0", "title": "盆栽澆水頻率", "text": "某園藝社之經驗指出，盆栽每週澆水兩次即足夠。" },
+          { "id": "n1", "title": "梅雨季之澆水", "text": "某園藝社修正其說法：盆栽每週澆水兩次僅適用於一般天氣；梅雨季土壤不易乾燥，澆水頻率應再減少。" }
+        ],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "盆栽一般天氣每週澆水兩次即足夠，梅雨季應再減少澆水頻率", "conditions": ["某園藝社修正後之說法"], "critique": "僅單一社團之說法", "pros": ["避免土壤過濕"], "cons": ["出處未載"], "sources": ["N1"], "ref": "x", "_oid": "i_1" },
+          { "op": "supersede", "id": "C1", "by": "@x", "reason": "同一社團已把 C1 修正為分天氣情況之說法", "validPeriod": "修正前之說法", "sources": ["N1"], "_oid": "i_2" }
+        ]
+      },
+      "expect": { "keep": [0, 1], "irreversibleListed": true },
+      "why": "同一園藝社修正其說法，新主張涵蓋舊說並補上梅雨季之條件，以新主張取代 C1 成立；取代不可逆，須明列裁決"
+    },
+    {
+      "id": "c04",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "吸塵器濾網", "text": "某維修行指出，吸塵器濾網阻塞會使吸力下降；濾網宜每月以清水沖洗，完全晾乾後再裝回。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "吸塵器濾網宜每月以清水沖洗，完全晾乾後再裝回", "conditions": ["某維修行之建議"], "critique": "僅單一維修行之建議", "pros": ["維持吸力"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_1" },
+          { "op": "add", "kind": "rule", "text": "吸塵器濾網每月須用清水沖洗，晾乾透了才能裝回", "conditions": ["某維修行之建議"], "critique": "僅單一維修行之建議", "pros": ["維持吸力"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_2" },
+          { "op": "add", "kind": "pitfall", "text": "濾網阻塞會使吸力下降", "conditions": ["濾網阻塞時"], "critique": "僅單一維修行之說明", "sources": ["N1"], "_oid": "i_3" }
+        ],
+        "issues": [{ "ref": "i_2", "severity": "高", "type": "重複", "detail": "與 i_1 同義", "fix": "刪除" }]
+      },
+      "expect": { "drop": [1], "keep": [0, 2] },
+      "why": "i=1 與 i=0 同指每月沖洗並晾乾後裝回，屬重複，以重複剔除合剔除閘；i=0 與 i=2 各述不同之內容且見於出處，應保留"
+    },
+    {
+      "id": "c05",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "素燒後之坯體上釉較易附著", "conditions": ["某陶藝工坊之說明"], "critique": "僅單一工坊之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "釉層過厚會於燒成時流釉", "conditions": ["釉層過厚時"], "critique": "僅另一工坊之說明", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "釉料附著", "text": "某陶藝工坊指出，素燒後之坯體吸水性較高，上釉較易附著；上釉前須拭去浮塵。" },
+          { "id": "n2", "title": "上釉厚度", "text": "另一工坊指出，釉層過厚會於燒成時流釉，沾黏窯板。" }
+        ],
+        "batch": [],
+        "ops": [
+          { "op": "merge", "into": "C1", "from": ["C2"], "reason": "兩條皆談上釉", "_oid": "i_1" }
+        ]
+      },
+      "expect": { "drop": [0], "irreversibleListed": true },
+      "why": "C1 談素燒後上釉較易附著、C2 談釉層過厚會流釉，結論各異，不可併為一條；不當之合併應剔除（剔除亦屬明列裁決）；與待審案 p04 為同一合併，應然一致"
+    },
+    {
+      "id": "c06",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "路線班距", "text": "某路線平日尖峰班距較短、離峰班距較長；週末全日採離峰班距。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "某路線平日尖峰班距較短，離峰班距較長", "conditions": ["某路線之平日"], "critique": "僅單一路線之說明", "pros": ["尖峰時段較易搭乘"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_1" },
+          { "op": "add", "kind": "rule", "text": "某路線週末全日採離峰班距", "conditions": ["某路線之週末"], "critique": "僅單一路線之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_2" }
+        ],
+        "issues": [{ "ref": "i_2", "severity": "中", "type": "重複", "detail": "與 i_1 同談班距", "fix": "合併或移除" }]
+      },
+      "expect": { "keep": [0, 1] },
+      "why": "兩條雖同談班距，一為平日、一為週末，內容與適用時段各異，並非重複；審計僅列中嚴重度，不應剔除"
+    },
+    {
+      "id": "c07",
+      "holdout": false,
+      "input": {
+        "sources": [
+          { "id": "n1", "title": "礦砂貓砂", "text": "某寵物店表示，礦砂貓砂吸水結塊快，清理糞塊較俐落。" },
+          { "id": "n2", "title": "豆腐砂", "text": "另一間寵物店表示，豆腐砂可沖入馬桶，處理較方便。" }
+        ],
+        "batch": ["n1", "n2"],
+        "ops": [
+          { "op": "dispute_add", "question": "貓砂應選礦砂或豆腐砂？", "sides": [{ "position": "礦砂貓砂吸水結塊快，清理俐落", "sources": ["N1"] }, { "position": "豆腐砂可沖入馬桶，處理方便", "sources": ["N2"] }], "_oid": "i_1" },
+          { "op": "add", "kind": "rule", "text": "豆腐砂可沖入馬桶，處理較方便", "conditions": ["某寵物店之說明"], "critique": "僅單一店家之說明", "pros": ["處理方便"], "cons": ["出處未載"], "sources": ["N2"], "_oid": "i_2" }
+        ]
+      },
+      "expect": { "keep": [0, 1] },
+      "why": "兩方分別談結塊速度與處理方式，並未互相否定，不是真爭議；爭議類操作不得以內容為由剔除，以存疑（非對立）表達，照保留；i=1 見於出處"
+    },
+    {
+      "id": "c08",
+      "holdout": false,
+      "input": {
+        "state": { "claims": [{ "id": "C1", "kind": "rule", "text": "炒飯宜使用隔夜飯，炒麵須先將麵條煮至八分熟", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }] },
+        "sources": [{ "id": "n1", "title": "炒飯與炒麵", "text": "某烹飪教室指出，炒飯宜使用隔夜飯，水分較少較易炒散；炒麵則須先將麵條煮至八分熟。" }],
+        "batch": [],
+        "ops": [
+          { "op": "split", "id": "C1", "parts": [
+            { "kind": "rule", "text": "炒飯宜使用隔夜飯", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"] },
+            { "kind": "rule", "text": "炒麵須先將麵條煮至八分熟", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"] }
+          ], "reason": "一條主張含兩個互不相干之說法", "_oid": "i_1" }
+        ]
+      },
+      "expect": { "keep": [0], "irreversibleListed": true },
+      "why": "C1 併了炒飯與炒麵兩個獨立說法，拆為兩條各為原文子集且合起來涵蓋原文，拆分成立；拆分不可逆，須明列裁決"
+    },
+    {
+      "id": "c09",
+      "holdout": false,
+      "input": {
+        "sources": [
+          { "id": "n1", "title": "泳池開放時段", "text": "某游泳池平日傍晚開放給一般民眾，週末全日開放。" },
+          { "id": "n2", "title": "泳池救生員配置", "text": "同一游泳池規定，開放時段內至少須有兩位救生員在場。" }
+        ],
+        "batch": ["n1", "n2"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "游泳池平日傍晚、週末全日開放給一般民眾", "conditions": ["某游泳池之規定"], "critique": "僅單一泳池之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_1" },
+          { "op": "add", "kind": "rule", "text": "游泳池開放時段內至少須有兩位救生員在場", "conditions": ["某游泳池之規定"], "critique": "僅單一泳池之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N2"], "_oid": "i_2" }
+        ],
+        "issues": [{ "ref": "i_2", "severity": "高", "type": "離題", "detail": "與 N1 談之開放時段無關", "fix": "刪除" }]
+      },
+      "expect": { "keep": [0, 1] },
+      "why": "i=1 引 N2 並如實述其規定，同屬泳池管理；意見以其與 N1 無關為由指為離題，判準是與出處及本題組是否相關而非與另一篇是否相關，意見不成立，不可剔除"
+    },
+    {
+      "id": "c10",
+      "holdout": false,
+      "input": {
+        "sources": [
+          { "id": "n1", "title": "登山杖使用", "text": "某登山社建議，下坡時使用登山杖可減輕膝蓋負擔。" },
+          { "id": "n2", "title": "登山杖攜帶", "text": "另一登山社提醒，狹窄處須將登山杖收妥，以免勾到他人。" }
+        ],
+        "batch": ["n1", "n2"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "下坡時使用登山杖可減輕膝蓋負擔", "conditions": ["某登山社之建議"], "critique": "僅單一社團之建議", "pros": ["減輕膝蓋負擔"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_1" },
+          { "op": "dispute_add", "question": "下坡該使用或收妥登山杖？", "sides": [{ "position": "下坡時使用登山杖", "sources": ["N1"] }, { "position": "狹窄處須將登山杖收妥", "sources": ["N2"] }], "_oid": "i_2" },
+          { "op": "add", "kind": "rule", "text": "使用登山杖可完全避免膝蓋受傷", "conditions": ["下坡時"], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_3" }
+        ],
+        "issues": [{ "ref": "i_3", "severity": "高", "type": "捏造", "detail": "出處只說減輕負擔，未說完全避免受傷", "fix": "刪除" }]
+      },
+      "expect": { "drop": [2], "keep": [0, 1] },
+      "why": "i=2 之完全避免受傷為出處所無，經高嚴重度之捏造意見剔除合閘；i=1 兩方談不同情境（下坡與狹窄處）並不對立，以存疑保留；i=0 見於出處"
+    },
+    {
+      "id": "c11",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "pitfall", "text": "週末開放若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "未增派人力而週末開放時，閉館整理之時間會不夠", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] }
+          ]
+        },
+        "sources": [{ "id": "n1", "title": "社區圖書館週末開放", "text": "某社區圖書館自去年起週末開放，週末之借閱量約占全週兩成；館方表示，若未增派人力，閉館後之整理時間不足。" }],
+        "batch": [],
+        "ops": [
+          { "op": "retract", "id": "C1", "reason": "無出處支持", "_oid": "i_1" }
+        ]
+      },
+      "expect": { "drop": [0], "irreversibleListed": true },
+      "why": "C1 之出處明載整理時間不足，「無出處支持」之撤回不成立，應剔除；撤回不可逆，須明列裁決；與待審案 p01 之第二項為同一撤回，應然一致"
+    },
+    {
+      "id": "c12",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "temporal", "text": "社區紙類回收前須先拆除釘書針", "period": "舊規定", "critique": "僅單一社區之規定", "sources": ["n0"] },
+            { "id": "C2", "kind": "temporal", "text": "社區紙類回收前不必拆除釘書針", "period": "現行規定", "critique": "僅單一社區之規定", "sources": ["n1"] }
+          ]
+        },
+        "sources": [
+          { "id": "n0", "title": "舊之紙類回收規定", "text": "某社區舊規定要求紙類回收前先拆除釘書針。" },
+          { "id": "n1", "title": "現行之紙類回收規定", "text": "某社區現行規定紙類回收前不必拆除釘書針。" },
+          { "id": "n2", "title": "紙類回收公告", "text": "某社區公告：紙類回收前不必拆除釘書針，舊規定廢止。" }
+        ],
+        "batch": ["n2"],
+        "ops": [
+          { "op": "supersede", "id": "C2", "by": "C1", "reason": "以舊規定為準", "validPeriod": "現行規定", "sources": ["N2"], "_oid": "i_1" }
+        ]
+      },
+      "expect": { "drop": [0], "irreversibleListed": true },
+      "why": "N2 公告舊規定廢止、現行不必拆除，應是 C1 被 C2 取代；本操作方向相反，把現行規定取代掉，屬錯誤，應剔除（剔除亦屬明列裁決）"
+    },
+    {
+      "id": "ch1",
+      "holdout": true,
+      "input": {
+        "sources": [{ "id": "n1", "title": "戶外活動前準備", "text": "某幼兒園規定戶外活動前先塗抹防曬並補充水分；活動後洗手再進教室。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "戶外活動前先塗抹防曬並補充水分", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_1" },
+          { "op": "add", "kind": "rule", "text": "活動後洗手再進教室", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_2" },
+          { "op": "add", "kind": "rule", "text": "公車專用道可縮短尖峰時段之行駛時間", "conditions": ["某一條公車路線"], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_3" }
+        ],
+        "issues": [{ "ref": "i_3", "severity": "高", "type": "離題", "detail": "公車專用道與幼兒園戶外活動無關", "fix": "刪除" }]
+      },
+      "expect": { "drop": [2], "keep": [0, 1] },
+      "why": "i=2 談公車專用道，與出處及本題組皆無關，經高嚴重度之離題意見剔除合閘；i=0、i=1 見於出處，應保留"
+    },
+    {
+      "id": "ch2",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "每週固定練習較易記住手語手勢", "conditions": ["某手語班之觀察"], "critique": "僅單一班級之觀察", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "只看影片自學，容易養成錯誤之手勢", "conditions": ["只看影片自學時"], "critique": "僅單一班級之觀察", "sources": ["n1"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "手語練習", "text": "某手語班觀察到，每週固定練習較易記住手勢；只看影片自學，容易養成錯誤之手勢。" },
+          { "id": "n2", "title": "手語練習(另一班)", "text": "另一手語班亦觀察到，每週固定練習較易記住手勢。" }
+        ],
+        "batch": ["n2"],
+        "ops": [
+          { "op": "retract", "id": "C2", "reason": "離題", "_oid": "i_1" },
+          { "op": "confirm", "id": "C1", "sources": ["N2"], "_oid": "i_2" }
+        ]
+      },
+      "expect": { "drop": [0], "keep": [1], "irreversibleListed": true },
+      "why": "C2 之內容明載於 n1，並非離題，撤回不成立，應剔除；i=1 以另一班之觀察確認 C1，應保留；撤回不可逆，須明列裁決"
+    },
+    {
+      "id": "ch3",
+      "holdout": true,
+      "input": {
+        "sources": [{ "id": "n1", "title": "營地選擇", "text": "某露營協會建議，營地宜選在地勢較高處以利排水；避開乾涸河床，以防突發之水流。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "營地宜選在地勢較高處以利排水", "conditions": ["某露營協會之建議"], "critique": "僅單一協會之建議", "pros": ["利於排水"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "i_1" },
+          { "op": "add", "kind": "pitfall", "text": "紮營於乾涸河床時，突發之水流有危險", "conditions": ["紮營於乾涸河床時"], "critique": "僅單一協會之說明", "sources": ["N1"], "_oid": "i_2" }
+        ],
+        "issues": [{ "ref": "i_2", "severity": "中", "type": "重複", "detail": "與 i_1 同談營地選擇", "fix": "合併" }]
+      },
+      "expect": { "keep": [0, 1] },
+      "why": "兩條同談營地選擇，但一為地勢排水之規則、一為乾涸河床之陷阱，內容各異並非重複；審計僅列中嚴重度，不應剔除"
+    },
+    {
+      "id": "ch4",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "縫紉機上線穿錯會造成斷線", "conditions": ["某縫紉教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "縫紉機穿線不正確，容易使線斷裂", "conditions": ["某縫紉教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }
+          ]
+        },
+        "sources": [{ "id": "n1", "title": "縫紉機斷線", "text": "某縫紉教室指出，縫紉機上線穿錯會造成斷線；穿線前須先抬起壓腳。" }],
+        "batch": [],
+        "ops": [
+          { "op": "merge", "into": "C1", "from": ["C2"], "reason": "兩條同指上線穿錯造成斷線", "_oid": "i_1" }
+        ]
+      },
+      "expect": { "keep": [0], "irreversibleListed": true },
+      "why": "C1 與 C2 同指穿線不正確使線斷，合併成立，應保留；合併不可逆，須明列裁決；與待審案 p05 為同一合併，應然一致"
+    }
+  ]
+}

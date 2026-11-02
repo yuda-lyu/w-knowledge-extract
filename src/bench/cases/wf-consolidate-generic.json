@@ -1,0 +1,378 @@
+{
+  "v": 1,
+  "note": "工作流類(整併 wf-consolidate;結構合規)之通用題組:每案給有效主張逾上限(input.cap)之合成核心狀態與材料;應然 merges＝該合併之條目對(同義而措辭不同者;一方併入另一方或兩方併入同一條皆算)、noLoss＝守門、納入閘與套用皆無拒收且不變式成立、liveAtMost＝整併後有效主張數上限(只定到恰好靠該併者即可達成,不要求把同主題而結論不同、或爭議兩方所引之近似主張也併掉;此為上限;把爭議兩方所引之主張併為一條者於套用即拒收〔noLoss 不成立〕,其餘多併者不由程式判,以各案之依據說明為準)。含參數與待解問題之同義合併、三條同義之合併、同主題不同結論或不同期間之近似條目、爭議兩方所引之主張,以及尚未拆解之非對立爭議(拆解須合規定,且不得使有效主張逾上限)。各案情境各自獨立,材料皆為合成之中立情境。",
+  "cases": [
+    {
+      "id": "s01",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "社區圖書館週末開放時借閱量較平日多", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "社區圖書館於週末開放，借閱量多於平日", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C3", "kind": "pitfall", "text": "延長開放時段若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "圖書館平日與週末", "text": "某社區圖書館之統計顯示，週末之借閱量較平日多。" },
+          { "id": "n2", "title": "圖書館人力說明", "text": "館方表示，延長開放時段若未增派人力，閉館後之整理時間不足。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同指週末借閱多於平日，應合併；C3 為不同之陷阱，不可併入"
+    },
+    {
+      "id": "s02",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "社區圖書館週末開放時借閱量較平日多", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "社區圖書館於週末開放，借閱量多於平日", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C3", "kind": "pitfall", "text": "延長開放時段若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n2"] },
+            { "id": "C4", "kind": "pitfall", "text": "未增派人力而延長開放時段，閉館整理之時間會不夠", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "圖書館平日與週末", "text": "某社區圖書館之統計顯示，週末之借閱量較平日多。" },
+          { "id": "n2", "title": "圖書館人力說明", "text": "館方表示，延長開放時段若未增派人力，閉館後之整理時間不足。" }
+        ],
+        "cap": 3
+      },
+      "expect": { "merges": [["C1", "C2"], ["C3", "C4"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1／C2 與 C3／C4 各為同義之兩條，各應合併；兩組主題不同不可互併"
+    },
+    {
+      "id": "s03",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "觀葉植物於春季修剪可促進新芽生長", "conditions": ["某園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["促進新芽"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "春季修剪觀葉植物有利新芽生長", "conditions": ["另一園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["促進新芽"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "花期中修剪會使花朵提早凋謝", "conditions": ["某園藝社之看法"], "critique": "僅單一社團之看法", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C4", "kind": "rule", "text": "花期中輕度修剪可促進續開花", "conditions": ["另一園藝社之看法"], "critique": "僅單一社團之看法", "pros": ["促進續開花"], "cons": ["出處未載"], "sources": ["n4"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "盆栽修剪(甲社)", "text": "某園藝社建議，觀葉植物於春季修剪，可促進新芽生長。" },
+          { "id": "n2", "title": "盆栽修剪(乙社)", "text": "另一園藝社同樣建議春季修剪觀葉植物，以利新芽生長。" },
+          { "id": "n3", "title": "花期修剪(丙社)", "text": "某園藝社認為，花期中修剪會使花朵提早凋謝。" },
+          { "id": "n4", "title": "花期修剪(丁社)", "text": "另一園藝社認為，花期中輕度修剪可促進續開花。" }
+        ],
+        "cap": 3
+      },
+      "expect": { "merges": [["C1", "C2"]], "noLoss": true, "liveAtMost": 3 },
+      "why": "C1 與 C2 同指春季修剪促進新芽，應合併；C3 與 C4 同談花期修剪但結論相反，是兩種看法，不是同義，不可併為一條；只併 C1／C2 即達上限 3"
+    },
+    {
+      "id": "s04",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "冷氣濾網每月清洗一次可維持出風順暢", "conditions": ["某維修行之建議"], "critique": "僅單一維修行之建議", "pros": ["維持出風順暢"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "冷氣濾網宜每月清洗一次以維持出風順暢", "conditions": ["另一家電行之建議"], "critique": "僅單一店家之建議", "pros": ["維持出風順暢"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "pitfall", "text": "室外機周圍堆放雜物會妨礙散熱", "conditions": ["室外機周圍堆放雜物時"], "critique": "僅單一維修行之說明", "sources": ["n1"] }
+          ],
+          "parameters": [
+            { "id": "P1", "name": "冷氣濾網清洗頻率", "value": "每月一次", "conditions": "某維修行之建議", "claim": "C1", "sources": ["n1"] },
+            { "id": "P2", "name": "冷氣濾網清洗頻率", "value": "每月一次", "conditions": "另一家電行之建議", "claim": "C2", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "冷氣保養(維修行)", "text": "某維修行建議，冷氣濾網每月清洗一次可維持出風順暢；室外機周圍堆放雜物會妨礙散熱。" },
+          { "id": "n2", "title": "冷氣保養(家電行)", "text": "另一家電行建議，冷氣濾網宜每月清洗一次，以維持出風順暢。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"], ["P1", "P2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同義應合併；P1 與 P2 為同名同值之參數（每月一次），亦應合併；C3 為不同之陷阱，不可併入"
+    },
+    {
+      "id": "s05",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "公車站牌電子看板顯示到站時間", "conditions": ["某市之站牌"], "critique": "僅單一城市之觀察", "pros": ["乘客可掌握到站時間"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "站牌之電子看板可顯示到站時間", "conditions": ["另一城市之站牌"], "critique": "僅單一城市之觀察", "pros": ["乘客可掌握到站時間"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "部分站牌增設座椅與遮雨棚", "conditions": ["某市部分站牌"], "critique": "僅使用者之反映", "pros": ["候車較舒適"], "cons": ["出處未載"], "sources": ["n3"] }
+          ],
+          "questions": [
+            { "id": "Q1", "text": "老舊站牌何時完成更新？", "sources": ["n1"] },
+            { "id": "Q2", "text": "老舊站牌預計於何時更新完畢？", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "站牌資訊(甲市)", "text": "某市公車站牌已加裝電子看板顯示到站時間；老舊站牌尚待更新，完成時間未定。" },
+          { "id": "n2", "title": "站牌資訊(乙市)", "text": "另一城市之站牌電子看板可顯示到站時間；老舊站牌之更新時程尚未公布。" },
+          { "id": "n3", "title": "候車座椅", "text": "某市部分站牌增設座椅與遮雨棚，使用者反映候車較舒適。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"], ["Q1", "Q2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同義應合併；Q1 與 Q2 同問老舊站牌何時更新，待解問題亦應合併；C3 為不同之主張，不可併入"
+    },
+    {
+      "id": "s06",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "新月夜觀星可見較多暗星", "conditions": ["某天文社之觀察"], "critique": "僅單一社團之觀察", "pros": ["暗星較多"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "新月夜觀星能看到更多暗星", "conditions": ["另一天文社之觀察"], "critique": "僅單一社團之觀察", "pros": ["暗星較多"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "半月夜較易辨識地面方位", "conditions": ["某天文社之觀察"], "critique": "僅單一社團之觀察", "pros": ["不易迷路"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C4", "kind": "rule", "text": "半月夜地面方位不易辨識", "conditions": ["另一天文社之觀察"], "critique": "僅單一社團之觀察", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n4"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "半月夜是否較易辨識地面方位？", "sides": [{ "position": "半月夜較易辨識地面方位", "claims": ["C3"], "sources": ["n3"] }, { "position": "半月夜地面方位不易辨識", "claims": ["C4"], "sources": ["n4"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "新月夜觀星(甲社)", "text": "某天文社觀察到，新月夜天空較暗，可見之暗星較多。" },
+          { "id": "n2", "title": "新月夜觀星(乙社)", "text": "另一天文社觀察到，新月夜觀星能看到更多暗星。" },
+          { "id": "n3", "title": "半月夜觀星(甲社)", "text": "某天文社觀察到，半月夜較易辨識地面方位，初學者較不易迷路。" },
+          { "id": "n4", "title": "半月夜觀星(乙社)", "text": "另一天文社觀察到，半月夜之地面方位不易辨識。" }
+        ],
+        "cap": 3
+      },
+      "expect": { "merges": [["C1", "C2"]], "noLoss": true, "liveAtMost": 3 },
+      "why": "C1 與 C2 同義應合併；C3 與 C4 是爭議 D1 之兩方所引、結論相反，不可併為一條（併了爭議兩方即指向同一主張）；只併 C1／C2 即達上限 3"
+    },
+    {
+      "id": "s07",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "煎魚前先拭乾魚身，魚皮較不易黏鍋", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["魚皮較完整"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "煎魚前將魚身拭乾，較不易黏鍋", "conditions": ["另一教室之說明"], "critique": "僅單一教室之說明", "pros": ["魚皮較完整"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "魚身拭乾後再煎，魚皮不易黏鍋", "conditions": ["第三間教室之說明"], "critique": "僅單一教室之說明", "pros": ["魚皮較完整"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C4", "kind": "rule", "text": "煎魚時鍋具須先預熱", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C5", "kind": "rule", "text": "煎至單面定型再翻面，魚皮較完整", "conditions": ["第三間教室之說明"], "critique": "僅單一教室之說明", "pros": ["魚皮較完整"], "cons": ["出處未載"], "sources": ["n3"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "煎魚(甲教室)", "text": "某烹飪教室指出，煎魚前先拭乾魚身，魚皮較不易黏鍋；鍋具須先預熱。" },
+          { "id": "n2", "title": "煎魚(乙教室)", "text": "另一教室指出，煎魚前將魚身拭乾，較不易黏鍋。" },
+          { "id": "n3", "title": "煎魚(丙教室)", "text": "第三間教室指出，魚身拭乾後再煎，魚皮不易黏鍋；煎至單面定型再翻面，魚皮較完整。" }
+        ],
+        "cap": 3
+      },
+      "expect": { "merges": [["C1", "C2"], ["C1", "C3"]], "noLoss": true, "liveAtMost": 3 },
+      "why": "C1、C2、C3 三條同指煎魚前拭乾魚身較不易黏鍋，須併為一條（一次合併三條或分兩次皆可）；C4（預熱）、C5（單面定型再翻面）為不同之主張，不可併入"
+    },
+    {
+      "id": "s08",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "temporal", "text": "某山屋開放接待登山客", "period": "夏季", "critique": "僅單一山屋之公告", "sources": ["n1"] },
+            { "id": "C2", "kind": "temporal", "text": "某山屋暫停接待登山客", "period": "冬季", "critique": "僅單一山屋之公告", "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "登山前須登記入山", "conditions": ["某登山協會之規定"], "critique": "僅單一協會之規定", "pros": ["便於掌握入山人員"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C4", "kind": "rule", "text": "入山前須先完成登記", "conditions": ["另一登山協會之規定"], "critique": "僅單一協會之規定", "pros": ["便於掌握入山人員"], "cons": ["出處未載"], "sources": ["n4"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "某山屋冬季是否接待登山客？", "sides": [{ "position": "某山屋夏季開放接待登山客", "sources": ["n1"] }, { "position": "某山屋冬季暫停接待登山客", "sources": ["n2"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "山屋夏季開放", "text": "某山屋夏季開放接待登山客。" },
+          { "id": "n2", "title": "山屋冬季休館", "text": "某山屋冬季暫停接待登山客。" },
+          { "id": "n3", "title": "入山登記(甲協會)", "text": "某登山協會規定，登山前須登記入山，以便掌握入山人員。" },
+          { "id": "n4", "title": "入山登記(乙協會)", "text": "另一登山協會規定，入山前須先完成登記，以便掌握入山人員。" }
+        ],
+        "cap": 3
+      },
+      "expect": { "merges": [["C3", "C4"]], "noLoss": true, "liveAtMost": 3 },
+      "why": "C3 與 C4 同義應合併；C1 與 C2 句子相近但一為夏季開放、一為冬季暫停，期間與結論皆不同，不可併為一條；D1 兩方談不同季節，並不對立，但拆解不在本應然內——若一併拆解，會新增兩條有效主張而逾上限；只併 C3／C4 即達上限 3"
+    },
+    {
+      "id": "s09",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "真人導覽之互動性佳", "conditions": ["某博物館之觀察"], "critique": "僅單一館之觀察", "pros": ["互動性佳"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "真人導覽互動性較佳", "conditions": ["另一博物館之觀察"], "critique": "僅單一館之觀察", "pros": ["互動性佳"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "語音導覽可自行調整參觀節奏", "conditions": ["第三間博物館之觀察"], "critique": "僅單一館之觀察", "pros": ["可自行調整節奏"], "cons": ["出處未載"], "sources": ["n3"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "導覽以真人或語音為宜？", "sides": [{ "position": "真人導覽互動性佳", "sources": ["n1"] }, { "position": "語音導覽可自行調整節奏", "sources": ["n3"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "真人導覽(甲館)", "text": "某博物館以真人導覽為主，參觀者反映互動性佳。" },
+          { "id": "n2", "title": "真人導覽(乙館)", "text": "另一博物館之真人導覽，互動性較佳。" },
+          { "id": "n3", "title": "語音導覽", "text": "第三間博物館採語音導覽，參觀者可自行調整參觀節奏。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同義應合併；D1 兩方談不同面向（互動性與節奏），並不對立，但拆解不在本應然內——若一併拆解，須各方給種類與完整標注，且拆出之新主張會使有效主張增加；C3 為不同之主張，不可併入"
+    },
+    {
+      "id": "s10",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "幼犬每日分次餵食較不易腹瀉", "conditions": ["某動物醫院之建議"], "critique": "僅單一醫院之建議", "pros": ["不易腹瀉"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "幼犬分次餵食較一次餵食不易腹瀉", "conditions": ["另一診所之建議"], "critique": "僅單一診所之建議", "pros": ["不易腹瀉"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "成犬之餵食次數無特別建議", "conditions": ["某動物醫院之建議"], "critique": "僅單一醫院之建議", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }
+          ],
+          "parameters": [
+            { "id": "P1", "name": "幼犬每日餵食方式", "value": "分次餵食", "conditions": "某動物醫院之建議", "claim": "C1", "sources": ["n1"] },
+            { "id": "P2", "name": "幼犬每日餵食方式", "value": "分次餵食", "conditions": "另一診所之建議", "claim": "C2", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "餵食建議(醫院)", "text": "某動物醫院建議，幼犬每日分次餵食，較不易腹瀉；成犬之餵食次數則無特別建議。" },
+          { "id": "n2", "title": "餵食建議(診所)", "text": "另一家動物診所建議，幼犬分次餵食較一次餵食不易腹瀉。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"], ["P1", "P2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同義應合併；P1 與 P2 同名同值（分次餵食）之參數亦應合併，合併後參數所依之主張須指向存活者；C3 為不同之主張，不可併入"
+    },
+    {
+      "id": "s11",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "寶特瓶須倒空後投入回收", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["便於後續處理"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "寶特瓶須先倒空再投入回收", "conditions": ["另一社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["便於後續處理"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "瓶蓋須另外投放", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }
+          ],
+          "questions": [
+            { "id": "Q1", "text": "瓶身標籤是否須撕除？", "sources": ["n1"] },
+            { "id": "Q2", "text": "瓶身之標籤須不須撕除？", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "寶特瓶回收(甲社區)", "text": "某社區回收站規定寶特瓶須倒空後投入，瓶蓋須另外投放；瓶身標籤是否須撕除，規定中未說明。" },
+          { "id": "n2", "title": "寶特瓶回收(乙社區)", "text": "另一社區回收站規定寶特瓶須先倒空再投入；瓶身之標籤須不須撕除，公告未載明。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"], ["Q1", "Q2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同義應合併；Q1 與 Q2 同問瓶身標籤是否須撕除，待解問題亦應合併；C3 為不同之主張，不可併入"
+    },
+    {
+      "id": "s12",
+      "holdout": false,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "每日分段練習較易進步", "conditions": ["某音樂教室之觀察"], "critique": "僅單一教室之觀察", "pros": ["較易進步"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "分段練習每日進行較易進步", "conditions": ["另一音樂教室之觀察"], "critique": "僅單一教室之觀察", "pros": ["較易進步"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "一次長時間練習較易進步", "conditions": ["第三間音樂教室之觀察"], "critique": "僅單一教室之觀察", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "分段練習與一次長時間練習何者較易進步？", "sides": [{ "position": "每日分段練習較易進步", "claims": ["C1"], "sources": ["n1"] }, { "position": "一次長時間練習較易進步", "claims": ["C3"], "sources": ["n3"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "分段練習(甲教室)", "text": "某音樂教室觀察到，每日分段練習較易進步。" },
+          { "id": "n2", "title": "分段練習(乙教室)", "text": "另一音樂教室觀察到，分段練習每日進行較易進步。" },
+          { "id": "n3", "title": "集中練習", "text": "第三間音樂教室觀察到，一次長時間練習較易進步。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同義應合併（合併後爭議 D1 之一方改指存活者）；C3 與 C1 為爭議 D1 之兩方、結論相反，不可併為一條；只併 C1／C2 即達上限 2"
+    },
+    {
+      "id": "sh1",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "戶外活動前先補充水分", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["避免脫水"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "戶外活動前須先補充水分", "conditions": ["另一幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["避免脫水"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "活動後洗手再進教室", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["維持教室清潔"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C4", "kind": "rule", "text": "活動後須先洗手才能用餐", "conditions": ["第三間幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["維持衛生"], "cons": ["出處未載"], "sources": ["n3"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "戶外活動規定(甲園)", "text": "某幼兒園規定戶外活動前先補充水分；活動後洗手再進教室。" },
+          { "id": "n2", "title": "戶外活動規定(乙園)", "text": "另一幼兒園規定戶外活動前須先補充水分。" },
+          { "id": "n3", "title": "用餐規定(丙園)", "text": "第三間幼兒園規定活動後須先洗手才能用餐。" }
+        ],
+        "cap": 3
+      },
+      "expect": { "merges": [["C1", "C2"]], "liveAtMost": 3 },
+      "why": "C1 與 C2 同義應合併；C3（洗手後進教室）與 C4（洗手後用餐）句型相近但規定之事不同，不可併為一條；只併 C1／C2 即達上限 3"
+    },
+    {
+      "id": "sh2",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "pitfall", "text": "池水濁度偏高時須暫停開放", "conditions": ["濁度偏高時"], "critique": "僅單一泳池之作法", "sources": ["n1"] },
+            { "id": "C2", "kind": "pitfall", "text": "濁度偏高時，池水須暫停開放", "conditions": ["濁度偏高時"], "critique": "僅另一泳池之作法", "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "游泳池開放前須檢測水質", "conditions": ["某游泳池之作法"], "critique": "僅單一泳池之作法", "pros": ["及早發現水質變化"], "cons": ["出處未載"], "sources": ["n1"] }
+          ],
+          "parameters": [
+            { "id": "P1", "name": "水質檢測時機", "value": "每日開放前", "conditions": "某游泳池之作法", "claim": "C3", "sources": ["n1"] },
+            { "id": "P2", "name": "水質檢測時機", "value": "每日開放前", "conditions": "另一游泳池之作法", "claim": "C3", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "泳池水質(甲池)", "text": "某游泳池每日開放前檢測水質；池水濁度偏高時須暫停開放。" },
+          { "id": "n2", "title": "泳池水質(乙池)", "text": "另一游泳池每日開放前檢測水質；濁度偏高時，池水須暫停開放。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"], ["P1", "P2"]], "noLoss": true, "liveAtMost": 2 },
+      "why": "C1 與 C2 同義應合併；P1 與 P2 同名同值（每日開放前）之參數亦應合併；C3 為不同之主張，不可併入"
+    },
+    {
+      "id": "sh3",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "掛號郵件須由收件人簽收", "conditions": ["某郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["確保送達本人"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "掛號郵件須由收件人本人簽收", "conditions": ["另一郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["確保送達本人"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "同住成員亦可代收掛號郵件", "conditions": ["某郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C4", "kind": "rule", "text": "掛號郵件不得由他人代收", "conditions": ["另一郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n4"] }
+          ],
+          "disputes": [{ "id": "D1", "question": "掛號郵件可否由同住成員代收？", "sides": [{ "position": "同住成員亦可代收", "claims": ["C3"], "sources": ["n3"] }, { "position": "不得由他人代收", "claims": ["C4"], "sources": ["n4"] }] }]
+        },
+        "sources": [
+          { "id": "n1", "title": "掛號簽收(甲局)", "text": "某郵局表示，掛號郵件須由收件人簽收。" },
+          { "id": "n2", "title": "掛號簽收(乙局)", "text": "另一郵局表示，掛號郵件須由收件人本人簽收。" },
+          { "id": "n3", "title": "同住成員代收", "text": "某郵局表示，同住成員亦可代收掛號郵件。" },
+          { "id": "n4", "title": "不得代收", "text": "另一郵局表示，掛號郵件不得由他人代收。" }
+        ],
+        "cap": 3
+      },
+      "expect": { "merges": [["C1", "C2"]], "noLoss": true, "liveAtMost": 3 },
+      "why": "C1 與 C2 同義應合併；C3 與 C4 為爭議 D1 之兩方、結論相反，不可併為一條；只併 C1／C2 即達上限 3"
+    },
+    {
+      "id": "sh4",
+      "holdout": true,
+      "input": {
+        "state": {
+          "claims": [
+            { "id": "C1", "kind": "rule", "text": "候車時須站在黃線後方", "conditions": ["某車站之提醒"], "critique": "僅單一車站之提醒", "pros": ["保持安全距離"], "cons": ["出處未載"], "sources": ["n1"] },
+            { "id": "C2", "kind": "rule", "text": "旅客候車須站在黃線後方", "conditions": ["另一車站之提醒"], "critique": "僅單一車站之提醒", "pros": ["保持安全距離"], "cons": ["出處未載"], "sources": ["n2"] },
+            { "id": "C3", "kind": "rule", "text": "站在黃線後方候車", "conditions": ["第三個車站之提醒"], "critique": "僅單一車站之提醒", "pros": ["保持安全距離"], "cons": ["出處未載"], "sources": ["n3"] },
+            { "id": "C4", "kind": "pitfall", "text": "列車進站時靠近月台邊緣有危險", "conditions": ["列車進站時"], "critique": "僅單一車站之提醒", "sources": ["n1"] }
+          ],
+          "questions": [
+            { "id": "Q1", "text": "黃線後方之距離應如何規定？", "sources": ["n1"] },
+            { "id": "Q2", "text": "黃線後方之距離應當如何規定？", "sources": ["n2"] }
+          ]
+        },
+        "sources": [
+          { "id": "n1", "title": "候車安全(甲站)", "text": "某車站提醒旅客候車時須站在黃線後方；列車進站時勿靠近月台邊緣；黃線後方之距離未見規定。" },
+          { "id": "n2", "title": "候車安全(乙站)", "text": "另一車站提醒旅客候車須站在黃線後方；黃線後方之距離，公告中未載明。" },
+          { "id": "n3", "title": "候車安全(丙站)", "text": "第三個車站提醒旅客站在黃線後方候車。" }
+        ],
+        "cap": 2
+      },
+      "expect": { "merges": [["C1", "C2"], ["C1", "C3"], ["Q1", "Q2"]], "noLoss": true },
+      "why": "C1、C2、C3 三條同指候車須站在黃線後方，須併為一條；Q1 與 Q2 同問黃線後方距離之規定，待解問題亦應合併；C4 為不同之陷阱，不可併入"
+    }
+  ]
+}

@@ -1,15 +1,15 @@
-// unit-core-state.test.mjs — 主張庫之差量套用(applyDelta)、審查裁決、涵蓋落帳、不變式、證據等級(純函數)
+// unit-core-state.test.mjs — 主張庫之差量套用(applyDelta)、終審裁決、涵蓋落帳、不變式、狀態正規化、證據等級(純函數)
 //
-// 規格來源:tmp/wke-distill-b-全盤.md §3.2(操作 × 合規條件)與 §11.1 A4～A9、A25(2026-09-29 雙審定案);
-//   安裝方〈建議w-knowledge-extract優化〉§2.1、§2.4、§3 驗收 1～6。每條斷言對應之規格句見其訊息字串。
+// 規格來源:extract/stores/coreState.mjs 檔頭【操作語意】①～⑬與各函數之 JSDoc。每條斷言對應之規格句見其訊息字串。
 // 執行:npx mocha test/unit-core-state.test.mjs(純函數,不落檔、不開埠)
 
 import assert from 'node:assert/strict'
-import {
-    emptyState, upgradeState, findItem, applyDelta, applyVerdicts, coverageOf, commitBatch, checkInvariants, stateDigest,
-    queuePendingReview, pendingReviewOps, STATE_VERSION, RETRACT_REASONS, DISPUTE_DROP_REASONS, DROP_REASONS, NEW_ITEM_DROP_REASONS, FIXABLE_FIELDS
-} from '../src/stores/coreState.mjs'
+import { emptyState, normalizeState, findItem, checkInvariants, STATE_VERSION, CORRUPT_STATE_CODE, RETRACT_REASONS, PROGRAM_RETRACT_REASONS, reviveItems, holdItems, releaseHeld, unsupportedOf, withdrawSources, setExcluded, excludedSourcesOf, supportingSourcesOf, citedNotesOf } from '../src/stores/coreState.mjs'
+import { applyDelta, coverageOf, commitBatch, queuePendingReview } from '../src/stores/coreDelta.mjs'
+import { applyVerdicts, pendingReviewOps, DISPUTE_DROP_REASONS, DOUBT_REASONS, DROP_REASONS, NEW_ITEM_DROP_REASONS, FIXABLE_FIELDS } from '../src/workflow/verdicts.mjs'
+import { stateDigest } from '../src/stores/stateDigest.mjs'
 import { makeEvidence, UNASSESSED } from '../src/stores/evidence.mjs'
+import { seedCore } from './tools/extractKit.mjs'
 
 const B = (...ids) => ids.map((id, k) => ({ code: `N${k + 1}`, id }))
 const BATCH = B('n1', 'n2', 'n3', 'n4')
@@ -17,17 +17,15 @@ const run = (state, ops, extra = {}) => applyDelta(state, { ops }, { batch: BATC
 const reasons = (r) => r.rejected.map((x) => x.reason)
 const claim = (s, id) => findItem(s, id)?.item
 
-/** 以一組操作建立起點狀態(並落帳,使 consumed 涵蓋出處) */
+/** 以一組操作建立起點狀態(並落帳,使 consumed 涵蓋出處;造法取共用件 seedCore,test/tools/extractKit) */
 function seed() {
-    const s0 = emptyState({ concept: '均值回歸' })
-    const r = run(s0, [
+    return seedCore({ concept: '均值回歸', ops: [
         { op: 'add', ref: 'a', kind: 'principle', text: '價格偏離均值後傾向回歸', sources: ['N1'] },
         { op: 'add', ref: 'b', kind: 'pitfall', text: '強趨勢下回歸失效', conditions: ['強趨勢'], sources: ['N2'] },
         { op: 'add', ref: 'c', kind: 'rule', text: '偏離兩個標準差以上才進場', sources: ['N3'] },
         { op: 'param_add', ref: 'p', name: '半衰期', value: '5–20 日', claim: '@a', sources: ['N1'] },
         { op: 'question_add', ref: 'q', text: '回歸速度是否隨市況而變', sources: [] },
-    ])
-    return commitBatch(r.state, coverageOf({ batch: BATCH, applied: r.applied }))
+    ], batch: BATCH, at: 'T' })
 }
 
 describe('unit-core-state', function() {
@@ -48,28 +46,29 @@ describe('unit-core-state', function() {
             assert.equal(r.state.changelog.length, 1)
         })
 
-        it('文字中殘留之本批代號換成筆記連結(代號只在本批有效;真實模型驗收實測「N4 指出」);非本批代號與夾在英數中者不動;待審操作亦同', () => {
+        it('殘留之本批代號:理由類欄位(statusNote、沿革說明、待審之 reason)換成筆記連結(代號只在本批有效;非本批代號與夾在英數中者不動);內容欄位不換(ES17:由納入閘交修訂、定稿仍殘留即不採——2026-10-04 起移除內容欄之自動轉連結)', () => {
             const s = seed()
             const r = run(s, [
                 { op: 'add', ref: 'x', kind: 'rule', text: '依 N4 之實驗，偏離大時先減碼', conditions: ['N4、N2 皆見'], sources: ['N4'] },
                 { op: 'dispute_add', question: '回歸是否在強趨勢下成立', note: 'N2 與 N4 結論相反；N9 非本批；RN4 不動', sides: [{ position: '成立（N4）', claims: ['@x'], sources: ['N4'] }, { position: '不成立', claims: ['C2'] }] },
                 { op: 'essence', text: '回歸多數時成立（N4），強趨勢下失效', claims: ['C1', '@x'], reason: '依 N4 補充' },
                 { op: 'supersede', id: 'C3', by: '@x', reason: 'N4 之新證據', validPeriod: 'N4 以前之研究', sources: ['N4'] },
+                { op: 'retract', id: 'C2', reason: '無出處支持', note: '經 N2 重讀後不成立' },
             ], { withhold: ['supersede'] })
             assert.equal(reasons(r).length, 0, reasons(r).join('；'))
             const c = r.state.claims.find((x) => x.text.startsWith('依'))
-            assert.equal(c.text, '依 [[n4]] 之實驗，偏離大時先減碼')
-            assert.deepEqual(c.conditions, ['[[n4]]、[[n2]] 皆見'])
+            assert.deepEqual([c.text, c.conditions], ['依 N4 之實驗，偏離大時先減碼', ['N4、N2 皆見']], '內容欄不換')
             const d = r.state.disputes[0]
-            assert.equal(d.note, '[[n2]] 與 [[n4]] 結論相反；N9 非本批；RN4 不動')
-            assert.equal(d.sides[0].position, '成立（[[n4]]）')
-            assert.equal(r.state.essence.text, '回歸多數時成立（[[n4]]），強趨勢下失效')
-            assert.deepEqual([r.withheld[0].resolved.reason, r.withheld[0].resolved.validPeriod], ['[[n4]] 之新證據', '[[n4]] 以前之研究'])
+            assert.deepEqual([d.note, d.sides[0].position, r.state.essence.text], ['N2 與 N4 結論相反；N9 非本批；RN4 不動', '成立（N4）', '回歸多數時成立（N4），強趨勢下失效'])
+            const c2 = claim(r.state, 'C2')
+            assert.equal(c2.statusNote, '經 [[n2]] 重讀後不成立', '理由類欄位換成連結')
+            assert.match(c2.history[c2.history.length - 1].note, /經 \[\[n2\]\] 重讀後不成立/)
+            assert.deepEqual([r.withheld[0].resolved.reason, r.withheld[0].resolved.validPeriod], ['[[n4]] 之新證據', 'N4 以前之研究'], '待審:理由換、內容欄不換')
             const after = commitBatch(r.state, coverageOf({ batch: BATCH, applied: r.applied, queued: r.withheld.filter((w) => w.resolved) }))
             assert.deepEqual(checkInvariants(s, after, { touched: r.touched }), [])
         })
 
-        it('文字中之〔@ref〕(1.0.5 真實模型驗收實測本質文字寫「〔@a〕」):落盤前換成實際 id;ref 未定義 → 拒收(文字引用懸空);所指新項不成立(同差量稍後失敗、或已被審查剔除)→ 去掉標記、不連帶拒收(2026-10-01 對稱化),不留短命識別碼', () => {
+        it('文字中之〔@ref〕(如本質文字寫「〔@a〕」):落盤前換成實際 id;ref 未定義 → 拒收(文字引用懸空);所指新項不成立(同差量稍後失敗、或已被終審剔除)→ 去掉標記、不連帶拒收(兩種不成立同一處置),不留短命識別碼', () => {
             const s = seed()
             const r = run(s, [
                 { op: 'add', ref: 'x', kind: 'rule', text: '偏離大時先減碼（承〔@y〕）', sources: ['N4'] },
@@ -88,7 +87,7 @@ describe('unit-core-state', function() {
             assert.equal(r.state.essence.text, `回歸多數時成立〔${y.id}〕，強趨勢下失效〔C2〕`)
             assert.equal(r.state.claims.find((c) => c.text.startsWith('承')).text, '承之說', '所指新項稍後失敗 → 去掉標記')
             assert.ok(!JSON.stringify(r.state).includes('〔@'), '狀態內不留〔@ref〕')
-            // 被審查剔除之新項:文字中之提及不是結構引用 → 去掉標記、本操作照套(1.0.5 曾拒收,同一情形依先後兩種結果、且內容連帶遺失)
+            // 被終審剔除之新項:文字中之提及不是結構引用 → 去掉標記、本操作照套(與「同差量稍後失敗」同一結果,內容不連帶遺失)
             const v = applyVerdicts({ ops: [{ op: 'add', ref: 'a', kind: 'rule', text: '甲', sources: ['N1'] }, { op: 'add', kind: 'rule', text: '承〔@a〕之說', sources: ['N2'] }] }, [{ i: 0, action: 'drop', reason: '離題' }, { i: 1, action: 'keep' }])
             assert.deepEqual(v.conflicts, [], '文字提及不列依賴衝突(不連帶拒收)')
             const r2 = applyDelta(s, v.delta, { batch: BATCH, at: 'T', droppedRefs: v.droppedRefs })
@@ -96,7 +95,7 @@ describe('unit-core-state', function() {
             assert.deepEqual(checkInvariants(s, commitBatch(r.state, coverageOf({ batch: BATCH, applied: r.applied })), { touched: r.touched }), [])
         })
 
-        it('操作之目標 id 可為同一差量新項之 @ref(把本批新主張 contest 進既有爭議;真實模型驗收實測被誤拒);所依新項被拒 → 拒收理由寫明根因(1.0.5)', () => {
+        it('操作之目標 id 可為同一差量新項之 @ref(如把本批新主張 contest 進既有爭議);所依新項被拒 → 拒收理由寫明根因', () => {
             let s = seed()
             s = run(s, [{ op: 'dispute_add', question: '回歸是否普遍成立', sides: [{ position: '是', claims: ['C1'] }, { position: '否', claims: ['C2'] }], sources: ['N1'] }]).state
             const r = run(s, [
@@ -139,7 +138,10 @@ describe('unit-core-state', function() {
             const bad = run(s, [{ op: 'essence', text: '本'.repeat(221), claims: ['C1'], reason: 'r' }])
             assert.deepEqual(reasons(bad), ['essence 過長（221 字，上限 220）'])
             assert.equal(bad.state.essence.text, '', '本質未被改寫')
-            const m = applyDelta(s, { ops: [{ op: 'merge', into: 'C1', from: ['C3'], reason: '同一主張', text: '併'.repeat(100) }] }, { mode: 'consolidate', at: 'T' })
+            // 合併稿須保有 into 與被併項之過半內容(coreState 檔頭⑪);此處另以補述把長度推過上限 90 以測超長計數
+            const long = `價格偏離均值後傾向回歸；偏離兩個標準差以上才進場${'（補述）'.repeat(18)}`
+            assert.ok(long.length > 90 && long.length <= 180)
+            const m = applyDelta(s, { ops: [{ op: 'merge', into: 'C1', from: ['C3'], reason: '同一主張', text: long }] }, { mode: 'consolidate', at: 'T' })
             assert.deepEqual([reasons(m), m.overLimit, m.lengthChecked], [[], 1, 1])
         })
     })
@@ -177,6 +179,17 @@ describe('unit-core-state', function() {
             assert.deepEqual(reasons(r4), ['必要欄位不可改為空', '種類「bogus」不在許可清單'])
         })
 
+        it('revise 只驗被改之欄位(⑩):未改之欄位即使逾本次上限 2 倍亦不重驗;被改之欄位照驗長度與文字引用', () => {
+            const r0 = run(emptyState(), [{ op: 'add', kind: 'rule', text: '甲規則', conditions: ['條'.repeat(100)], sources: ['N1'] }])
+            assert.deepEqual([reasons(r0), r0.overLimit], [[], 1], 'conditions 100 字:逾上限 60、未逾 2 倍 → 放行並計數')
+            const s = commitBatch(r0.state, coverageOf({ batch: BATCH, applied: r0.applied }))
+            const strict = { limits: { conditions: 40 } }
+            const ok = run(s, [{ op: 'revise', id: 'C1', fields: { text: '甲規則（修）' }, reason: 'r', sources: ['N2'] }], strict)
+            assert.deepEqual([reasons(ok), claim(ok.state, 'C1').text], [[], '甲規則（修）'], '未改之 conditions(100 字＞40×2)不重驗')
+            assert.deepEqual(reasons(run(s, [{ op: 'revise', id: 'C1', fields: { conditions: ['條'.repeat(100)] }, reason: 'r', sources: ['N2'] }], strict)), ['conditions 過長（100 字，上限 40）'])
+            assert.deepEqual(reasons(run(s, [{ op: 'revise', id: 'C1', fields: { text: '見〔C9〕' }, reason: 'r', sources: ['N2'] }])), ['文字引用懸空：〔C9〕'])
+        })
+
         it('supersede:須理由與成立期間(可為「不詳」或相對期間);by 須存在且非自身;主張與參數皆可;終態不可再操作', () => {
             const s = seed()
             const r = run(s, [
@@ -192,7 +205,7 @@ describe('unit-core-state', function() {
             assert.deepEqual(reasons(r2), ['目標 C2 已取代', '取代者不可為自身'])
         })
 
-        it('引用不成立之拒收理由寫根因(1.0.5;真實模型驗收實測本質引爭議之 @ref 被報「不存在或為終態」):ref 未定義、不存在、種類不符、終態各自寫明', () => {
+        it('引用不成立之拒收理由寫根因(如本質引爭議之 @ref 寫明「為爭議，須為主張」):ref 未定義、不存在、種類不符、終態各自寫明,不以「不存在或為終態」概括', () => {
             const s = run(seed(), [{ op: 'retract', id: 'C3', reason: '離題' }]).state
             const r = run(s, [
                 { op: 'dispute_add', ref: 'd', question: 'q', sides: [{ position: '甲', claims: ['C1'], sources: ['N4'] }, { position: '乙', claims: ['C2'] }] },
@@ -213,7 +226,7 @@ describe('unit-core-state', function() {
             ])
             const merge = (into, from) => reasons(applyDelta(s, { ops: [{ op: 'merge', into, from, reason: 'r' }] }, { mode: 'consolidate', at: 'T' }))
             assert.deepEqual([merge('C3', ['C1']), merge('C1', ['P1']), merge('D1x', ['C1'])], [['into C3 已撤回'], ['from P1 為參數，須為主張'], ['into 引用之項目 D1x 不存在']])
-            // 目標欄(2026-10-01 補齊;1.0.5 只改了引用欄,目標欄仍把種類不符報成「不存在」)
+            // 目標欄與引用欄同一規則:種類不符寫明種類,不報成「不存在」
             const one = (op) => reasons(run(s, [op]))
             assert.deepEqual([
                 one({ op: 'confirm', id: 'Q1', sources: ['N4'] }),
@@ -252,6 +265,48 @@ describe('unit-core-state', function() {
             assert.deepEqual(reasons(r2), [`撤回理由須為：${RETRACT_REASONS.join('、')}`])
             assert.equal(r2.state.disputes.length, 1, '撤回不刪除')
         })
+
+        it('本質所引主張之處置(⑭,審查 X1):supersede → 自本質移除並標 stale(不改指 by);retract「重複」→ 改指存活之 into;retract 其他 → 移除並標 stale;merge／split 照改指;不變式皆成立;重寫 essence 即解除 stale', () => {
+            const base = () => {
+                const r = run(seed(), [{ op: 'essence', text: '均值回歸之本質', claims: ['C1', 'C2'], reason: '首版' }])
+                assert.deepEqual(r.rejected, [])
+                return commitBatch(r.state, coverageOf({ batch: BATCH, applied: r.applied }))
+            }
+            // supersede by @x:本質移除 C1、標 stale、不改指新主張
+            const s1 = base()
+            const r1 = run(s1, [
+                { op: 'add', ref: 'x', kind: 'principle', text: '新證據顯示回歸只在低波動期成立', sources: ['N4'] },
+                { op: 'supersede', id: 'C1', by: '@x', reason: '新證據', validPeriod: '較早之研究', sources: ['N4'] },
+            ])
+            assert.deepEqual(reasons(r1), [])
+            assert.deepEqual(r1.state.essence.claims, ['C2'], '被取代者自本質移除、不改指 by')
+            assert.deepEqual([r1.state.essence.stale?.from, r1.state.essence.stale?.version], ['C1', s1.version + 1])
+            assert.deepEqual(checkInvariants(s1, commitBatch(r1.state, coverageOf({ batch: BATCH, applied: r1.applied })), { touched: r1.touched }), [])
+            assert.match(stateDigest(r1.state), /本質待重寫/, '摘要明示待重寫')
+            // retract 重複 into C2:改指 C2(已引者去重);不標 stale
+            const s2 = base()
+            const r2 = run(s2, [{ op: 'retract', id: 'C1', reason: '重複', into: 'C2' }])
+            assert.deepEqual(reasons(r2), [])
+            assert.deepEqual(r2.state.essence.claims, ['C2'])
+            assert.equal(r2.state.essence.stale, null)
+            assert.deepEqual(checkInvariants(s2, commitBatch(r2.state, coverageOf({ batch: BATCH, applied: r2.applied })), { touched: r2.touched }), [])
+            // retract 離題:移除並標 stale;本質可引空集合(不變式不要求非空)
+            const s3 = base()
+            const r3 = run(s3, [{ op: 'retract', id: 'C1', reason: '離題' }, { op: 'retract', id: 'C2', reason: '離題' }])
+            assert.deepEqual(reasons(r3), [])
+            assert.deepEqual(r3.state.essence.claims, [])
+            assert.equal(r3.state.essence.stale?.from, 'C2')
+            assert.deepEqual(checkInvariants(s3, commitBatch(r3.state, coverageOf({ batch: BATCH, applied: r3.applied })), { touched: r3.touched }), [])
+            // 重寫 essence → stale 解除
+            const r4 = run(r1.state, [{ op: 'essence', text: '重寫後之本質', claims: ['C2', 'C4'], reason: '重寫' }])
+            assert.deepEqual(reasons(r4), [])
+            assert.equal(r4.state.essence.stale, null)
+            // 對照:supersede 之 by 為終態亦不會改指(一律移除),不變式仍成立
+            const s5 = base()
+            const r5 = run(s5, [{ op: 'supersede', id: 'C1', reason: 'x', validPeriod: '不詳', sources: ['N4'] }])
+            assert.deepEqual(reasons(r5), [])
+            assert.deepEqual(checkInvariants(s5, commitBatch(r5.state, coverageOf({ batch: BATCH, applied: r5.applied })), { touched: r5.touched }), [])
+        })
     })
 
     describe('applyDelta:爭議、參數、問題、本質、相關概念', function() {
@@ -264,10 +319,45 @@ describe('unit-core-state', function() {
                 { op: 'dispute_add', question: 'q3', sides: [{ position: '甲', sources: ['N4'] }, { position: '', sources: ['N3'] }] },
                 { op: 'dispute_add', question: 'q4', sides: [{ position: '甲', sources: ['N4'] }, { position: '乙', claims: ['C3'] }] },
             ])
-            assert.deepEqual(reasons(r), ['少於兩方', '各方出處只有同一篇（同篇正反不成爭議）', '有一方缺立場'])
+            assert.deepEqual(reasons(r), ['少於兩方', 'side 0 與 side 1 之出處只有同一篇（同篇正反不成爭議；引述他人研究之一方請標 basis「轉述」）', '有一方缺立場'])
             const d = r.state.disputes[0]
             assert.deepEqual(d.sides[1].claims, ['C3'])
             assert.equal(claim(r.state, 'C3').status, 'contested')
+        })
+
+        it('同篇規則之例外(⑬):筆記所引述之他人研究與本篇結論相反——該方 basis 含「轉述」即成立爭議(basis 留在該方);ctx.reportedBasis 可換關鍵詞', () => {
+            const s = seed()
+            const same = [{ position: '本篇結論：回歸成立', sources: ['N4'] }, { position: '所引他人研究：回歸不成立', sources: ['N4'] }]
+            assert.match(reasons(run(s, [{ op: 'dispute_add', question: 'q', sides: same }]))[0], /^side 0 與 side 1 之出處只有同一篇/)
+            const r = run(s, [{ op: 'dispute_add', question: 'q', sides: [same[0], { ...same[1], basis: '轉述（引自他人研究）' }] }])
+            assert.deepEqual(reasons(r), [])
+            assert.deepEqual(r.state.disputes[0].sides.map((sd) => [sd.sources, sd.basis]), [[['n4'], undefined], [['n4'], '轉述（引自他人研究）']])
+            assert.deepEqual(reasons(run(s, [{ op: 'dispute_add', question: 'q', sides: [same[0], { ...same[1], basis: '引述' }] }], { reportedBasis: ['引述'] })), [])
+            assert.match(reasons(run(s, [{ op: 'dispute_add', question: 'q', sides: [same[0], { ...same[1], basis: '轉述' }] }], { reportedBasis: ['引述'] }))[0], /^side 0 與 side 1 之出處只有同一篇/, '換關鍵詞後「轉述」不再豁免')
+        })
+
+        it('同篇規則對稱(檢定標準 ES1;B4):補方、三方、併爭議皆不得新增「兩方皆只有同一篇」之對(轉述只豁免其所在之對);既有之對不擋;各 ≥2 篇而集合相同者不在此列;contest 只使篇集變大', () => {
+            const s = seed()
+            const base = run(s, [{ op: 'dispute_add', ref: 'd', question: '回歸速度', sides: [{ position: '快', sources: ['N1'] }, { position: '慢', sources: ['N2'] }] }])
+            assert.deepEqual(reasons(base), [])
+            const s1 = base.state
+            // 補方(sides_add)與既有 side 0 同為 n1 之單篇 → 拒收;補方為轉述 → 成立
+            assert.deepEqual(reasons(run(s1, [{ op: 'dispute_update', id: 'D1', note: '補一方', sides_add: [{ position: '視市況', sources: ['N1'] }] }])), ['side 0 與 side 2 之出處只有同一篇（同篇正反不成爭議；引述他人研究之一方請標 basis「轉述」）'])
+            assert.deepEqual(reasons(run(s1, [{ op: 'dispute_update', id: 'D1', note: '補一方', sides_add: [{ position: '視市況', sources: ['N1'], basis: '轉述' }] }])), [])
+            assert.deepEqual(reasons(run(s1, [{ op: 'dispute_update', id: 'D1', note: '補一方', sides_add: [{ position: '視市況', sources: ['N3'] }] }])), [])
+            // 三方皆 n4、一方轉述:另兩方仍為同一研究之正反(舊判準「任一方轉述即整體豁免」放過此例)
+            const three = [{ position: '甲', sources: ['N4'] }, { position: '乙', sources: ['N4'], basis: '轉述' }, { position: '丙', sources: ['N4'] }]
+            assert.match(reasons(run(s, [{ op: 'dispute_add', question: 'q', sides: three }]))[0], /^side 0 與 side 2 之出處只有同一篇/)
+            // 篇集經所引主張而來:C1(n1)與 n1 之方 → 同篇
+            assert.match(reasons(run(s, [{ op: 'dispute_add', question: 'q', sides: [{ position: '甲', claims: ['C1'] }, { position: '乙', sources: ['N1'] }] }]))[0], /^side 0 與 side 1/)
+            // 兩方篇集相同而各 2 篇(辯論型報導)→ 不在此列
+            assert.deepEqual(reasons(run(s, [{ op: 'dispute_add', question: 'q', sides: [{ position: '甲', sources: ['N1', 'N2'] }, { position: '乙', sources: ['N1', 'N2'] }] }])), [])
+            // 併爭議:併後新增同篇成對 → 拒收;不新增者照併
+            const two = run(s1, [{ op: 'dispute_add', ref: 'e', question: '回歸速度（他篇）', sides: [{ position: '很快', sources: ['N1'], basis: '轉述' }, { position: '不一定', sources: ['N3'] }] }, { op: 'dispute_add', ref: 'f', question: '回歸速度（第三）', sides: [{ position: '很慢', sources: ['N2'], basis: '轉述' }, { position: '看標的', sources: ['N1'] }] }]).state
+            assert.match(reasons(run(two, [{ op: 'merge', into: 'D1', from: ['D3'], reason: '同一問題' }], { mode: 'consolidate' }))[0], /^併後side 0 與 side 3 之出處只有同一篇/)
+            assert.deepEqual(reasons(run(two, [{ op: 'merge', into: 'D1', from: ['D2'], reason: '同一問題' }], { mode: 'consolidate' })), [])
+            // contest 把同篇主張列入一方:該方篇集變大(n2 → n1、n2),不新增同篇成對
+            assert.deepEqual(reasons(run(s1, [{ op: 'contest', id: 'C1', dispute: 'D1', side: 1, reason: '另見', sources: ['N1'] }])), [])
         })
 
         it('contest 須連爭議並指明一方;dispute_update 可解決爭議(所引主張回 active)、可加一方', () => {
@@ -318,6 +408,11 @@ describe('unit-core-state', function() {
             assert.deepEqual(r2.state.essence.sources, ['n1', 'n4'], '同一差量之確認亦反映於本質出處')
             const r3 = run(s, [{ op: 'essence', text: '無依據', claims: [], reason: 'x' }])
             assert.deepEqual(reasons(r3), ['essence 須引至少一條主張（claims）'])
+            // reason 只在改寫時入沿革:首次歸納缺 reason 照收(2026-10-04 收尾 B2:整合員漏 reason 致新核心無本質);改寫缺 reason 仍拒;缺 text 一律拒
+            const r4 = run(s, [{ op: 'essence', text: '首次歸納不附理由', claims: ['C1'] }])
+            assert.deepEqual([reasons(r4), r4.state.essence.text], [[], '首次歸納不附理由'])
+            assert.deepEqual(reasons(run(r4.state, [{ op: 'essence', text: '改寫但不附理由', claims: ['C1'] }])), ['缺 reason（改寫本質須說明理由）'])
+            assert.deepEqual(reasons(run(s, [{ op: 'essence', text: '', claims: ['C1'], reason: 'x' }])), ['缺 text'])
         })
 
         it('related_add 正規化去重、去自身;related_prune 限整併', () => {
@@ -330,15 +425,15 @@ describe('unit-core-state', function() {
         })
     })
 
-    describe('拆解硬配之爭議(dispute_dissolve;有建立無解除之缺陷,2026-09-29)', function() {
+    describe('拆解硬配之爭議(dispute_dissolve;爭議可立亦可拆)', function() {
 
         /** 起點:爭議 D1 一方引主張 C3、一方只有立場文字(出處 n4) */
         const withDispute = () => commitBatch(run(seed(), [{ op: 'dispute_add', question: '回歸何時成立', sides: [{ position: '偏離大時成立', claims: ['C3'] }, { position: '低流動性時才成立', conditions: ['小型股'], sources: ['N4'] }] }]).state, { used: ['n4'] })
 
-        it('拆解:爭議轉終態(理由「非對立」)、只有立場之方轉為主張(出處與條件沿用、種類預設取許可清單第一項)、引主張之方回 active;不變式成立', () => {
+        it('拆解:爭議轉終態(理由「非對立」)、只有立場之方轉為主張(出處與條件沿用、種類取 kinds[k])、引主張之方回 active;不變式成立', () => {
             const s = withDispute()
             assert.equal(claim(s, 'C3').status, 'contested')
-            const r = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: '兩方回答的是不同條件下之成立與否' }])
+            const r = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: '兩方回答的是不同條件下之成立與否', kinds: [null, 'principle'] }])
             assert.deepEqual(reasons(r), [])
             const d = findItem(r.state, 'D1').item
             assert.deepEqual([d.status, d.retractReason, d.statusNote], ['retracted', '非對立', '兩方回答的是不同條件下之成立與否'])
@@ -347,11 +442,19 @@ describe('unit-core-state', function() {
             assert.deepEqual(d.sides.map((sd) => sd.claims), [['C3'], ['C4']], '各方可追溯至主張')
             assert.equal(claim(r.state, 'C3').status, 'active', '對立標籤拿掉')
             assert.deepEqual(checkInvariants(s, r.state, { touched: r.touched }), [])
-            // kinds 依方序;不在許可清單者取第一項
+            // kinds 依方序;轉為主張之方之種類須在清單(自訂種類亦然)——缺或不在清單即整條拒收(與 ES14 之組裝同一判定),爭議不動
             assert.equal(claim(run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: ['rule', 'pitfall'] }]).state, 'C4').kind, 'pitfall')
-            assert.equal(claim(run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: ['x', 'nope'] }]).state, 'C4').kind, 'principle')
-            assert.equal(claim(run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r' }], { claimKinds: ['觀察', '規則'] }).state, 'C4').kind, '觀察', '自訂種類取其第一項')
-            assert.equal(findItem(run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r' }]).state, 'C4').item.history[0].note, '拆自 D1 side 1', '沿革以 side k 標示')
+            for (const kinds of [['x', 'nope'], undefined, [null]]) {
+                const bad = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', ...(kinds ? { kinds } : {}) }])
+                assert.deepEqual([reasons(bad).length, findItem(bad.state, 'D1').item.status], [1, 'open'], JSON.stringify(kinds))
+                assert.match(reasons(bad)[0], /^side 1 之種類「.+」不在主張種類（principle、rule、pitfall、temporal）$/)
+            }
+            assert.equal(claim(run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: [null, '規則'] }], { claimKinds: ['觀察', '規則'] }).state, 'C4').kind, '規則', '自訂種類')
+            assert.deepEqual(reasons(run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: [null, 'rule'] }], { claimKinds: ['觀察', '規則'] })), ['side 1 之種類「rule」不在主張種類（觀察、規則）'])
+            assert.equal(findItem(run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: [null, 'principle'] }]).state, 'C4').item.history[0].note, '拆自 D1 side 1', '沿革以 side k 標示')
+            // 錯種類之拆解被拒,同一差量之他操作照套
+            const mix = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: [null, 'x'] }, { op: 'add', kind: 'rule', text: '他操作照套之新主張', sources: ['N1'] }])
+            assert.deepEqual([mix.applied.map((a) => a.op), reasons(mix).length], [['add'], 1])
         })
 
         it('拆解不遺失「方層出處」(confirm side 所加、不在所引主張出處內者):只引一條有效主張 → 併入該主張;引多條 → 以該方立場另立一條主張', () => {
@@ -359,7 +462,7 @@ describe('unit-core-state', function() {
             // side 0(引 C3)另有方層出處 n1
             const s = commitBatch(run(s0, [{ op: 'confirm', id: 'D1', side: 0, sources: ['N1'] }]).state, { used: ['n1'] })
             assert.deepEqual(findItem(s, 'D1').item.sides[0].sources, ['n1'])
-            const r = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: '兩方回答不同問題' }])
+            const r = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: '兩方回答不同問題', kinds: [null, 'principle'] }])
             assert.deepEqual(reasons(r), [])
             assert.deepEqual(claim(r.state, 'C3').sources, ['n3', 'n1'], '併入唯一所引之主張')
             assert.match(claim(r.state, 'C3').history.at(-1).note, /併入 D1 side 0 之方層出處/)
@@ -373,23 +476,25 @@ describe('unit-core-state', function() {
             assert.deepEqual(checkInvariants(t0, r2.state, { touched: r2.touched }), [])
         })
 
-        it('拆解之拒收:缺理由、目標非爭議、已撤回;為不可逆操作(審查失敗時暫緩);與確認同一爭議並存皆拒;整併模式可用', () => {
+        it('拆解之拒收:缺理由、目標非爭議、已撤回;為不可逆操作(終審失敗時暫緩);與確認同一爭議並存皆拒;整併模式可用', () => {
             const s = withDispute()
             assert.deepEqual(reasons(run(s, [{ op: 'dispute_dissolve', id: 'D1' }])), ['缺 reason（兩方為何不是對立）'])
             assert.deepEqual(reasons(run(s, [{ op: 'dispute_dissolve', id: 'C3', reason: 'r' }])), ['目標 C3 為主張，須為爭議'])
             assert.deepEqual(reasons(run(s, [{ op: 'dispute_dissolve', id: 'D7', reason: 'r' }])), ['目標爭議 D7 不存在'])
-            const once = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r' }]).state
-            assert.deepEqual(reasons(run(once, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r' }])), ['爭議 D1 已撤回'])
+            const once = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: [null, 'principle'] }]).state
+            assert.deepEqual(reasons(run(once, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r', kinds: [null, 'principle'] }])), ['爭議 D1 已撤回'])
             const w = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r' }], { withhold: ['dispute_dissolve'] })
             assert.deepEqual([w.withheld.length, findItem(w.state, 'D1').item.status], [1, 'open'], '暫緩:爭議不動')
             const both = run(s, [{ op: 'dispute_dissolve', id: 'D1', reason: 'r' }, { op: 'confirm', id: 'D1', sources: ['N1'] }])
             assert.equal(both.applied.length, 0, reasons(both).join('；'))
-            const c = applyDelta(s, { ops: [{ op: 'dispute_dissolve', id: 'D1', reason: '整併時發現為硬配' }] }, { mode: 'consolidate', at: 'T' })
+            const c = applyDelta(s, { ops: [{ op: 'dispute_dissolve', id: 'D1', reason: '整併時發現為硬配', kinds: [null, 'principle'] }] }, { mode: 'consolidate', at: 'T' })
             assert.deepEqual([reasons(c), findItem(c.state, 'D1').item.status], [[], 'retracted'])
         })
 
-        it('審查存疑(1.0.5,三獨立審定案 E′):爭議類操作之「非對立」不再剔除——doubt 照套並在爭議記存疑(不改狀態);舊寫法 drop＋非對立視同 doubt;doubt 不適用於非爭議類;拆解可以「對立成立」剔除', () => {
-            assert.deepEqual(DISPUTE_DROP_REASONS, ['離題', '同篇'], '爭議類只收形式理由')
+        it('終審存疑:爭議類操作之「非對立」「同篇」不剔除——doubt 照套並在爭議記存疑(不改狀態);drop＋非對立／同篇視同 doubt(byDrop 標示);doubt 不適用於非爭議類;拆解可以「對立成立」剔除', () => {
+            // 爭議類之剔除只收「離題」(閘門另要求高嚴重度離題意見);同篇與非對立同為存疑(E13:結構上之同篇由 applyDelta 判定)
+            assert.deepEqual(DISPUTE_DROP_REASONS, ['離題'], '爭議類只收形式理由')
+            assert.deepEqual(DOUBT_REASONS, ['非對立', '同篇'])
             const ops = [
                 { op: 'add', ref: 'a', kind: 'rule', text: '新主張', sources: ['N1'] },
                 { op: 'dispute_add', question: 'q', sides: [{ position: '甲方', claims: ['@a'] }, { position: '乙方之立場', conditions: ['c'], sources: ['N2'] }] },
@@ -401,7 +506,10 @@ describe('unit-core-state', function() {
                 { i: 2, action: 'drop', reason: '非對立' },
                 { i: 3, action: 'drop', reason: '對立成立', note: '對立成立' },
             ])
-            assert.deepEqual(v.doubted.map((x) => [x.index, x.reason, x.note, x.legacy]), [[1, '非對立', '兩方回答不同問題', false], [2, '非對立', '', true]])
+            assert.deepEqual(v.doubted.map((x) => [x.index, x.reason, x.note, x.byDrop]), [[1, '非對立', '兩方回答不同問題', false], [2, '非對立', '', true]], 'byDrop:以 drop＋非對立表達者為 true')
+            const vs = applyVerdicts({ ops }, [{ i: 1, action: 'drop', reason: '同篇', note: '兩方皆出自同一研究之利弊' }, { i: 2, action: 'doubt', reason: '同篇' }])
+            assert.deepEqual(vs.doubted.map((x) => [x.index, x.reason, x.byDrop]), [[1, '同篇', true], [2, '同篇', false]], '同篇:drop 或 doubt 皆為存疑')
+            assert.deepEqual(vs.dropped, [])
             assert.deepEqual(v.dropped.map((x) => [x.index, x.reason, x.note]), [[3, '對立成立', '對立成立']])
             assert.deepEqual(v.delta.ops.filter((o) => o._doubt).map((o) => o._i), [1, 2], '存疑者照保留')
             // 套用:爭議照立,存疑記在爭議上(沿革另記);所引主張 contested(存疑不改狀態)
@@ -409,10 +517,10 @@ describe('unit-core-state', function() {
             const d = findItem(r.state, 'D1').item
             assert.deepEqual([reasons(r), d.status, d.doubt.reason, d.doubt.note, d.doubt.op, d.doubt.count, d.history.at(-1).op], [[], 'open', '非對立', '兩方回答不同問題', 'dispute_add', 1, 'doubt'])
             assert.equal(claim(r.state, 'C1').status, 'contested')
-            // contest 之存疑記所列入之主張與 side;未附說明者標「（審查未附說明）」;累計次數
+            // contest 之存疑記所列入之主張與 side;未附說明者標「（終審未附說明）」;累計次數
             const s = run(seed(), [{ op: 'dispute_add', question: 'q2', sides: [{ position: '甲', claims: ['C1'] }, { position: '乙', claims: ['C2'] }], sources: ['N1'] }]).state
             const r2 = run(s, [{ op: 'contest', id: 'C3', dispute: 'D1', side: '1', reason: 'r', sources: ['N4'], _doubt: { reason: '非對立', note: '' } }])
-            assert.deepEqual([reasons(r2), findItem(r2.state, 'D1').item.doubt.claim, findItem(r2.state, 'D1').item.doubt.side, findItem(r2.state, 'D1').item.doubt.note], [[], 'C3', 1, '（審查未附說明）'], 'side 容許數字字串')
+            assert.deepEqual([reasons(r2), findItem(r2.state, 'D1').item.doubt.claim, findItem(r2.state, 'D1').item.doubt.side, findItem(r2.state, 'D1').item.doubt.note], [[], 'C3', 1, '（終審未附說明）'], 'side 容許數字字串')
             const s2 = commitBatch(r2.state, { used: ['n1', 'n4'] })
             const r3 = run(s2, [{ op: 'dispute_update', id: 'D1', note: 'n', sources: ['N3'], _doubt: { reason: '非對立', note: '再疑' } }])
             assert.equal(findItem(r3.state, 'D1').item.doubt.count, 2)
@@ -422,7 +530,7 @@ describe('unit-core-state', function() {
             assert.deepEqual([bad.verdictRejected.length, bad.unverdicted], [2, [0, 1, 2, 3]])
         })
 
-        it('審查剔除之新項被保留之操作引用:回報依賴衝突,套用時拒收理由寫明「已被審查剔除(理由)」(12 種引用點同一機制);出處彙整含 sides_add', () => {
+        it('終審剔除之新項被保留之操作引用:回報依賴衝突,套用時拒收理由寫明「已被終審剔除(理由)」(12 種引用點同一機制);出處彙整含 sides_add', () => {
             const s = seed()
             const ops = [
                 { op: 'add', ref: 'a', kind: 'rule', text: '新主張', sources: ['N1'] },
@@ -431,12 +539,12 @@ describe('unit-core-state', function() {
                 { op: 'dispute_update', id: 'D9', note: 'n', sides_add: [{ position: '丙', sources: ['N4'] }] },
                 { op: 'supersede', id: 'C1', by: '@a', reason: 'r', validPeriod: '不詳', sources: ['N1'] },
             ]
-            const v = applyVerdicts({ ops }, [{ i: 0, action: 'drop', reason: '離題', note: '與本概念無關' }, { i: 3, action: 'drop', reason: '同篇' }, { i: 4, action: 'keep' }])
+            const v = applyVerdicts({ ops }, [{ i: 0, action: 'drop', reason: '離題', note: '與本概念無關' }, { i: 3, action: 'drop', reason: '離題' }, { i: 4, action: 'keep' }])
             assert.deepEqual(v.droppedRefs, { a: '離題' })
             assert.deepEqual(v.conflicts.map((c) => [c.kept, c.keptOp, c.dropped, c.ref, c.reason]), [[1, 'dispute_add', 0, '@a', '離題'], [2, 'param_add', 0, '@a', '離題'], [4, 'supersede', 0, '@a', '離題']])
             assert.deepEqual(v.dropped.find((x) => x.index === 3).sources, ['N4'], 'dispute_update 之 sides_add 出處計入(否則筆記判未涵蓋而重送)')
             const r = run(s, v.delta.ops, { droppedRefs: v.droppedRefs })
-            assert.deepEqual(reasons(r), Array(3).fill('所引 @a 已被審查剔除（離題）'), '各引用點同一句(取代者 by 亦不加前綴)')
+            assert.deepEqual(reasons(r), Array(3).fill('所引 @a 已被終審剔除（離題）'), '各引用點同一句(取代者 by 亦不加前綴)')
         })
     })
 
@@ -446,7 +554,9 @@ describe('unit-core-state', function() {
             let s = seed()
             s = commitBatch(run(s, [{ op: 'dispute_add', question: 'q', sides: [{ position: '甲', claims: ['C3'] }, { position: '乙', sources: ['N4'] }] }, { op: 'essence', text: 'e', claims: ['C3'], reason: 'r' }]).state, { used: ['n4'] })
             assert.match(reasons(run(s, [{ op: 'merge', into: 'C1', from: ['C3'], reason: 'x' }]))[0], /增量模式不可用「merge」/)
-            const r = applyDelta(s, { ops: [{ op: 'merge', into: 'C1', from: ['C3'], reason: '同一主張', text: '合併後' }] }, { mode: 'consolidate', at: 'T' })
+            // 合併稿須保有兩條之過半內容(⑪);與原文無關之「合併後」會被拒
+            assert.match(reasons(applyDelta(s, { ops: [{ op: 'merge', into: 'C1', from: ['C3'], reason: '同一主張', text: '合併後' }] }, { mode: 'consolidate', at: 'T' }))[0], /過半/)
+            const r = applyDelta(s, { ops: [{ op: 'merge', into: 'C1', from: ['C3'], reason: '同一主張', text: '價格偏離均值後傾向回歸，偏離兩個標準差以上才進場' }] }, { mode: 'consolidate', consolidate: true, at: 'T' })
             assert.deepEqual(reasons(r), [])
             const c3 = claim(r.state, 'C3')
             assert.equal(c3.status, 'superseded')
@@ -454,9 +564,31 @@ describe('unit-core-state', function() {
             assert.deepEqual(claim(r.state, 'C1').sources, ['n1', 'n3'])
             assert.deepEqual(r.state.disputes[0].sides[0].claims, ['C1'])
             assert.deepEqual(r.state.essence.claims, ['C1'])
-            assert.equal(claim(r.state, 'C1').text, '合併後')
-            assert.equal(r.state.lastConsolidated, r.state.version)
+            assert.equal(claim(r.state, 'C1').text, '價格偏離均值後傾向回歸，偏離兩個標準差以上才進場')
+            assert.equal(r.state.lastConsolidated, r.state.version, 'ctx.consolidate 真值 → 記整併水位')
             assert.deepEqual(checkInvariants(s, r.state, { touched: r.touched }), [])
+            // 套用機制與棒次分開(終審 §3 D5h):以整併機制套用而非整併者(本質專步)不記水位;沿革記實際棒次
+            const e = applyDelta(s, { ops: [{ op: 'merge', into: 'C1', from: ['C3'], reason: '同一主張', text: '價格偏離均值後傾向回歸，偏離兩個標準差以上才進場' }] }, { mode: 'consolidate', step: 'essence', at: 'T' })
+            assert.deepEqual([reasons(e), e.state.lastConsolidated, e.state.changelog.at(-1).mode], [[], s.lastConsolidated, 'essence'])
+        })
+
+        it('merge 不得使同一爭議之不同方指向同一主張(拒收;兩方立場相反卻引同一條);不變式只報新產生者', () => {
+            let s = seed()
+            s = commitBatch(run(s, [{ op: 'dispute_add', question: 'q', sides: [{ position: '甲', claims: ['C1'] }, { position: '乙', claims: ['C3'], sources: ['N4'] }] }]).state, { used: ['n4'] })
+            // coreDelta merge:「併入會使同一爭議之不同方指向同一主張者拒收」
+            const r = applyDelta(s, { ops: [{ op: 'merge', into: 'C1', from: ['C3'], reason: '同談同一題' }] }, { mode: 'consolidate', consolidate: true, at: 'T' })
+            assert.match(reasons(r)[0], /合併會使爭議 D1 之不同方指向同一主張（C1、C3 分屬其各方）/)
+            assert.deepEqual([claim(r.state, 'C3').mergedInto, claim(r.state, 'C3').status], ['', 'contested'], '不套用(C3 仍為爭議所引之 contested)')
+            assert.deepEqual(r.state.disputes[0].sides.map((x) => x.claims), [['C1'], ['C3']])
+            // checkInvariants:「同一爭議之不同方不得引同一主張……只報方數未變而新產生者」
+            const bad = JSON.parse(JSON.stringify(s))
+            bad.disputes[0].sides[1].claims = ['C1']
+            assert.ok(checkInvariants(s, bad, { touched: ['D1'] }).some((x) => x === '爭議之不同方引同一主張：D1→C1'), JSON.stringify(checkInvariants(s, bad, { touched: ['D1'] })))
+            assert.deepEqual(checkInvariants(bad, bad, { touched: [] }).filter((x) => /不同方引同一主張/.test(x)), [], '既有之違反不報(屬存量掃描)')
+            // 方數增加者不報(爭議併爭議之各方原樣併入——見「merge 併爭議(⑪)」案;此處以新增一方模擬)
+            const grown = JSON.parse(JSON.stringify(s))
+            grown.disputes[0].sides.push({ ...grown.disputes[0].sides[1], claims: ['C1'] })
+            assert.deepEqual(checkInvariants(s, grown, { touched: ['D1'] }).filter((x) => /不同方引同一主張/.test(x)), [])
         })
 
         it('refacet:面向改名作用於該面向之全部非終態主張', () => {
@@ -464,6 +596,104 @@ describe('unit-core-state', function() {
             s = run(s, [{ op: 'revise', id: 'C1', fields: { facet: '機制' }, reason: 'r', sources: ['N1'] }, { op: 'revise', id: 'C2', fields: { facet: '機制' }, reason: 'r', sources: ['N2'] }]).state
             const r = applyDelta(s, { ops: [{ op: 'refacet', from: '機制', to: '原理與機制' }] }, { mode: 'consolidate', at: 'T' })
             assert.deepEqual(r.state.claims.map((c) => c.facet), ['原理與機制', '原理與機制', ''])
+        })
+
+        it('merge 併爭議(⑪):各方併入 into(方數只增、出處取聯集),被併之爭議轉終態(撤回「重複」、mergedInto);各方所引主張仍 contested;from 須同為爭議;限整併', () => {
+            const s = commitBatch(run(seed(), [
+                { op: 'dispute_add', question: '回歸是否普遍成立', sides: [{ position: '成立', claims: ['C1'] }, { position: '不成立', claims: ['C2'] }], sources: ['N1'] },
+                { op: 'dispute_add', question: '回歸普遍嗎', sides: [{ position: '強趨勢下不成立', claims: ['C2'], sources: ['N4'] }, { position: '偏離大時成立', claims: ['C3'] }] },
+            ]).state, { used: ['n4'] })
+            assert.deepEqual(s.disputes.map((d) => d.id), ['D1', 'D2'])
+            const r = applyDelta(s, { ops: [{ op: 'merge', into: 'D1', from: ['D2'], reason: '同一問題' }] }, { mode: 'consolidate', at: 'T' })
+            assert.deepEqual(reasons(r), [])
+            const d1 = findItem(r.state, 'D1').item
+            const d2 = findItem(r.state, 'D2').item
+            assert.deepEqual(d1.sides.map((sd) => [sd.position, sd.claims, sd.sources]), [['成立', ['C1'], []], ['不成立', ['C2'], []], ['強趨勢下不成立', ['C2'], ['n4']], ['偏離大時成立', ['C3'], []]], '方數只增、各方原樣')
+            assert.deepEqual([d1.status, d1.sources], ['open', ['n1', 'n4']])
+            assert.deepEqual([d2.status, d2.retractReason, d2.statusNote, d2.mergedInto], ['retracted', '重複', '併入 D1：同一問題', 'D1'])
+            assert.deepEqual(['C1', 'C2', 'C3'].map((id) => claim(r.state, id).status), ['contested', 'contested', 'contested'])
+            assert.deepEqual(checkInvariants(s, r.state, { touched: r.touched }), [])
+            assert.deepEqual(reasons(applyDelta(s, { ops: [{ op: 'merge', into: 'D1', from: ['C3'], reason: 'r' }] }, { mode: 'consolidate', at: 'T' })), ['from C3 為主張，須為爭議'])
+            assert.deepEqual(reasons(run(s, [{ op: 'merge', into: 'D1', from: ['D2'], reason: 'r' }])), ['增量模式不可用「merge」'])
+        })
+    })
+
+    describe('applyDelta:拆分(split)', function() {
+
+        /** 起點:C4 為一條含兩個主張之長條目(出處 n4;面向、證據性質已標),被本質與參數 P2 引用 */
+        const withLong = () => {
+            const r = run(seed(), [
+                { op: 'add', ref: 'L', kind: 'principle', facet: '機制', text: '均值回歸在低波動期較明顯，但在高波動期常被趨勢淹沒', basis: '樣本外', sources: ['N4'] },
+                { op: 'param_add', name: '低波動門檻', value: '年化 15%', claim: '@L', sources: ['N4'] },
+                { op: 'essence', text: '均值回歸隨波動而變', claims: ['@L'], reason: '首版' },
+            ])
+            assert.deepEqual(reasons(r), [])
+            return commitBatch(r.state, coverageOf({ batch: BATCH, applied: r.applied }))
+        }
+        const PARTS = [{ text: '均值回歸在低波動期較明顯' }, { text: '但在高波動期常被趨勢淹沒', kind: 'pitfall' }]
+
+        it('split(⑫):原條轉終態(superseded＋splitInto)、新條沿用原條之出處／面向／證據性質／origin、種類可逐條指定;本質與參數之引用改指第一條;不需本批出處;增量、整併皆可用;不變式成立', () => {
+            const s = withLong()
+            assert.equal(claim(s, 'C4').text, '均值回歸在低波動期較明顯，但在高波動期常被趨勢淹沒')
+            const r = run(s, [{ op: 'split', id: 'C4', reason: '一條含兩個主張', parts: PARTS }])
+            assert.deepEqual(reasons(r), [])
+            assert.deepEqual(r.applied.map((a) => [a.op, a.id, a.sources]), [['split', 'C4', []]], '純重組:不消耗本批筆記')
+            const c4 = claim(r.state, 'C4')
+            assert.deepEqual([c4.status, c4.splitInto, c4.statusNote, c4.history.at(-1).note], ['superseded', ['C5', 'C6'], '拆分為 C5、C6：一條含兩個主張', '拆分為 C5、C6'])
+            const parts = ['C5', 'C6'].map((id) => claim(r.state, id))
+            assert.deepEqual(parts.map((c) => [c.text, c.kind, c.facet, c.basis, c.sources, c.origin, c.status, c.history[0].note]), [
+                ['均值回歸在低波動期較明顯', 'principle', '機制', '樣本外', ['n4'], 'note', 'active', '拆自 C4'],
+                ['但在高波動期常被趨勢淹沒', 'pitfall', '機制', '樣本外', ['n4'], 'note', 'active', '拆自 C4'],
+            ], '未指定種類者沿用原條')
+            assert.deepEqual([r.state.essence.claims, findItem(r.state, 'P2').item.claim], [['C5'], 'C5'], '引用不懸空:改指第一條')
+            assert.equal(r.state.version, s.version + 1)
+            assert.deepEqual(checkInvariants(s, r.state, { touched: r.touched }), [])
+            const c = applyDelta(s, { ops: [{ op: 'split', id: 'C4', reason: '整併時拆分', parts: PARTS }] }, { mode: 'consolidate', consolidate: true, at: 'T' })
+            assert.deepEqual([reasons(c), claim(c.state, 'C4').splitInto, c.state.lastConsolidated], [[], ['C5', 'C6'], c.state.version])
+        })
+
+        it('split 之拒收:條數 2～8、各條須為原文之子集(不可加入原文沒有之內容)、合起來須涵蓋原文(不可丟內容)、種類須在許可清單、須 reason、目標須為非終態之主張;為不可逆操作(可暫緩);與他項改狀態操作並存皆拒', () => {
+            const s = withLong()
+            const one = (op, extra) => reasons(run(s, [op], extra))
+            const sp = (parts, extra = {}) => ({ op: 'split', id: 'C4', reason: 'r', parts, ...extra })
+            assert.deepEqual(one(sp([PARTS[0]])), ['parts 須為 2～8 條（各帶 text）'])
+            assert.deepEqual(one(sp(Array(9).fill(PARTS[0]))), ['parts 須為 2～8 條（各帶 text）'])
+            assert.deepEqual(one(sp([PARTS[0], { text: '均值回歸在低波動期較明顯，年化超額報酬達百分之十二' }])), ['第 2 條不是原文之子集（包含率須 ≥0.8）——拆分不可加入原文沒有之內容'])
+            assert.match(one(sp([{ text: '均值回歸' }, { text: '趨勢淹沒' }]))[0], /^各條合起來只涵蓋原文 0\.\d\d（須 ≥0\.85）——拆分不可丟掉原文內容$/)
+            assert.deepEqual(one(sp([PARTS[0], { ...PARTS[1], kind: 'bogus' }])), ['種類「bogus」不在許可清單'])
+            assert.deepEqual(one(sp(PARTS, { reason: '' })), ['缺 reason'])
+            assert.deepEqual(one(sp(PARTS, { id: 'P2' })), ['目標 P2 為參數，須為主張'])
+            assert.deepEqual(one(sp(PARTS, { id: 'C9' })), ['目標主張 C9 不存在'])
+            const done = run(s, [sp(PARTS)]).state
+            assert.deepEqual(reasons(run(done, [sp(PARTS)])), ['目標 C4 已為終態'])
+            const w = run(s, [sp(PARTS)], { withhold: ['split'] })
+            assert.deepEqual([w.withheld.map((x) => [x.op, x.resolved.id]), claim(w.state, 'C4').status, w.state.claims.length], [[['split', 'C4']], 'active', s.claims.length], '暫緩:原條不動、不新增')
+            assert.deepEqual(one(sp(PARTS)), [])
+            assert.deepEqual(reasons(run(s, [sp(PARTS), { op: 'revise', id: 'C4', fields: { text: '均值回歸隨波動而變' }, reason: 'r', sources: ['N4'] }])), Array(2).fill('同一項目 C4 有多個改狀態操作'))
+        })
+
+        it('split 與其他文字欄:被爭議引用之主張可拆分(爭議方改指第一條、不變式成立,同 merge 之改指);子集與涵蓋以全部文字欄計——原條之條件移入拆出條之 conditions 不誤拒、他欄夾帶原文沒有之內容被拒;證據性質沿用原條', () => {
+            // ①被爭議某方引用之 C4 拆分:引用改指第一條,checkInvariants 不得報「所引主張遺失」
+            const s0 = withLong()
+            const d = run(s0, [{ op: 'dispute_add', question: '均值回歸是否隨波動而變', sides: [{ position: '低波動期才成立', claims: ['C4'] }, { position: '與波動無關', sources: ['N1'] }] }])
+            assert.deepEqual(reasons(d), [])
+            const s = commitBatch(d.state, coverageOf({ batch: BATCH, applied: d.applied }))
+            const did = s.disputes.at(-1).id
+            const r = run(s, [{ op: 'split', id: 'C4', reason: '一條含兩個主張', parts: PARTS }])
+            assert.deepEqual(reasons(r), [])
+            const first = claim(r.state, 'C4').splitInto[0]
+            assert.deepEqual(findItem(r.state, did).item.sides[0].claims, [first], '爭議方之引用改指第一條')
+            assert.deepEqual(checkInvariants(s, r.state, { touched: r.touched }), [], '拆分後之改指不算「所引主張遺失」')
+            // ②原條帶條件:拆出條把條件放在自身之 conditions(內容未丟)→ 涵蓋足夠、照套
+            const w = run(seed(), [{ op: 'add', kind: 'principle', text: '動量在趨勢市場有效，在盤整市場失效', conditions: ['僅限流動性高之大型股'], basis: '樣本內', sources: ['N4'] }])
+            const sw = commitBatch(w.state, coverageOf({ batch: BATCH, applied: w.applied }))
+            const id = w.applied[0].id
+            const ok = run(sw, [{ op: 'split', id, reason: '兩種市況', parts: [{ text: '動量在趨勢市場有效', conditions: ['僅限流動性高之大型股'] }, { text: '在盤整市場失效', basis: '樣本外' }] }])
+            assert.deepEqual(reasons(ok), [], '條件移入拆出條之 conditions 不算丟失')
+            assert.deepEqual(claim(ok.state, id).splitInto.map((x) => claim(ok.state, x).basis), ['樣本內', '樣本內'], '證據性質沿用原條(拆出條給之 basis 不採)')
+            // ③他欄夾帶原文沒有之內容 → 該條不是原文之子集
+            const smuggle = run(sw, [{ op: 'split', id, reason: 'r', parts: [{ text: '動量在趨勢市場有效', critique: '此策略年化報酬可達百分之五十並適用全部市場' }, { text: '在盤整市場失效', conditions: ['僅限流動性高之大型股'] }] }])
+            assert.deepEqual(reasons(smuggle), ['第 1 條不是原文之子集（包含率須 ≥0.8）——拆分不可加入原文沒有之內容'])
         })
     })
 
@@ -484,7 +714,7 @@ describe('unit-core-state', function() {
             assert.deepEqual(r.applied.map((a) => a.id), ['C3'])
         })
 
-        it('withhold(審查失敗之降級):指定操作暫緩、記入 withheld(含其出處),其 ref 之依賴連鎖拒收', () => {
+        it('withhold(終審失敗之降級):指定操作暫緩、記入 withheld(含其出處),其 ref 之依賴連鎖拒收', () => {
             const s = seed()
             const r = run(s, [{ op: 'supersede', id: 'C2', reason: 'r', validPeriod: 'x', sources: ['N4'] }, { op: 'confirm', id: 'C1', sources: ['N3'] }], { withhold: ['supersede', 'retract'] })
             assert.deepEqual(r.withheld.map((w) => [w.index, w.op, w.sources]), [[0, 'supersede', ['n4']]])
@@ -493,7 +723,7 @@ describe('unit-core-state', function() {
             assert.deepEqual(r.applied.map((a) => a.id), ['C1'])
         })
 
-        it('全數拒收:不升版、無 changelog;整併模式不可用增量操作', () => {
+        it('全數拒收:知識版號不變、無 changelog;整併模式不可用增量操作', () => {
             const s = seed()
             const r = run(s, [{ op: 'confirm', id: 'C99', sources: ['N1'] }])
             assert.equal(r.state.version, s.version)
@@ -503,16 +733,16 @@ describe('unit-core-state', function() {
         })
     })
 
-    describe('第二輪判識之補正(2026-09-29 §12)', function() {
+    describe('跨批對立、重複撤回、待審與裁決回報', function() {
 
-        it('新筆記與既有主張相反:一方引既有主張(其出處早已 consumed)、一方引本批 → 爭議成立;contest 連同差量新建之爭議(判識 A exp1)', () => {
+        it('新筆記與既有主張相反:一方引既有主張(其出處早已 consumed)、一方引本批 → 爭議成立', () => {
             const s = seed()
             const r = run(s, [
                 { op: 'dispute_add', ref: 'd', question: '偏離均值後是否回歸', sides: [{ position: '會回歸', claims: ['C1'] }, { position: '不回歸', sources: ['N4'] }] },
                 { op: 'add', ref: 'x', kind: 'principle', text: '部分資產不回歸均值', sources: ['N4'] },
             ])
             assert.deepEqual(reasons(r), [])
-            assert.equal(claim(r.state, 'C1').status, 'contested', '舊主張因被未解決之爭議引用而 contested,對立並陳')
+            assert.equal(claim(r.state, 'C1').status, 'contested', '既有主張因被未解決之爭議引用而 contested,對立並陳')
             assert.deepEqual(r.state.disputes[0].sources, ['n4'])
         })
 
@@ -526,14 +756,14 @@ describe('unit-core-state', function() {
             assert.deepEqual(checkInvariants(s, r2.state, { touched: r2.touched }), [])
         })
 
-        it('審查失敗之降級:終態操作暫緩並保存待審(@ref 換成實際 id),其筆記算涵蓋;待審目標轉為終態者丟棄;上限 20', () => {
+        it('終審失敗之降級:終態操作暫緩並保存待審(@ref 換成實際 id),其筆記算涵蓋;待審目標轉為終態者丟棄;上限 20', () => {
             const s = seed()
             const r = run(s, [
                 { op: 'add', ref: 'n', kind: 'principle', text: '回歸在高頻資料中不成立', sources: ['N4'] },
                 { op: 'supersede', id: 'C1', by: '@n', reason: '新研究', validPeriod: '較早之研究', sources: ['N4'] },
             ], { withhold: ['supersede', 'retract', 'merge'] })
             assert.deepEqual(r.withheld[0].resolved, { op: 'supersede', id: 'C1', by: 'C4', reason: '新研究', validPeriod: '較早之研究', sources: ['n4'] })
-            const q = queuePendingReview(r.state, r.withheld, { at: 'T', reason: '審查失敗' })
+            const q = queuePendingReview(r.state, r.withheld, { at: 'T', reason: '終審失敗' })
             assert.equal(q.queued, 1)
             assert.equal(q.state.pendingReview[0].op.by, 'C4')
             const cov = coverageOf({ batch: BATCH, applied: r.applied, queued: r.withheld.filter((w) => w.resolved) })
@@ -560,7 +790,7 @@ describe('unit-core-state', function() {
             assert.deepEqual(v.removed, [{ note: 'N2', reason: '同篇' }])
             assert.deepEqual(v.unverdicted, [1])
             const cov = coverageOf({ batch: BATCH, applied: [{ sources: ['n1'] }], removed: v.removed })
-            assert.deepEqual(cov.dropped, [{ note: 'n2', reason: '審查刪去出處：同篇' }])
+            assert.deepEqual(cov.dropped, [{ note: 'n2', reason: '終審刪去出處：同篇' }])
             const s = seed()
             const marked = v.delta.ops.map((o) => (o._i === 1 ? { ...o, _withhold: true } : o))
             const r = run(s, marked)
@@ -576,9 +806,9 @@ describe('unit-core-state', function() {
         })
     })
 
-    describe('applyVerdicts:審查逐操作裁決', function() {
+    describe('applyVerdicts:終審逐操作裁決', function() {
 
-        it('keep／drop／fix;未裁決者保留;不得新增操作;fix 不得增加出處;爭議類之剔除只收「離題／同篇」;回報用提案原序號', () => {
+        it('keep／drop／fix;未裁決者保留;不得新增操作;fix 不得增加出處;爭議類之剔除只收「離題／同篇」;回報用差量原序號', () => {
             const ops = [
                 { op: 'add', kind: 'rule', text: '甲', sources: ['N1', 'N2'] },
                 { op: 'add', kind: 'rule', text: '乙（離題）', sources: ['N3'] },
@@ -601,7 +831,7 @@ describe('unit-core-state', function() {
             assert.deepEqual(r.applied.map((a) => a.index).sort(), [0, 2, 3], 'applyDelta 回報原序號')
         })
 
-        it('可修者不刪(2026-10-01;安裝方 1.0.5 實測一天 11 項爭議因此連帶拒收):新增主張／參數不收「性質標錯」——按未裁決保留、引用它之爭議照立;標籤以 fix 改 kind／basis／snapshot;其他操作仍可用「性質標錯」', () => {
+        it('可修者不刪(coreState 檔頭⑨):新增主張／參數不收「性質標錯」——按未裁決保留、引用它之爭議照立;標籤以 fix 改 kind／basis／snapshot;其他操作仍可用「性質標錯」', () => {
             assert.deepEqual(NEW_ITEM_DROP_REASONS, ['離題', '無出處支持', '同篇', '重複', '捏造'])
             assert.ok(DROP_REASONS.includes('性質標錯'), '操作類別用錯(如應立爭議卻寫成取代)仍可剔除')
             assert.deepEqual(FIXABLE_FIELDS.add.filter((k) => ['kind', 'basis'].includes(k)), ['basis', 'kind'])
@@ -629,14 +859,14 @@ describe('unit-core-state', function() {
             assert.deepEqual(reasons(r), [])
             const b = r.state.claims.find((c) => c.text === '另一篇之相反結果')
             assert.deepEqual([b.kind, b.basis], ['pitfall', '案例'], 'fix 改標籤')
-            assert.equal(r.state.disputes.length, 1, '引用之爭議照立(1.0.5 會連帶拒收)')
+            assert.equal(r.state.disputes.length, 1, '引用之爭議照立(不連帶拒收)')
             assert.equal(findItem(r.state, 'C3').item.status, 'active')
         })
     })
 
     describe('涵蓋與落帳', function() {
 
-        it('coverageOf:被已套用操作引用、列入 skipped(理由合法)、被審查剔除者皆算涵蓋;只被拒收或暫緩者為未涵蓋', () => {
+        it('coverageOf:被已套用操作引用、列入 skipped(理由合法)、被終審剔除者皆算涵蓋;只被拒收或暫緩者為未涵蓋', () => {
             const cov = coverageOf({
                 batch: BATCH,
                 applied: [{ sources: ['n1'] }],
@@ -645,7 +875,7 @@ describe('unit-core-state', function() {
             })
             assert.deepEqual(cov.used, ['n1'])
             assert.deepEqual(cov.skipped, [{ note: 'n2', reason: '離題' }], '已被引用者不再列略過')
-            assert.deepEqual(cov.dropped, [{ note: 'n3', reason: '審查剔除：重複' }])
+            assert.deepEqual(cov.dropped, [{ note: 'n3', reason: '終審剔除：重複' }])
             assert.deepEqual(cov.uncovered, ['n4'])
             assert.deepEqual(cov.badSkipped, [{ note: 'N3', reason: '看過了' }])
         })
@@ -669,7 +899,7 @@ describe('unit-core-state', function() {
                 fn(x)
                 return checkInvariants(s, x, { touched: ['C1'] }).join('｜')
             }
-            assert.match(bad((x) => x.claims.splice(1, 1)), /舊項遺失：C2/)
+            assert.match(bad((x) => x.claims.splice(1, 1)), /既有項遺失：C2/)
             assert.match(bad((x) => {
                 x.claims[0].sources = []
             }), /出處減少：C1/)
@@ -706,8 +936,13 @@ describe('unit-core-state', function() {
             assert.match(checkInvariants(s, x, { touched: ['C1'] }).join('｜'), /出處不在已用筆記內：n77/)
         })
 
-        it('性質測試:隨機操作序列(固定種子)40 輪——applyDelta 不拋錯,落帳後不變式恆成立', () => {
-            let seedN = 20260929
+        it('性質測試:隨機操作序列(多組固定種子)各 40 輪——applyDelta 不拋錯,落帳後不變式恆成立', () => {
+            for (const seed of [20260929, 20261003, 7, 424242]) runProperty(seed)
+        })
+
+        /** 單一種子之性質測試(種子固定、可重現;多組種子以涵蓋單一序列碰不到之操作組合) */
+        function runProperty(seed) {
+            let seedN = seed
             const rnd = () => {
                 seedN = (seedN * 1103515245 + 12345) % 2147483648
                 return seedN / 2147483648
@@ -737,7 +972,7 @@ describe('unit-core-state', function() {
                         param_add: { op: 'param_add', ref: `r${k}`, name: 'k', value: pick(['1', '']), claim: pick(['', anyId()]), sources: src() },
                         question_add: { op: 'question_add', text: 'q?', sources: src() },
                         question_resolve: { op: 'question_resolve', id: anyId(), resolution: 'r', sources: src() },
-                        dispute_dissolve: { op: 'dispute_dissolve', id: anyId(), reason: pick(['r', '']), kinds: [pick(['rule', 'x'])] },
+                        dispute_dissolve: (() => { const id = anyId(); const reason = pick(['r', '']); const k = pick(['rule', 'pitfall', 'principle', 'x']); return { op: 'dispute_dissolve', id, reason, kinds: [k, k] } })(),
                         essence: { op: 'essence', text: `本質${round}`, claims: [anyId()], reason: 'r' },
                         related_add: { op: 'related_add', concepts: [pick(['甲', '乙'])] },
                         merge: { op: 'merge', into: anyId(), from: [anyId()], reason: 'r' },
@@ -750,11 +985,11 @@ describe('unit-core-state', function() {
                 let next = commitBatch(r.state, coverageOf({ batch: mode === 'delta' ? batch : [], applied: r.applied }))
                 next = ev.apply(next, notes)
                 const v = checkInvariants(before, next, { touched: r.touched })
-                assert.deepEqual(v, [], `第 ${round} 輪(${mode}):${JSON.stringify(ops)}`)
+                assert.deepEqual(v, [], `種子 ${seed} 第 ${round} 輪(${mode}):${JSON.stringify(ops)}`)
                 s = next
             }
-            assert.ok(s.claims.length > 3, '序列確實有累積')
-        })
+            assert.ok(s.claims.length > 3, `種子 ${seed}:序列確實有累積`)
+        }
     })
 
     describe('證據等級(中立預設)', function() {
@@ -817,6 +1052,18 @@ describe('unit-core-state', function() {
             assert.equal(s.disputes[0].sides[0].evidence.level, '中')
             assert.equal(s.disputes[0].sides[1].evidence.level, '低')
             assert.equal(claim(s, 'C2').evidence.level, '低')
+            // 終態項(主張、參數、爭議)保留原值;非終態者以新等級重算(出處筆記之等級升為高)
+            const up = new Map([...notes, ['l1', { evidenceLevel: '高', claimType: '實證研究' }], ['op', { evidenceLevel: '高', claimType: '實證研究' }]])
+            const t = JSON.parse(JSON.stringify(s))
+            claim(t, 'C2').status = 'retracted'
+            findItem(t, 'P1').item.status = 'superseded'
+            t.disputes[0].status = 'retracted'
+            const frozen = JSON.stringify([claim(t, 'C2').evidence, findItem(t, 'P1').item.evidence, t.disputes[0].sides.map((sd) => sd.evidence)])
+            ev.apply(t, up)
+            assert.equal(JSON.stringify([claim(t, 'C2').evidence, findItem(t, 'P1').item.evidence, t.disputes[0].sides.map((sd) => sd.evidence)]), frozen, '終態項不重算(含已撤回之爭議各方)')
+            const live = JSON.parse(JSON.stringify(s))
+            ev.apply(live, up)
+            assert.deepEqual([claim(live, 'C2').evidence.level, live.disputes[0].sides[1].evidence.level], ['中', '中'], '對照:非終態者重算(高級僅 1 份文件 → 封頂中)')
         })
 
         it('主張本身之兩道封頂(只壓低不抬高):證據性質(basis)取所含關鍵詞之最嚴者、皆不含取「*」;自承限制片語 → 次高;皆記入 trace(安裝方驗收 §3 #3)', () => {
@@ -844,19 +1091,38 @@ describe('unit-core-state', function() {
             const plain = makeEvidence({ levels: ['高', '中', '低'] })
             const s0 = { ...emptyState(), claims: [{ id: 'C1', status: 'active', sources: ['a', 'b'], basis: '理論', critique: '單一研究' }] }
             plain.apply(s0, n)
-            assert.equal(s0.claims[0].evidence.level, '高', '未給兩表 → 不封頂(直呼 makeEvidence 之行為不變)')
+            assert.equal(s0.claims[0].evidence.level, '高', '未給兩表 → 不封頂(兩道封頂只在給了 basisCaps／selfLimit 時生效)')
         })
     })
 
-    describe('upgradeState／stateDigest', function() {
+    describe('normalizeState／stateDigest', function() {
 
-        it('upgradeState:補齊缺欄;未知之較新版本拒讀;非物件拒讀', () => {
-            const s = upgradeState({ v: 1, concept: '甲', claims: [{ id: 'C1' }] })
-            assert.deepEqual(s.nextId, { C: 1, D: 1, P: 1, Q: 1 })
-            assert.deepEqual(s.disputes, [])
-            assert.throws(() => upgradeState({ v: STATE_VERSION + 1 }), /新於本套件支援/)
-            assert.throws(() => upgradeState(null), /須為物件/)
-            assert.throws(() => upgradeState({ v: 0 }), /格式版本無效/)
+        it('normalizeState:只收 v＝STATE_VERSION(3)——其他版本(較舊、較新、0、缺 v)一律拒讀,訊息以「格式版本」起頭(不升級、不降級);非物件拒讀;v＝3 原樣正規化(缺欄補預設、既有內容不動、不修改輸入)', () => {
+            assert.equal(STATE_VERSION, 3)
+            const reject = (v) => `格式版本 ${v} 非本套件之 3，拒讀（本套件只讀寫本格式之狀態檔）`
+            for (const v of [1, 2, 4, 0]) {
+                assert.throws(() => normalizeState({ v, concept: '甲', claims: [{ id: 'C1', text: 't' }] }), { message: reject(v) }, `v=${v}`)
+            }
+            assert.throws(() => normalizeState({ concept: '甲' }), { message: reject('（無）') }, '缺 v 亦拒讀')
+            assert.throws(() => normalizeState({ v: null, concept: '甲' }), { message: reject('（無）') })
+            assert.throws(() => normalizeState(null), { message: '核心狀態須為物件' })
+            assert.throws(() => normalizeState([]), { message: '核心狀態須為物件' })
+            // v＝3 而欄位不全:缺欄補預設(nextId 逐鍵補)、既有內容原樣、缺版號歸 0;回傳新物件,輸入不變。鍵在場而錯型別(如版號 -1)＝壞檔,拒讀(嚴格驗形)
+            assert.throws(() => normalizeState({ v: 3, coreId: 'k', concept: '甲', version: -1 }), (e) => e.code === CORRUPT_STATE_CODE && /version 應為非負整數/.test(e.message), '非法版號不再歸 0,拒讀')
+            const raw = { v: 3, coreId: 'k', concept: '甲', claims: [{ id: 'C1', text: 't' }], nextId: { C: 2 }, essence: { text: 'e' } }
+            const before = JSON.parse(JSON.stringify(raw))
+            const n = normalizeState(raw)
+            assert.deepEqual(n.nextId, { C: 2, D: 1, P: 1, Q: 1 })
+            assert.deepEqual([n.disputes, n.parameters, n.questions, n.related, n.pendingReview, n.consumed, n.skipped, n.essenceHistory, n.changelog, n.renderHashes], [[], [], [], [], [], [], [], [], [], []])
+            assert.deepEqual(n.essence, { text: 'e', claims: [], sources: [], at: '', stale: null })
+            assert.deepEqual(n.claims, [{ id: 'C1', text: 't' }], '既有項原樣(不補欄、不轉換)')
+            assert.deepEqual([n.v, n.version, n.rev, n.scope, n.coreId, n.concept], [3, 0, 0, 'concept', 'k', '甲'])
+            assert.deepEqual(raw, before, '不修改輸入')
+            // 本套件寫出之完整狀態:往返原樣(deep-equal),且為新物件
+            const s = commitBatch(run(seed(), [{ op: 'dispute_add', question: 'q', sides: [{ position: '甲', claims: ['C1'] }, { position: '乙', sources: ['N4'] }] }]).state, { used: ['n4'] })
+            const back = normalizeState(JSON.parse(JSON.stringify(s)))
+            assert.deepEqual(back, s)
+            assert.notEqual(normalizeState(s).claims, s.claims, '回傳新物件(不共用參照)')
         })
 
         it('stateDigest:列非終態之主張與爭議(含 id)、終態只列 id;空狀態明示', () => {
@@ -869,12 +1135,17 @@ describe('unit-core-state', function() {
             assert.match(d, /【已取代／撤回】〔C3〕撤回（離題）/)
             assert.doesNotMatch(d, /偏離兩個標準差以上才進場/)
             assert.equal(stateDigest(emptyState()), '（尚無內容）')
+            // 已有主張而無本質 → 明示待歸納(下次處理時起草端據以提出 essence);有本質者不出現此行
+            assert.match(d, /^【本質】（尚未歸納——本核心已有主張而無本質，本批須以 essence 綜合現有主張）$/m)
+            const withE = run(s, [{ op: 'essence', text: '偏離均值之價格傾向回歸', claims: ['C1'], reason: '首版' }]).state
+            assert.doesNotMatch(stateDigest(withE), /尚未歸納/)
+            assert.match(stateDigest(withE), /^【本質】偏離均值之價格傾向回歸（依〔C1〕）$/m)
         })
 
-        it('side k 一致(1.0.5 三獨立審定案 S1):摘要各方標 side k、k 即操作之 side 值;side 收整數、數字字串與「side k」;錯誤訊息列現有範圍', () => {
+        it('side k 一致:摘要各方標 side k、k 即操作之 side 值;side 收整數、數字字串與「side k」;錯誤訊息列現有範圍', () => {
             const s = run(seed(), [{ op: 'dispute_add', question: '回歸速度', sides: [{ position: '快', claims: ['C1'] }, { position: '慢', claims: ['C2'] }], sources: ['N1'] }]).state
             assert.match(stateDigest(s), /【爭議】（各方以 side k 標示，k 即操作之 "side" 值，自 0 起）\n〔D1〕回歸速度｜side 0：快（引〔C1〕）｜side 1：慢（引〔C2〕）/)
-            // 依摘要所見之 k 填 side → 落在同一方(1.0.4 摘要寫「第2方」、操作要填 1,模型照抄即錯一格)
+            // 依摘要所見之 k 填 side → 落在同一方(摘要與操作同一編號;「第2方」之類之序數寫法不收)
             for (const side of [1, '1', 'side 1', 'Side1']) {
                 const r = run(s, [{ op: 'contest', id: 'C3', dispute: 'D1', side, reason: 'r', sources: ['N3'] }])
                 const d = findItem(r.state, 'D1').item
@@ -885,17 +1156,159 @@ describe('unit-core-state', function() {
             assert.deepEqual(reasons(run(s, [{ op: 'confirm', id: 'D1', side: 2, sources: ['N4'] }])), ['爭議 D1 無 side 2（現有 side 0～1）'])
         })
 
-        it('審查存疑於提案摘要只顯示至下一次提案落盤(存疑時刻 ≥ 上次提案時刻);已解決或撤回之爭議不顯示', () => {
+        it('終審存疑於起草所見之狀態摘要只顯示至下一次提煉落盤(存疑時刻 ≥ 上次提煉時刻 proposedAt);已解決或撤回之爭議不顯示', () => {
             const s = run(seed(), [{ op: 'dispute_add', question: '回歸速度', sides: [{ position: '快', claims: ['C1'] }, { position: '慢', claims: ['C2'] }], sources: ['N1'] }]).state
             const v = applyVerdicts({ ops: [{ op: 'dispute_update', id: 'D1', note: '補充', sources: ['N4'] }] }, [{ i: 0, action: 'doubt', reason: '非對立', note: '兩方回答不同問題' }])
             const T = '2026-10-01T00:00:00+08:00'
             const t = applyDelta(s, v.delta, { batch: BATCH, at: T }).state
             assert.deepEqual([t.disputes[0].doubt.at, t.disputes[0].doubt.version], [T, t.version])
-            const line = /｜審查存疑（非對立）：兩方回答不同問題/
-            assert.match(stateDigest({ ...t, proposedAt: T }), line, '存疑產生之提案落盤時 proposedAt＝其時刻 → 下一次提案看得到')
-            assert.doesNotMatch(stateDigest({ ...t, proposedAt: '2026-10-02T00:00:00+08:00' }), line, '其後之提案落盤 → 不再呈現')
+            const line = /｜終審存疑（非對立）：兩方回答不同問題/
+            assert.match(stateDigest({ ...t, proposedAt: T }), line, '存疑產生之提煉落盤時 proposedAt＝其時刻 → 下一次起草看得到')
+            assert.doesNotMatch(stateDigest({ ...t, proposedAt: '2026-10-02T00:00:00+08:00' }), line, '其後之提煉落盤 → 不再呈現')
             const resolved = run(t, [{ op: 'dispute_update', id: 'D1', status: 'resolved', note: '已釐清', sources: ['N3'] }]).state
             assert.doesNotMatch(stateDigest({ ...resolved, proposedAt: T }), line, '已解決者不顯示')
+        })
+    })
+
+    // 檔頭 ⑱⑲(2026-10-05 F 段;檢定標準 ES9 存量、ES8):程式差量、可還原之撤回、隔離
+    describe('程式差量、可還原之撤回與隔離(⑱⑲)', function() {
+
+        it('⑱程式撤回理由只收程式差量(ctx.program＋onlyOps);AI 差量用之 → 拒收;程式差量之 revise 不需本批出處', () => {
+            const s = seed()
+            const ai = run(s, [{ op: 'retract', id: 'C3', reason: '覆核無出處支持' }])
+            assert.deepEqual(reasons(ai), [`撤回理由須為：${RETRACT_REASONS.join('、')}`], 'AI 差量不可用程式撤回理由')
+            const noOnly = applyDelta(s, { ops: [{ op: 'retract', id: 'C3', reason: '覆核無出處支持' }] }, { batch: [], at: 'T', program: true })
+            assert.equal(noOnly.rejected.length, 1, '未給 onlyOps 不啟用程式差量')
+            const p = applyDelta(s, { ops: [{ op: 'retract', id: 'C3', reason: '覆核無出處支持' }, { op: 'revise', id: 'C1', reason: '依出處收斂措辭', fields: { text: '價格偏離均值後在樣本內傾向回歸' } }] }, { batch: [], at: 'T', program: true, onlyOps: ['revise', 'retract'] })
+            assert.deepEqual(p.rejected, [])
+            assert.deepEqual([claim(p.state, 'C3').status, claim(p.state, 'C3').retractReason], ['retracted', '覆核無出處支持'])
+            assert.equal(claim(p.state, 'C1').text, '價格偏離均值後在樣本內傾向回歸')
+            assert.deepEqual(checkInvariants(s, p.state, { touched: p.touched }), [], '程式撤回理由為合法之撤回理由')
+            assert.deepEqual(PROGRAM_RETRACT_REASONS.filter((x) => RETRACT_REASONS.includes(x)), [], '兩表不重疊(AI 不得用)')
+        })
+
+        it('⑱reviveItems:只還原可還原理由之撤回 → active(或 contested)、清理由、沿革記 revive、升版;其餘終態不動;不變式(須 touched)', () => {
+            const s = seed()
+            const r = applyDelta(s, { ops: [{ op: 'retract', id: 'C3', reason: '覆核無出處支持' }, { op: 'retract', id: 'C2', reason: '離題' }] }, { batch: [], at: 'T', program: true, onlyOps: ['retract'] }).state
+            const v = reviveItems(r, ['C3', 'C2', 'C1'], { at: 'T2', why: '使用者要求還原' })
+            assert.deepEqual(v.revived, ['C3'], '「離題」之撤回不可還原;有效主張不動')
+            const c3 = claim(v.state, 'C3')
+            assert.deepEqual([c3.status, c3.retractReason, c3.statusNote, c3.history.at(-1).op, c3.history.at(-1).note], ['active', '', '', 'revive', '使用者要求還原'])
+            assert.equal(claim(v.state, 'C2').status, 'retracted')
+            assert.equal(v.state.version, r.version + 1)
+            assert.deepEqual(checkInvariants(r, v.state, { touched: v.revived }), [], '可還原之撤回被還原為唯一例外')
+            assert.ok(checkInvariants(r, v.state, { touched: [] }).some((x) => /未觸及之項被改動：C3/.test(x)), '未列 touched 即違反')
+            const same = reviveItems(r, ['C2'])
+            assert.equal(same.state, r, '無可還原者原樣回傳')
+            // 非 revive 之終態改動仍違反
+            const forged = JSON.parse(JSON.stringify(r))
+            Object.assign(forged.claims.find((c) => c.id === 'C2'), { status: 'active', retractReason: '' })
+            assert.ok(checkInvariants(r, forged, { touched: ['C2'] }).some((x) => /終態項被改動：C2/.test(x)))
+        })
+
+        it('⑱withdrawSources 之恢復:「出處已撤他篇無支持」之撤回而出處含恢復之筆記 → 同一次升版一併還原(revived);他種撤回不還原', () => {
+            const s = seed()
+            const w = withdrawSources(s, { withdraw: [{ id: 'n3', title: '筆記三' }], at: 'T1' }).state
+            const r = applyDelta(w, { ops: [{ op: 'retract', id: 'C3', reason: '出處已撤他篇無支持', note: '他篇皆不支持' }] }, { batch: [], at: 'T2', program: true, onlyOps: ['retract'] }).state
+            const back = withdrawSources(r, { restore: ['n3'], at: 'T3' })
+            assert.deepEqual([back.bumped, back.revived], [true, ['C3']])
+            assert.equal(claim(back.state, 'C3').status, 'active')
+            assert.equal(back.state.changelog.at(-1).revived[0], 'C3')
+            assert.deepEqual(checkInvariants(r, back.state, { touched: back.revived }), [])
+            const r2 = applyDelta(w, { ops: [{ op: 'retract', id: 'C3', reason: '覆核無出處支持' }] }, { batch: [], at: 'T2', program: true, onlyOps: ['retract'] }).state
+            assert.deepEqual(withdrawSources(r2, { restore: ['n3'], at: 'T3' }).revived, [], 'ES9 之撤回不隨出處恢復(由使用者還原)')
+        })
+
+        it('⑲隔離:held 之主張併入 unsupportedOf.items(另列 held)、洗白守門擋引用、摘要標「隔離待判」;終態即移出;解除', () => {
+            const s = seed()
+            const h = holdItems(s, [{ id: 'C1', std: 'ES9', why: '兩席不一致', hash: 'h1' }, { id: 'D9', std: 'ES9' }], { at: 'T' })
+            assert.deepEqual(h.held, ['C1'], '只收存在之非終態主張')
+            assert.deepEqual(h.state.held.C1, { std: 'ES9', at: 'T', why: '兩席不一致', hash: 'h1' })
+            const un = unsupportedOf(h.state)
+            assert.deepEqual([un.items.has('C1'), un.held.has('C1'), un.any], [true, true, true])
+            const cite = run(h.state, [{ op: 'essence', text: '均值回歸之本質', claims: ['C1'], reason: '首版' }])
+            assert.match(reasons(cite)[0], /所引〔C1〕出處支持未能判定、已隔離待判，不得引用/)
+            assert.match(stateDigest(h.state), /〔C1〕.*出處支持未能判定（隔離待判，勿引用）/)
+            assert.deepEqual(checkInvariants(s, h.state, { touched: [] }), [], 'held 為記帳欄位')
+            const gone = run(h.state, [{ op: 'retract', id: 'C1', reason: '離題' }]).state
+            assert.equal(gone.held, undefined, '轉終態即移出 held')
+            const rl = releaseHeld(h.state, ['C1'])
+            assert.deepEqual([rl.released, rl.state.held, unsupportedOf(rl.state).any], [['C1'], undefined, false])
+            assert.ok(checkInvariants(s, { ...h.state, held: { C9: { std: 'ES9' } } }, { touched: [] }).some((x) => /held 含非主張或終態之條目/.test(x)))
+            assert.throws(() => normalizeState({ ...h.state, held: 'x' }), (e) => e.code === CORRUPT_STATE_CODE && /held 應為物件/.test(e.message), 'normalizeState 嚴格驗形:錯型別＝壞檔(不補形狀)')
+        })
+
+        it('⑳出處排除集:setExcluded 以新結果取代(空 → 移除;只收非終態主張與其出處欄內者);證據計算與摘要扣除之、出處欄不動;終態即移出;不變式驗形狀', () => {
+            const s0 = seed()
+            const rc = run(s0, [{ op: 'confirm', id: 'C1', sources: ['N2', 'N4'] }]) // C1 出處 n1、n2、n4
+            const s = commitBatch(rc.state, coverageOf({ batch: BATCH, applied: rc.applied }))
+            assert.deepEqual(claim(s, 'C1').sources, ['n1', 'n2', 'n4'])
+            const x = setExcluded(s, [{ id: 'C1', ids: ['n4', 'n2', 'n9'] }, { id: 'D9', ids: ['n1'] }], { at: 'T' })
+            assert.deepEqual(x.changed, ['C1'])
+            assert.deepEqual(x.state.srcExcluded.C1, { ids: ['n2', 'n4'], std: 'ES9', at: 'T' }, '不在出處欄者(n9)不收;排序')
+            assert.deepEqual([...excludedSourcesOf(x.state, 'C1')], ['n2', 'n4'])
+            assert.deepEqual(supportingSourcesOf(claim(x.state, 'C1'), x.state), ['n1'])
+            assert.deepEqual(claim(x.state, 'C1').sources, ['n1', 'n2', 'n4'], '出處欄不動(只增之不變式)')
+            assert.deepEqual(checkInvariants(s, x.state, { touched: [] }), [], '記帳欄位')
+            assert.equal(setExcluded(x.state, [{ id: 'C1', ids: ['n4', 'n2'] }]).changed.length, 0, '同結果不改')
+            assert.equal(setExcluded(x.state, [{ id: 'C1', ids: [] }]).state.srcExcluded, undefined, '空 → 移除(重判全列為支持即恢復)')
+            // 證據:不支持之出處不計(高等級之 n4 受排除即不抬高)
+            const ev = makeEvidence({ levels: ['高', '中', '低'] })
+            const notes = new Map([['n1', { id: 'n1', evidenceLevel: '低', docId: 'd1' }], ['n2', { id: 'n2', evidenceLevel: '中', docId: 'd2' }], ['n4', { id: 'n4', evidenceLevel: '高', docId: 'd4' }]])
+            assert.equal(claim(ev.apply(JSON.parse(JSON.stringify(s)), notes), 'C1').evidence.level, '中', '未排除:取出處最高(高級僅 1 份文件 → 封頂中)')
+            const e1 = claim(ev.apply(JSON.parse(JSON.stringify(x.state)), notes), 'C1').evidence
+            assert.equal(e1.level, '低', '排除 n2、n4 後只剩 n1(低)')
+            assert.match(e1.trace, /另 2 篇經覆核判不支持，不計/)
+            assert.match(stateDigest(x.state), /〔C1〕[^\n]*（其中 2 篇經覆核判不支持，不計證據）/)
+            // 終態即移出;不變式擋形狀錯誤
+            assert.equal(run(x.state, [{ op: 'retract', id: 'C1', reason: '離題' }]).state.srcExcluded, undefined)
+            assert.ok(checkInvariants(s, { ...x.state, srcExcluded: { C1: { ids: ['n9'] } } }, { touched: [] }).some((m) => /srcExcluded 含非主張、終態或不在出處欄之筆記/.test(m)))
+            assert.throws(() => normalizeState({ ...x.state, srcExcluded: 'x' }), (e) => e.code === CORRUPT_STATE_CODE && /srcExcluded 應為物件/.test(e.message), 'normalizeState 嚴格驗形:錯型別＝壞檔(不補形狀)')
+        })
+    })
+
+    describe('核心之依據筆記(citedNotesOf;「核心已引」之唯一口徑)', function() {
+
+        // 起點:C1(n1)、C2(n2)、C3(n3)、P1(n1)、Q1(無出處);再立爭議 D1(一方引 C1、一方出處 n4)並給 Q1 出處 n3
+        const base = () => {
+            const r = run(seed(), [
+                { op: 'dispute_add', question: '回歸是否在強趨勢下成立', sides: [{ position: '成立', claims: ['C1'] }, { position: '不成立', basis: '實證', sources: ['N4'] }] },
+            ])
+            assert.deepEqual(reasons(r), [])
+            return r.state
+        }
+
+        it('非終態之主張、參數、爭議、待解問題之出處聯集:依條目序(主張→參數→爭議→問題)去重、扣已撤出處;回傳 Set', () => {
+            const s = base()
+            const cited = citedNotesOf(s)
+            assert.ok(cited instanceof Set)
+            assert.deepEqual([...cited], ['n1', 'n2', 'n3', 'n4'], '主張 n1、n2、n3;參數 n1 重複不再列;爭議 n4')
+            const w = withdrawSources(s, { withdraw: [{ id: 'n2', title: 'T2', reason: '筆記已刪除' }], at: 'T' })
+            assert.deepEqual([...citedNotesOf(w.state)], ['n1', 'n3', 'n4'], '已撤出處不算依據(出處欄不動)')
+            assert.deepEqual(claim(w.state, 'C2').sources, ['n2'])
+            const r = run(s, [{ op: 'retract', id: 'C3', reason: '離題' }])
+            assert.deepEqual(reasons(r), [])
+            assert.deepEqual([...citedNotesOf(r.state)], ['n1', 'n2', 'n4'], '撤回之主張之出處不再是依據')
+            assert.deepEqual([...citedNotesOf(emptyState())], [])
+            assert.deepEqual([...citedNotesOf(undefined)], [], '無狀態 → 空集合')
+        })
+
+        it('爭議取頂層出處:確認爭議而未指定方者只入頂層,其筆記亦是依據(內容變更即應重審——保守方向)', () => {
+            const s = base()
+            const r = run(s, [{ op: 'confirm', id: 'D1', sources: ['N3'] }], { batch: B('x1', 'x2', 'n9') })
+            assert.deepEqual(reasons(r), [])
+            const d = findItem(r.state, 'D1').item
+            assert.ok(d.sources.includes('n9') && !d.sides.some((sd) => (sd.sources || []).includes('n9')), '前提:n9 只在頂層出處')
+            assert.ok(citedNotesOf(r.state).has('n9'))
+        })
+
+        it('已取代或已撤回之爭議不再是依據(各方之出處亦不計);其他條目仍引之筆記照計', () => {
+            const s = base()
+            for (const status of ['superseded', 'retracted']) {
+                const t = JSON.parse(JSON.stringify(s))
+                findItem(t, 'D1').item.status = status
+                assert.deepEqual([...citedNotesOf(t)], ['n1', 'n2', 'n3'], `${status}:n4 只在爭議 → 不計;n1 另由 C1 引 → 照計`)
+            }
         })
     })
 })

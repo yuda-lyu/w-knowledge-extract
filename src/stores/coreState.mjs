@@ -1,42 +1,104 @@
-// coreState.mjs — 核心知識之狀態(主張庫)與差量操作:純函數,不做 IO
+// coreState.mjs — 核心知識之狀態(主張庫)之模型、衍生、不變式與常數,與差量操作之語意:純函數,不做 IO
 //
-// 【為何需要】核心 md 此前同時是呈現與唯一的保存:每版讀回、截斷 2,500 字、整份重寫——舊知識逐版流失、
-//   出處只剩最近一批、篇幅與保留互相拉扯(安裝方〈建議w-knowledge-extract優化〉§1,2026-09-29)。改為:狀態為真理,md 為投影;
-//   模型只提「差量操作」,由本檔套用並保證不變式——舊項不刪(被取代／撤回者保留並附理由)、出處只增、id 穩定、引用可解析。
+// 【狀態為真理、md 為投影】模型只提「差量操作」,由本檔套用並保證不變式——既有項不刪(被取代／撤回者保留並附理由)、
+//   出處只增、id 穩定、引用可解析。每條知識皆有逐條出處(本批筆記)。
 // 【機制所有,domain 不可放寬】操作之結構規則(出處須屬本批、跨操作衝突、ref 連鎖、同篇爭議、文字引用、長度上限)屬機制;
-//   domain 只給內容層:主張種類(claimKinds)、長度上限(limits)、證據演算法(evidenceOf)、提示詞與渲染。
-// 【操作語意之取捨(2026-09-29 雙審定案,tmp/wke-distill-b-全盤.md §11)】
+//   domain 只給內容層:主張種類(claimKinds)、長度上限(limits)、證據演算法(evidence:makeEvidence 之產物)、提示詞與渲染。
+// 【操作語意】
 //   ①同一差量內每個既有項至多一個改狀態操作(revise／supersede／retract／contest／merge-from),違者皆拒——意圖矛盾時不猜。
 //   ②confirm 與 supersede／retract 同一項 → 皆拒。③新項以 ref 互引(他處寫 '@ref'),被拒之新項其依賴操作連鎖拒收
-//     (否則引用懸空觸發不變式、整個差量丟棄)。④爭議之立場若出處全來自同一篇 → 拒收(同篇正反不成爭議)。
+//     (否則引用懸空觸發不變式、整個差量丟棄)。④爭議之立場若出處全來自同一篇 → 拒收(同篇正反不成爭議;例外見⑬)。
 //   ⑤contested 為衍生狀態:被未解決之爭議某方引用即 contested,否則 active——模型不直接改;終態(superseded／retracted)不可逆。
 //   ⑥文字欄以〔C12〕格式引用他項,引用不存在者拒收(自由文字之「Q1」「C4」可能是季度或術語,不檢查);同差量之新項寫〔@ref〕,
 //     落盤前換成實際 id,ref 未定義者拒收,所指新項不成立(被剔除、被拒收)者只去掉標記——文字提及不是結構引用,不連帶拒收。
 //   ⑦新增項與既有項全文相同 → 改記為 confirm(累積出處,不另立重複項)。
-//   ⑧爭議可立亦可拆(2026-09-29):兩方並非回答同一問題、或結論並不相反之「硬配對立」,以 dispute_dissolve 拆解——爭議轉終態
-//     (理由「非對立」),只有立場文字之一方由程式轉為獨立主張(出處沿用),內容與出處全留、只拿掉對立標籤;拆解為不可逆操作,
-//     須提案／整併提出且審查明列保留。審查對爭議類操作只能以形式理由(離題、同篇)剔除,認為非對立者以 doubt 標示存疑——
-//     照套該操作並記於爭議(1.0.5,三獨立審定案 E′)。此前只能建立爭議、不能不刪內容地解除(有 A→B 無 B→A)。
-//   ⑨審查之剔除只用於內容不成立者;可修者不刪(2026-10-01):新增主張與參數之標籤(種類、證據性質、快照)錯誤以 fix 改正,
-//     「性質標錯」對其不予剔除(按未裁決保留)。保留之操作所引新項被剔除而連帶拒收者,審查裁決自相矛盾,由呼叫端一律記 WARN。
+//   ⑧爭議可立亦可拆:兩方並非回答同一問題、或結論並不相反之「硬配對立」,以 dispute_dissolve 拆解——爭議轉終態(理由「非對立」),
+//     只有立場文字之一方由程式轉為獨立主張(出處沿用),內容與出處全留、只拿掉對立標籤;拆解為不可逆操作,須終審明列保留。
+//     終審對爭議類操作只能以形式理由(離題、同篇)剔除,認為非對立者以 doubt 標示存疑——照套該操作並記於爭議。
+//   ⑨終審之剔除只用於內容不成立者;可修者不刪:新增主張與參數之標籤(種類、證據性質、快照)錯誤以 fix 改正,
+//     「性質標錯」對其不予剔除(按未裁決保留)。保留之操作所引新項被剔除而連帶拒收者,裁決自相矛盾,由呼叫端一律記 WARN。
+//   ⑩revise 只驗被改之欄位(未改之欄位不重驗長度)。
+//   ⑪merge 可併爭議(各方併入 into);主張合併給 text 時,into 與每條被併項之文字皆須在合併稿保有過半(包含率 ≥0.5),
+//     長度上限放寬為 max(上限×2, 最長輸入×1.2)——不給 text 則 into 原文不變、被併者入沿革。
+//   ⑫split:長條目拆為 2～8 條,各條須為原文之子集(包含率 ≥0.8)、合起來涵蓋原文 ≥0.85(皆以 text、conditions、pros、cons、critique
+//     全部文字欄計);出處與證據性質(basis)沿用原條;原條轉終態(splitInto),引用原條之爭議方、本質、參數改指第一條。
+//   ⑭本質引用之處置只寫一份(redirectEssence):主張轉終態時本質所引一律改指或移除——merge 改指 into、split 改指第一條、
+//     retract「重複」改指 into(須為存活主張)、其餘 retract 與 supersede 一律移除並標 essence.stale(本質待重寫:取代後本質文字仍在
+//     述舊觀點,改指新主張會成「文字說 X、所引主張說非 X」之假支持)。不處置則不變式「本質所引主張懸空或為終態」必違反,
+//     取代／撤回本質所引之主張永遠落不了地。
+//   ⑬同篇規則排除的是「同一研究自身之正反(利弊、條件、限制)」;筆記所引述之他人研究與本篇結論相反者是真爭議——
+//     該方標 basis 含轉述(REPORTED_BASIS)即不受④限制,其證據等級依 basis 封頂(轉述＝最低)。拆解(⑧)時自帶性質之方另立主張並沿用其 basis。
+//   ⑮出處撤出(筆記經明示刪除):出處欄不動,withdrawn 記已撤之筆記;「存活出處」與「失撐」(unsupportedOf)
+//     一律衍生、不持久——還原即回復(真值維護之 OUT／IN);只有非終態條目受影響才升版。失撐條目不得被合併、不得被新本質／新爭議方／
+//     contest 引用(同一差量內已 confirm 補出處者除外),否則失撐內容以他條出處呈現。
+//   ⑯重審(內容已更新或新衝突之夥伴筆記入批):批內尚有重審筆記以外之存活出處者,不得以「無出處支持」撤回(只可 revise);
+//     重審筆記另收略過理由 RECHECK_SKIP_REASONS。confirm 之出處皆已在者為 noop,全為 noop 之差量不升版。
+//   ⑰關聯變更之影響(檢定標準 ES10;standards/relationImpact):partners(新關聯之夥伴候選,只收未消化者——消化即移出,commitBatch)、
+//     impactRecheck(關聯變更之重審項)、via(經夥伴入批之邊)只收已消化者;皆為記帳欄位,不影響條目與版號。
+//   ⑱程式差量與可還原之撤回(檢定標準 ES9 存量、ES8):ctx.program 之差量可用全部操作、revise 不需本批出處、
+//     撤回可用 PROGRAM_RETRACT_REASONS(AI 差量不可)。此類撤回可還原(reviveItems:status 回 active、沿革記 revive)——終態不可逆之唯一例外;
+//     ES8 之撤回於出處筆記還原時由 withdrawSources 一併還原。
+//   ⑲隔離(held;檢定標準之「未能判定不入正式可用集合」):held 之主張併入 unsupportedOf 之 items(洗白守門、本質待重寫一體適用),
+//     渲染另立「待判」;解除以 releaseHeld(記帳欄位,不升版)。
+//   ⑳出處排除集(srcExcluded;檢定標準 ES9「出處只增不減需衍生排除集」):主張 × 出處經 ES9 判定小組判受支持、
+//     而成立之兩票皆未列為支持者 → 記入 srcExcluded[主張 id]＝{ ids, std, at }(setExcluded;每次判定以新結果取代——重判可恢復)。
+//     出處欄不動(只增之不變式維持);證據計算(stores/evidence)與渲染之出處扣除之(supportingSourcesOf);覆核之材料仍用全部存活出處
+//     (liveSourcesOf),故改寫或出處內容變更後之重判可把它列回。記帳欄位,不升版;終態主張與已不在出處欄者移出。
+// 【分檔】本檔:狀態模型(emptyState／normalizeState)、衍生(withdrawnOf、liveSourcesOf、citedNotesOf、unsupportedOf、findItem…)、
+//   不變式(checkInvariants)、隔離與排除集與撤出處(holdItems／releaseHeld／setExcluded／withdrawSources)與常數;差量之套用、涵蓋與落帳、
+//   暫緩之存入待審在 stores/coreDelta;終審裁決之套用與待審之取出在 workflow/verdicts;狀態之提示詞摘要與規則表在 stores/stateDigest。
+// 【兩種模式】delta(一批筆記併入;出處須屬本批)、consolidate(整併:合併、重排面向、精簡;不需本批出處)。
 
 import isobj from 'wsemi/src/isobj.mjs'
 import isarr from 'wsemi/src/isarr.mjs'
+import { textValueOf as str, textListOf as strs, uniq, jsonClone as clone } from '../core/capturePackage.mjs'
 
-/** 狀態格式版本(upgradeState 依此升級;未知之較新版本拒讀) */
-export const STATE_VERSION = 1
+/** 狀態格式版本:本套件只讀寫此版(normalizeState 遇其他版本即拒讀,不升級、不降級) */
+export const STATE_VERSION = 3
+
+/** 他版狀態檔之錯誤碼(normalizeState 拒讀他版時之 err.code;核心儲存據以分流為 foreign,不當壞檔) */
+export const FOREIGN_STATE_CODE = 'STATE_FOREIGN_VERSION'
+
+/** 錯形狀之錯誤碼(normalizeState 嚴格驗形:鍵在場而錯型別;核心儲存據以分流為 corrupt——以上一版還原、壞檔隔離) */
+export const CORRUPT_STATE_CODE = 'STATE_CORRUPT_SHAPE'
 
 /** 增量模式之操作 */
-export const DELTA_OPS = ['add', 'confirm', 'revise', 'supersede', 'retract', 'contest', 'dispute_add', 'dispute_update', 'dispute_dissolve', 'param_add', 'question_add', 'question_resolve', 'essence', 'related_add']
+export const DELTA_OPS = ['add', 'confirm', 'revise', 'supersede', 'retract', 'contest', 'dispute_add', 'dispute_update', 'dispute_dissolve', 'param_add', 'question_add', 'question_resolve', 'essence', 'related_add', 'split']
 
 /** 整併模式之操作(不消耗筆記、不需本批出處) */
-export const CONSOLIDATE_OPS = ['merge', 'refacet', 'revise', 'essence', 'related_prune', 'dispute_dissolve']
+export const CONSOLIDATE_OPS = ['merge', 'refacet', 'revise', 'essence', 'related_prune', 'dispute_dissolve', 'split']
+
+/** 拆分之門檻(⑫):各條為原文子集、合起來涵蓋原文 */
+export const SPLIT_PART_MIN = 0.8
+
+/** 拆分之涵蓋門檻(⑫):各部合起來須涵蓋原文之比例下限 */
+export const SPLIT_COVER_MIN = 0.85
+/** 合併保留門檻(⑪):into 與每條被併項之文字在合併稿保有過半 */
+export const MERGE_KEEP_MIN = 0.5
+
+/** 爭議之一方為「引述他人研究」之證據性質關鍵詞(⑬;ctx.reportedBasis 可覆寫,須與 domain 之 basis 詞彙一致) */
+export const REPORTED_BASIS = ['轉述']
+
+/** 離題之理由名(撤回、終審剔除、爭議剔除、略過共用;已持久化於狀態之略過與撤回理由,值不可改) */
+export const OFFTOPIC_REASON = '離題'
 
 /** 撤回之理由(列舉;撤回為終態,項目保留並渲染於沿革);「重複」須帶 into(存活之同種類項),出處併入之 */
-export const RETRACT_REASONS = ['離題', '無出處支持', '同篇誤配', '重複']
+export const RETRACT_REASONS = [OFFTOPIC_REASON, '無出處支持', '同篇誤配', '重複']
 
-/** 終態操作(不可逆):審查失敗或漏裁決時不套用,改存待審(pendingReview) */
-export const TERMINAL_OPS = ['supersede', 'retract', 'merge', 'dispute_dissolve']
+/** 程式撤回之理由(只收程式差量:applyDelta ctx.program;AI 差量用之即拒收)——檢定標準 ES9 存量覆核成立不受支持、ES8 失撐主張他篇皆無支持(⑱) */
+export const PROGRAM_RETRACT_REASONS = ['覆核無出處支持', '出處已撤他篇無支持']
+
+/** 可還原之撤回理由(reviveItems;⑱):ES8 於出處筆記還原時自動還原、ES9 存量由使用者要求還原 */
+export const REVIVABLE_RETRACT = ['覆核無出處支持', '出處已撤他篇無支持']
+
+/** 拆解(dispute_dissolve)後爭議之撤回理由(爭議轉終態;渲染以之辨認「已拆解」——寫入與辨認同讀此值,已持久化,值不可改) */
+export const DISSOLVED_RETRACT_REASON = '非對立'
+
+/** 終態操作(不可逆):終審失敗或漏裁決時不套用,改存待審(pendingReview) */
+export const TERMINAL_OPS = ['supersede', 'retract', 'merge', 'dispute_dissolve', 'split']
+
+/** 終態操作之中文名(終審提示詞之不可逆清單由 TERMINAL_OPS 產生——提示詞與程式同一來源,新增終態操作不致漏列) */
+export const TERMINAL_OP_LABELS = Object.freeze({ supersede: '取代', retract: '撤回', merge: '合併', dispute_dissolve: '拆解', split: '拆分' })
 
 /** 待審上限:逾者丟最舊並由呼叫端記 WARN */
 export const PENDING_REVIEW_CAP = 20
@@ -47,36 +109,152 @@ export const DEFAULT_CLAIM_KINDS = ['principle', 'rule', 'pitfall', 'temporal']
 /** 預設長度上限(字元;domain 以 limits 覆寫)——提示詞寫入、超過即計入超長率;逾 2 倍拒收(防失控,不截斷改寫) */
 export const DEFAULT_LIMITS = { essence: 220, text: 90, conditions: 60, pros: 60, cons: 60, critique: 90, period: 40, basis: 90, position: 90, question: 90, note: 120, resolution: 120, name: 40, value: 60 }
 
-const KEY_OF_PREFIX = { C: 'claims', D: 'disputes', P: 'parameters', Q: 'questions' }
-const PREFIX_OF_KEY = { claims: 'C', disputes: 'D', parameters: 'P', questions: 'Q' }
-const NAME_OF_KEY = { claims: '主張', disputes: '爭議', parameters: '參數', questions: '問題' }
-const TERMINAL = new Set(['superseded', 'retracted'])
-const REF_RE = /〔([CDPQ]\d+)〕/g
-// 文字中以〔@ref〕指稱同一差量之新項(模型仿〔C1〕之寫法;1.0.5 真實模型驗收實測本質文字寫「〔@a〕」)——落盤前換成實際 id
-const TEMP_REF_RE = /〔@([^〔〕\s]+)〕/g
+/** 雜湊與指紋之欄位分隔字元(檢核紀錄之素材雜湊、存量覆核之內容雜湊、邊之簽名;已持久化於雜湊與快照,值不可改——各組雜湊處同讀此值) */
+export const HASH_FIELD_SEP = '\u0001'
+/** 條目 id 之前綴 → 集合鍵(C 主張、D 爭議、P 參數、Q 待解問題;findItem、不變式與長度判準同讀此一份) */
+export const KEY_OF_PREFIX = Object.freeze({ C: 'claims', D: 'disputes', P: 'parameters', Q: 'questions' })
+/** 條目之終態(取代、撤回):不再參與知識之計算(證據、引用、去向、渲染之有效條目)——各模組之終態判斷皆取此一份 */
+export const TERMINAL_STATUSES = Object.freeze(['superseded', 'retracted'])
+/** 終態之集合(TERMINAL_STATUSES 之 Set;各模組判終態取此一份) */
+export const TERMINAL_SET = Object.freeze(new Set(TERMINAL_STATUSES))
+/** 爭議類操作(dispute_add、dispute_update、contest):終審之剔除理由與存疑依之 */
+export const DISPUTE_OPS = new Set(['dispute_add', 'dispute_update', 'contest'])
+/**
+ * 操作之引用欄位(一份):ids＝指向單一條目之鍵、lists＝指向多條目之鍵(陣列)、texts＝可含〔id〕文字引用之欄——
+ *   同差量之 @ref 換號(workflow/candidates)、存待審時之 ref 換號(stores/coreDelta)、文字引用之改寫(standards/opGuards)、指向條目之擷取(workflow/verdicts)同讀
+ *
+ * @type {Object}
+ */
+export const REF_FIELDS = Object.freeze({
+    ids: Object.freeze(['id', 'by', 'into', 'dispute', 'claim']),
+    lists: Object.freeze(['from', 'claims']),
+    texts: Object.freeze(['text', 'question', 'note', 'critique', 'period', 'conditions', 'pros', 'cons', 'resolution']),
+})
+/** 各項之文字欄(長度上限、〔id〕引用、正體與檢定標準之範圍;爭議之各方另見 SIDE_TEXT_FIELDS)——套用、檢定標準與存量處置同讀此一份 */
+export const ITEM_TEXT_FIELDS = Object.freeze({
+    claims: Object.freeze(['text', 'conditions', 'pros', 'cons', 'period', 'critique', 'basis']),
+    parameters: Object.freeze(['name', 'value', 'conditions', 'period']),
+    questions: Object.freeze(['text', 'resolution']),
+    disputes: Object.freeze(['question', 'note']),
+})
+/** 爭議之一方之文字欄 */
+export const SIDE_TEXT_FIELDS = Object.freeze(['position', 'conditions', 'basis'])
 
-// revise 可改之欄位(id／sources／status／origin 等機制欄位不可由模型改)
-const REVISABLE = {
-    claims: ['text', 'conditions', 'pros', 'cons', 'period', 'critique', 'facet', 'basis', 'kind'],
-    parameters: ['name', 'value', 'conditions', 'period', 'snapshot'],
+/**
+ * 狀態之全部條目(主張、爭議、參數、待解問題;依此序)
+ *
+ * @param {Object} s 輸入狀態(四集合皆為陣列)
+ * @returns {Array} 回傳條目陣列(新陣列,元素為原物件)
+ * @example
+ * console.log(allItemsOf({ claims: [{ id: 'C1' }], disputes: [], parameters: [{ id: 'P1' }], questions: [] }).map((x) => x.id))
+ * // => [ 'C1', 'P1' ]
+ */
+export function allItemsOf(s) {
+    return [...s.claims, ...s.disputes, ...s.parameters, ...s.questions]
 }
-// 各項之文字欄(長度上限與〔id〕引用檢查之對象)
-const TEXT_FIELDS = {
-    claims: ['text', 'conditions', 'pros', 'cons', 'period', 'critique', 'basis'],
-    parameters: ['name', 'value', 'conditions', 'period'],
-    questions: ['text', 'resolution'],
-    disputes: ['question', 'note'],
+
+/**
+ * 代號或 id 之清單 → 本批筆記 id(取 textListOf 之文字值、以 noteOfCode 對回、去不在本批者、去重保序):操作之出處欄之讀法(納入閘、出處支持覆核同讀)
+ *
+ * @param {Map} codeMap 輸入 codeMapOf 之產物
+ * @param {*} v 輸入出處欄(陣列或單值)
+ * @returns {Array} 回傳筆記 id 陣列
+ * @example
+ * console.log(notesOfCodes(codeMapOf([{ code: 'N1', id: 'n-a' }, { code: 'N2', id: 'n-b' }]), ['n1', 'N3', 'n-a', 'N2']))
+ * // => [ 'n-a', 'n-b' ]
+ */
+export function notesOfCodes(codeMap, v) {
+    return uniq(strs(v).map((x) => noteOfCode(codeMap, x)).filter(Boolean))
 }
-const ARRAY_FIELDS = new Set(['conditions', 'pros', 'cons'])
+/**
+ * 文字欄之長度硬上限(套用之拒收與檢定標準 ES1 之判準同一份):本質為 limits.essence;其餘為該欄上限之 2 倍(1～2 倍放行而計數);
+ *   爭議之方之欄(sides[k].x)以其欄名計;無上限之欄回 0
+ *
+ * @param {String} field 輸入欄名('essence'、條目之欄或 sides[k].欄)
+ * @param {Object} limits 輸入長度上限
+ * @returns {Number} 回傳硬上限(0＝無上限)
+ * @example
+ * console.log(lengthCapOf('text', { text: 200 }), lengthCapOf('sides[1].position', { position: 50 }), lengthCapOf('essence', { essence: 300 }))
+ * // => 400 100 300
+ */
+export function lengthCapOf(field, limits) {
+    if (field === 'essence') return Number(limits?.essence) || 0
+    const base = String(field).replace(/^sides\[\d+\]\./, '')
+    return limits?.[base] ? limits[base] * 2 : 0
+}
+/**
+ * 本批代號對照:完整 id 與本批代號(大寫)皆對回筆記 id(套用、涵蓋與檢定標準之讀法同一份)
+ *
+ * @param {Array} batch 輸入本批 [{ code, id }]
+ * @returns {Map} 回傳 Map(代號或 id → 筆記 id);查詢以 noteOfCode(不分大小寫)
+ * @example
+ * console.log(noteOfCode(codeMapOf([{ code: 'N1', id: 'n-a' }]), 'n1'))
+ * // => n-a
+ */
+export function codeMapOf(batch) {
+    const map = new Map()
+    for (const b of isarr(batch) ? batch : []) {
+        if (!isobj(b) || !str(b.id)) continue
+        map.set(str(b.id), str(b.id))
+        if (str(b.code)) map.set(str(b.code).toUpperCase(), str(b.id))
+    }
+    return map
+}
 
-const str = (v) => (typeof v === 'string' ? v.trim() : (typeof v === 'number' ? String(v) : ''))
-const strs = (v) => (isarr(v) ? v.map((x) => str(x)).filter(Boolean) : (str(v) ? [str(v)] : []))
-const oneLine = (v) => str(v).replace(/\s+/g, ' ')
-const uniq = (arr) => [...new Set(arr)]
-const clone = (v) => JSON.parse(JSON.stringify(v))
-const sameText = (s) => String(s || '').normalize('NFKC').replace(/[\s\p{P}\p{S}]+/gu, '').toLowerCase()
-const allItems = (s) => [...s.claims, ...s.disputes, ...s.parameters, ...s.questions]
+/**
+ * 以本批代號對照取筆記 id(代號不分大小寫——模型常寫 n3)
+ *
+ * @param {Map} map 輸入 codeMapOf 之產物
+ * @param {*} x 輸入代號或 id
+ * @returns {String|null} 回傳筆記 id;不在本批回 null
+ * @example
+ * console.log(noteOfCode(codeMapOf([{ code: 'N1', id: 'n-a' }]), 'n1'))
+ * // => n-a
+ */
+export function noteOfCode(map, x) {
+    return map.get(str(x)) || map.get(str(x).toUpperCase()) || null
+}
 
+/**
+ * 「方」之索引:接受整數、數字字串與「side1／side 1」(提示詞以 `side k` 標示,模型可能照抄);其餘回 null
+ *
+ * @param {*} v 輸入索引
+ * @returns {Integer|null} 回傳索引
+ * @example
+ * console.log([parseSide(1), parseSide(' side 2 '), parseSide('x')])
+ * // => [ 1, 2, null ]
+ */
+export function parseSide(v) {
+    if (Number.isInteger(v)) return v
+    const m = typeof v === 'string' ? /^\s*(?:side\s*)?(\d+)\s*$/i.exec(v) : null
+    return m ? Number(m[1]) : null
+}
+
+/**
+ * 操作所帶之爭議方(dispute_add 之 sides 與 dispute_update 之 sides_add,依序)
+ *
+ * @param {Object} op 輸入操作
+ * @returns {Array} 回傳方之陣列
+ * @example
+ * console.log(opSidesOf({ op: 'dispute_add', sides: [{ position: '甲' }, { position: '乙' }] }).length, opSidesOf({ op: 'add' }).length)
+ * // => 2 0
+ */
+export function opSidesOf(op) {
+    return [...(isarr(op?.sides) ? op.sides : []), ...(isarr(op?.sides_add) ? op.sides_add : [])]
+}
+
+/**
+ * 操作所指之條目 id(id、into、ref 依序取第一個非空之文字值;無則空字串):覆核之日誌、剔除與修訂之記錄同讀
+ *
+ * @param {Object} op 輸入操作
+ * @returns {String} 回傳 id
+ * @example
+ * console.log([opIdOf({ op: 'revise', id: 'C2' }), opIdOf({ op: 'merge', into: 'C1' }), opIdOf({ op: 'add', ref: 'a' }), opIdOf({ op: 'add' })])
+ * // => [ 'C2', 'C1', 'a', '' ]
+ */
+export function opIdOf(op) {
+    return str(op.id) || str(op.into) || str(op.ref)
+}
 
 /**
  * 空狀態(新概念之首版起點)
@@ -97,44 +275,77 @@ export function emptyState(meta = {}) {
         version: 0, // 知識版本:有操作套用才 +1(md 與索引顯示者)
         rev: 0, // 寫入序號:每次寫檔 +1(含只改 consumed 之落帳);投影對帳與 CAS 一律比 rev——比 version 看不見只落帳之寫入
         updatedAt: '', // 最近一次知識版本之時刻(渲染取此值,使 md 為狀態之純函數)
-        essence: { text: '', claims: [], sources: [], at: '' },
+        essence: { text: '', claims: [], sources: [], at: '', stale: null }, // stale:所引主張被取代／撤回而未重寫時之標記 { version, at, from }
         claims: [],
         disputes: [],
         parameters: [],
         questions: [],
         related: [],
-        legacy: null,
         pendingReview: [],
         consumed: [],
         skipped: [],
         essenceHistory: [],
         changelog: [],
         lastConsolidated: 0,
-        proposedAt: '', // 最近一次提案之時刻(選題之等待錨點;整併不更新)
+        proposedAt: '', // 最近一次提煉批次之時刻(選題之等待錨點;整併不更新)
         renderHashes: [], // 最近兩次渲染之 md 雜湊(手改偵測;無則不比對)
+        // 出處版本紀錄:已消化筆記於消化當下之內容鍵 { [筆記 id]: { k:雜湊, v:內容鍵版本 } }——內容變更偵測之基準
+        seen: {},
+        seenConflicts: [], // 已於【關聯脈絡】實際呈現之衝突邊 id(新衝突以集合成員判定,不比時間)
+        withdrawn: {}, // 已刪除筆記之撤出處 { [筆記 id]: { at, title, reason } }:出處欄不動,「存活出處」由此衍生;還原即移除(可逆)
+        lineage: null, // 內容基準之建立 { at }:首見即以現值為基準(不視為變更);null＝尚未建立(維護時建立)
         nextId: { C: 1, D: 1, P: 1, Q: 1 },
     }
 }
 
 
 /**
- * 讀入之狀態升級與形狀補齊(缺欄補預設);未知之較新版本拒讀——不降級覆寫
+ * 讀入之狀態形狀補齊(缺鍵補預設)與嚴格驗形(鍵在場而錯型別即拒);格式版本須為 STATE_VERSION,其他版本一律拒讀(本套件不升級、不降級、不轉換他種格式)
  *
  * @param {*} raw 輸入自檔案讀出之物件
  * @returns {Object} 回傳可用之狀態物件(新物件,不修改輸入)
- * @throws {Error} raw 非物件、v 非正整數、或 v 大於 STATE_VERSION 時拋出
+ * @throws {Error} raw 非物件、v 不等於 STATE_VERSION(err.code 為 FOREIGN_STATE_CODE)、或鍵在場而錯型別(err.code 為 CORRUPT_STATE_CODE)時拋出;核心儲存據此分流
+ * @example
+ * const s = normalizeState({ v: STATE_VERSION, concept: '黑洞' })
+ * console.log(s.concept, s.claims, s.disputes.length)
+ * // => 黑洞 [] 0
  */
-export function upgradeState(raw) {
+export function normalizeState(raw) {
     if (!isobj(raw)) throw new Error('核心狀態須為物件')
-    if (!Number.isInteger(raw.v) || raw.v < 1) throw new Error(`核心狀態之格式版本無效：${raw.v}`)
-    if (raw.v > STATE_VERSION) throw new Error(`核心狀態之格式版本 ${raw.v} 新於本套件支援之 ${STATE_VERSION}，拒讀（請升級套件）`)
+    if (raw.v !== STATE_VERSION) {
+        const e = new Error(`格式版本 ${raw.v ?? '（無）'} 非本套件之 ${STATE_VERSION}，拒讀（本套件只讀寫本格式之狀態檔）`)
+        e.code = FOREIGN_STATE_CODE
+        throw e
+    }
     const base = emptyState({ coreId: raw.coreId, concept: raw.concept, scope: raw.scope })
     const s = { ...base, ...clone(raw) }
+    // 【嚴格驗形】鍵在場而錯型別＝壞檔(拋 CORRUPT_STATE_CODE;核心儲存分流為 corrupt、以上一版還原);缺鍵補預設(舊碼寫出之狀態檔缺後加之鍵,同一格式版本)。
+    //   錯形狀若靜默補成空值,下次存檔即永久遺失該集合,不變式以已清空之前像比對亦過——故不補、只拒
+    const bad = []
+    const want = (k, ok, what) => {
+        if (s[k] !== undefined && !ok(s[k])) bad.push(`${k} 應為${what}`)
+    }
+    for (const k of ['claims', 'disputes', 'parameters', 'questions', 'related', 'pendingReview', 'consumed', 'skipped', 'essenceHistory', 'changelog', 'renderHashes', 'seenConflicts']) want(k, isarr, '陣列')
+    for (const k of ['essence', 'nextId', 'seen', 'withdrawn']) want(k, isobj, '物件')
+    // 爭議覆核之結案紀錄(檢定標準 ES14;記帳欄位,只在有覆核時出現);關聯變更之影響(ES10;⑰):夥伴候選、關聯變更之重審項、經夥伴入批之邊(只在開啟後出現);隔離(⑲)
+    for (const k of ['doubtChecks', 'partners', 'impactRecheck', 'via', 'held', 'srcExcluded']) want(k, isobj, '物件')
+    for (const k of ['version', 'rev', 'lastConsolidated']) want(k, (v) => Number.isInteger(v) && v >= 0, '非負整數')
+    for (const k of ['coreId', 'concept', 'updatedAt', 'proposedAt']) want(k, (v) => typeof v === 'string', '字串')
+    want('lineage', (v) => v === null || isobj(v), 'null 或物件')
+    if (isarr(s.seenConflicts) && s.seenConflicts.some((x) => typeof x !== 'string')) bad.push('seenConflicts 之元素應為字串')
+    if (bad.length) {
+        const e = new Error(`核心狀態檔錯形狀（${bad.slice(0, 3).join('；')}）`)
+        e.code = CORRUPT_STATE_CODE
+        throw e
+    }
     for (const k of ['claims', 'disputes', 'parameters', 'questions', 'related', 'pendingReview', 'consumed', 'skipped', 'essenceHistory', 'changelog', 'renderHashes']) {
         if (!isarr(s[k])) s[k] = []
     }
     s.essence = { ...base.essence, ...(isobj(s.essence) ? s.essence : {}) }
     s.nextId = { ...base.nextId, ...(isobj(s.nextId) ? s.nextId : {}) }
+    for (const k of ['seen', 'withdrawn']) if (!isobj(s[k])) s[k] = {}
+    if (!isobj(s.lineage)) s.lineage = null
+    s.seenConflicts = isarr(s.seenConflicts) ? uniq(s.seenConflicts.map((x) => str(x)).filter(Boolean)) : []
     if (!Number.isInteger(s.version) || s.version < 0) s.version = 0
     if (!Number.isInteger(s.rev) || s.rev < 0) s.rev = 0
     s.v = STATE_VERSION
@@ -148,6 +359,10 @@ export function upgradeState(raw) {
  * @param {Object} s 輸入狀態
  * @param {String} id 輸入 id
  * @returns {Object|null} 回傳 { key, item }，找不到回 null
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }] }).state
+ * console.log(findItem(s, 'C1').key, findItem(s, 'C1').item.text, findItem(s, 'C9'))
+ * // => claims 甲 null
  */
 export function findItem(s, id) {
     const key = KEY_OF_PREFIX[String(id || '')[0]]
@@ -158,10 +373,433 @@ export function findItem(s, id) {
 
 
 /**
+ * 拆解(dispute_dissolve)時爭議各方之去處——拆解與檢定標準 ES14 之單一判定:引主張且無方層出處之方 → none(不動);
+ *   只引一條有效主張、有方層出處(confirm side／contest 所加,不在所引主張出處內者)且不自帶證據性質之方 → merge(方層出處併入該主張);
+ *   其餘(只有立場文字、或引多條、或自帶 basis——併入即以該主張之性質呈現,證據封頂被放寬)→ claim
+ *   (以該方立場另立一條主張,須有種類與標注)
+ *
+ * @param {Object} s 輸入狀態
+ * @param {Object} d 輸入爭議
+ * @returns {Array} 回傳 [{ k, to:'claim'|'merge'|'none', cited:Array(findItem 之結果,有效者), extra:Array(方層出處中不在所引主張出處內者) }]
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }, { text: '乙', sources: ['n2'] }], disputes: [{ question: '丙', sides: [{ position: '一方', claims: ['C1'], sources: ['n1'] }, { position: '他方', claims: ['C2'], sources: ['n2'] }] }] }).state
+ * console.log(dissolveSidesOf(s, s.disputes[0]).map((x) => x.to))
+ * // => [ 'none', 'none' ]
+ */
+export function dissolveSidesOf(s, d) {
+    const out = []
+    for (const [k, sd] of (isarr(d?.sides) ? d.sides : []).entries()) {
+        const cited = (isarr(sd?.claims) ? sd.claims : []).map((cid) => findItem(s, cid)).filter((h) => h && !TERMINAL_SET.has(h.item.status))
+        const covered = new Set(cited.flatMap((h) => h.item.sources || []))
+        const extra = (isarr(sd?.sources) ? sd.sources : []).filter((x) => !covered.has(x))
+        const to = (isarr(sd?.claims) && sd.claims.length && !extra.length) ? 'none' : (cited.length === 1 && extra.length && !str(sd?.basis) ? 'merge' : 'claim')
+        out.push({ k, to, cited, extra })
+    }
+    return out
+}
+
+
+/**
+ * 已撤出處之筆記 id 集合(state.withdrawn 之鍵)
+ *
+ * @param {Object} s 輸入狀態
+ * @returns {Set} 回傳筆記 id 集合
+ * @example
+ * console.log([...withdrawnOf({ withdrawn: { n1: { at: 'T1' } } })])
+ * // => [ 'n1' ]
+ */
+export function withdrawnOf(s) {
+    return new Set(Object.keys(isobj(s?.withdrawn) ? s.withdrawn : {}))
+}
+
+
+/**
+ * 條目之存活出處(出處欄位不動,扣除已撤者——出處只增之不變式維持,撤除與還原皆可逆)
+ *
+ * @param {Object} item 輸入條目(取 sources)
+ * @param {Object} s 輸入狀態
+ * @param {Set} [W] 輸入已撤集合(批次呼叫時傳入,免重算)
+ * @returns {Array} 回傳存活之筆記 id 陣列
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1', 'n2'] }] }).state
+ * s.withdrawn = { n2: { at: 'T1' } }
+ * console.log(liveSourcesOf(s.claims[0], s))
+ * // => [ 'n1' ]
+ */
+export function liveSourcesOf(item, s, W) {
+    const w = W instanceof Set ? W : withdrawnOf(s)
+    return (isarr(item?.sources) ? item.sources : []).filter((x) => !w.has(x))
+}
+
+
+/**
+ * 核心之依據筆記——「核心已引」之唯一口徑:非終態之主張、參數、爭議、待解問題之出處聯集,扣已撤出處(依條目序去重)
+ *   「提煉自」與「依據 N 篇」、cores 記錄之篇數、關聯脈絡之已引標記、維護之內容變更判定(被引用者重審、未被引用者靜默重設基準)、
+ *   重審項(內容已變、新判衝突)、關聯影響之夥伴判定同讀之。以依據為準:內容變更之筆記屬核心之依據者即應重審(保守方向)——
+ *   爭議取其頂層出處(各寫入路徑皆併入各方之出處;確認爭議而未指定方者只入頂層),已取代或已撤回之條目(含爭議)不再是依據
+ *
+ * @param {Object} s 輸入狀態
+ * @returns {Set} 回傳筆記 id 集合(依條目序:主張、參數、爭議、待解問題)
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }, { text: '乙', sources: ['n2', 'n1'] }] }).state
+ * console.log(citedNotesOf(s))
+ * // => Set(2) { 'n1', 'n2' }
+ */
+export function citedNotesOf(s) {
+    const W = withdrawnOf(s)
+    const out = new Set()
+    for (const x of [...(s?.claims || []), ...(s?.parameters || []), ...(s?.disputes || []), ...(s?.questions || [])]) {
+        if (TERMINAL_SET.has(x?.status)) continue
+        for (const id of isarr(x?.sources) ? x.sources : []) if (!W.has(id)) out.add(id)
+    }
+    return out
+}
+
+
+/**
+ * 主張之受排除出處(⑳;ES9 判受支持而兩席皆未列為支持者)
+ *
+ * @param {Object} s 輸入狀態
+ * @param {String} id 輸入主張 id
+ * @returns {Set} 回傳筆記 id 集合(無則空集合)
+ * @example
+ * const s0 = coreStateOf({ claims: [{ text: '甲', sources: ['n1', 'n2'] }] }).state
+ * const s = setExcluded(s0, [{ id: 'C1', ids: ['n2'], std: 'ES9' }], { at: 'T1' }).state
+ * console.log(excludedSourcesOf(s, 'C1'))
+ * // => Set(1) { 'n2' }
+ */
+export function excludedSourcesOf(s, id) {
+    const e = isobj(s?.srcExcluded) ? s.srcExcluded[str(id)] : null
+    return new Set(isarr(e?.ids) ? e.ids.map(str).filter(Boolean) : [])
+}
+
+
+/**
+ * 條目之支持出處:存活出處扣除受排除者(⑳;證據計算與渲染用——覆核之材料仍用 liveSourcesOf)
+ *
+ * @param {Object} item 輸入條目
+ * @param {Object} s 輸入狀態
+ * @param {Set} [W] 輸入已撤集合
+ * @returns {Array} 回傳筆記 id 陣列
+ * @example
+ * const s0 = coreStateOf({ claims: [{ text: '甲', sources: ['n1', 'n2'] }] }).state
+ * const s = setExcluded(s0, [{ id: 'C1', ids: ['n2'], std: 'ES9' }], { at: 'T1' }).state
+ * console.log(supportingSourcesOf(s.claims[0], s))
+ * // => [ 'n1' ]
+ */
+export function supportingSourcesOf(item, s, W) {
+    const x = excludedSourcesOf(s, item?.id)
+    return liveSourcesOf(item, s, W).filter((n) => !x.has(n))
+}
+
+
+/**
+ * 設定出處排除集(⑳;記帳欄位,不升版):每條以新結果取代;ids 空 → 移除該條;只收非終態主張與其出處欄內之筆記
+ *
+ * @param {Object} state 輸入狀態(不修改,回傳新狀態)
+ * @param {Array} entries 輸入 [{ id(主張 id), ids:Array(不支持之筆記 id), std? }]
+ * @param {Object} [o={}] 輸入 { at }
+ * @returns {Object} 回傳 { state, changed:Array(主張 id) }
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1', 'n2'] }] }).state
+ * const r = setExcluded(s, [{ id: 'C1', ids: ['n2'], std: 'ES9' }], { at: 'T1' })
+ * const back = setExcluded(r.state, [{ id: 'C1', ids: [] }])
+ * console.log(r.changed, excludedSourcesOf(r.state, 'C1'), back.changed, excludedSourcesOf(back.state, 'C1'))
+ * // => [ 'C1' ] Set(1) { 'n2' } [ 'C1' ] Set(0) {}
+ */
+export function setExcluded(state, entries, o = {}) {
+    const s = clone(state)
+    const changed = []
+    for (const e of isarr(entries) ? entries : []) {
+        const id = str(e?.id)
+        const h = id ? findItem(s, id) : null
+        if (!h || h.key !== 'claims') continue
+        const ids = TERMINAL_SET.has(h.item.status) ? [] : uniq(strs(e.ids)).filter((n) => (h.item.sources || []).includes(n)).sort()
+        const cur = isobj(s.srcExcluded?.[id]) ? s.srcExcluded[id] : null
+        if (!ids.length) {
+            if (cur) {
+                delete s.srcExcluded[id]
+                changed.push(id)
+            }
+            continue
+        }
+        if (cur && JSON.stringify(cur.ids || []) === JSON.stringify(ids)) continue
+        if (!isobj(s.srcExcluded)) s.srcExcluded = {}
+        s.srcExcluded[id] = { ids, std: str(e.std) || 'ES9', at: str(o?.at) }
+        changed.push(id)
+    }
+    if (isobj(s.srcExcluded) && !Object.keys(s.srcExcluded).length) delete s.srcExcluded
+    return { state: changed.length ? s : state, changed }
+}
+
+
+/**
+ * 失撐判定(衍生,不持久化——還原筆記即自動回復,同真值維護之 IN／OUT):
+ *   主張、待解問題:出處非空而存活出處為空;
+ *   參數:自身出處非空而存活為空,且無所依主張或所依主張已失撐／已終態;
+ *   爭議方:方層出處非空而存活為空,且所引之存活主張皆失撐(或無所引)。
+ * 只看非終態條目;部分出處已撤(存活非空)者另列 partial(狀態摘要標示用,不觸發 AI)。
+ * 隔離(⑲ held;出處支持未能判定之主張)併入 items——排除路徑一體適用;held 只列「非因出處已撤」者(渲染據以分節:出處已撤優先)。
+ *   爭議方與參數之失撐只依出處已撤判定(held 為待使用者判讀之暫態,不連帶)
+ *
+ * @param {Object} s 輸入狀態
+ * @returns {Object} 回傳 { items:Set(失撐或隔離之條目 id), sides:Map(爭議 id → Set(失撐之 side 索引)), partial:Set(部分出處已撤之條目 id), held:Set(隔離而出處未撤之主張 id), any:Boolean }
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }, { text: '乙', sources: ['n2'] }] }).state
+ * s.withdrawn = { n1: { at: 'T1' } }
+ * console.log([...unsupportedOf(s).items], unsupportedOf(s).any)
+ * // => [ 'C1' ] true
+ */
+export function unsupportedOf(s) {
+    const W = withdrawnOf(s)
+    const items = new Set()
+    const sides = new Map()
+    const partial = new Set()
+    const held = new Set()
+    const heldIds = Object.keys(isobj(s?.held) ? s.held : {})
+    const addHeld = () => {
+        for (const id of heldIds) {
+            const h = findItem(s, id)
+            if (!h || h.key !== 'claims' || TERMINAL_SET.has(h.item.status) || items.has(id)) continue
+            held.add(id)
+            items.add(id)
+        }
+    }
+    if (!W.size) {
+        addHeld()
+        return { items, sides, partial, held, any: items.size > 0 }
+    }
+    const lost = (x) => {
+        const src = isarr(x?.sources) ? x.sources : []
+        const live = src.filter((y) => !W.has(y))
+        if (src.length && live.length && live.length < src.length) partial.add(x.id)
+        return src.length > 0 && live.length === 0
+    }
+    for (const c of s?.claims || []) if (!TERMINAL_SET.has(c.status) && lost(c)) items.add(c.id)
+    for (const q of s?.questions || []) if (!TERMINAL_SET.has(q.status) && lost(q)) items.add(q.id)
+    const claimOk = (cid) => {
+        const h = findItem(s, cid)
+        return !!(h && h.key === 'claims' && !TERMINAL_SET.has(h.item.status) && !items.has(cid))
+    }
+    for (const p of s?.parameters || []) {
+        if (TERMINAL_SET.has(p.status)) continue
+        if (lost(p) && !(p.claim && claimOk(p.claim))) items.add(p.id)
+    }
+    for (const d of s?.disputes || []) {
+        if (d.status === 'retracted') continue
+        ;(d.sides || []).forEach((sd, k) => {
+            const src = isarr(sd?.sources) ? sd.sources : []
+            const ownLost = src.length > 0 && src.every((y) => W.has(y))
+            const cited = (isarr(sd?.claims) ? sd.claims : []).filter((cid) => {
+                const h = findItem(s, cid)
+                return h && !TERMINAL_SET.has(h.item.status)
+            })
+            if ((ownLost || !src.length) && (cited.length ? cited.every((cid) => items.has(cid)) : ownLost)) {
+                if (!sides.has(d.id)) sides.set(d.id, new Set())
+                sides.get(d.id).add(k)
+            }
+        })
+    }
+    addHeld()
+    return { items, sides, partial, held, any: items.size > 0 || sides.size > 0 }
+}
+
+
+/**
+ * 隔離主張(⑲;記帳欄位,不升版):出處支持未能判定者移出有效集合,待使用者判讀或內容變更後重判
+ *
+ * @param {Object} state 輸入狀態(不修改,回傳新狀態)
+ * @param {Array} entries 輸入 [{ id(主張 id), std, why, hash?(隔離時之受檢雜湊;內容或出處變了即再檢) }]
+ * @param {Object} [o={}] 輸入 { at }
+ * @returns {Object} 回傳 { state, held:Array(新隔離之 id) }
+ * @example
+ * const s0 = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }] }).state
+ * const r = holdItems(s0, [{ id: 'C1', std: 'ES9', why: '兩席意見不一致' }], { at: 'T1' })
+ * console.log(r.held, [...unsupportedOf(r.state).held], [...unsupportedOf(s0).held])
+ * // => [ 'C1' ] [ 'C1' ] []
+ */
+export function holdItems(state, entries, o = {}) {
+    const s = clone(state)
+    const out = []
+    for (const e of isarr(entries) ? entries : []) {
+        const id = str(e?.id)
+        const h = id ? findItem(s, id) : null
+        if (!h || h.key !== 'claims' || TERMINAL_SET.has(h.item.status)) continue
+        if (!isobj(s.held)) s.held = {}
+        if (!s.held[id]) out.push(id)
+        s.held[id] = { std: str(e.std), at: str(o?.at), why: str(e.why).slice(0, 300), ...(str(e.hash) ? { hash: str(e.hash) } : {}) }
+    }
+    return { state: s, held: out }
+}
+
+
+/**
+ * 解除隔離(⑲;記帳欄位,不升版):使用者豁免／要求重判、或重判受支持
+ *
+ * @param {Object} state 輸入狀態(不修改,回傳新狀態)
+ * @param {Array} ids 輸入主張 id
+ * @returns {Object} 回傳 { state, released:Array(id) }
+ * @example
+ * const s0 = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }] }).state
+ * const held = holdItems(s0, [{ id: 'C1', std: 'ES9', why: '兩席意見不一致' }], { at: 'T1' }).state
+ * const r = releaseHeld(held, ['C1'])
+ * console.log(r.released, unsupportedOf(held).held.size, unsupportedOf(r.state).held.size)
+ * // => [ 'C1' ] 1 0
+ */
+export function releaseHeld(state, ids) {
+    const want = new Set(strs(ids))
+    const cur = isobj(state?.held) ? state.held : {}
+    const released = Object.keys(cur).filter((id) => want.has(id))
+    if (!released.length) return { state, released }
+    const s = clone(state)
+    for (const id of released) delete s.held[id]
+    if (!Object.keys(s.held).length) delete s.held
+    return { state: s, released }
+}
+
+
+/**
+ * 還原可還原之撤回(⑱;程式寫入):只收 status retracted 且理由在 REVIVABLE_RETRACT 之主張 → active(deriveStatus 重算 contested)、
+ *   清撤回理由與說明、沿革記 revive;有還原者升版並記 changelog。本質不自動改回(撤回時已標待重寫,由本質專步重寫)
+ *
+ * @param {Object} state 輸入狀態(不修改,回傳新狀態)
+ * @param {Array} ids 輸入主張 id
+ * @param {Object} [o={}] 輸入 { at, why }
+ * @returns {Object} 回傳 { state, revived:Array(id) }
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'], status: 'retracted', retractReason: '覆核無出處支持' }] }).state
+ * const r = reviveItems(s, ['C1'], { at: 'T1' })
+ * console.log(s.claims[0].status, r.state.claims[0].status, r.revived)
+ * // => retracted active [ 'C1' ]
+ */
+export function reviveItems(state, ids, o = {}) {
+    const want = new Set(strs(ids))
+    const pick = (state?.claims || []).filter((c) => want.has(c.id) && c.status === 'retracted' && REVIVABLE_RETRACT.includes(c.retractReason)).map((c) => c.id)
+    if (!pick.length) return { state, revived: [] }
+    const s = clone(state)
+    const at = str(o?.at)
+    const version = s.version + 1
+    for (const c of s.claims) {
+        if (!pick.includes(c.id)) continue
+        const was = c.retractReason
+        Object.assign(c, { status: 'active', retractReason: '', statusNote: '' })
+        c.history = [...(isarr(c.history) ? c.history : []), { version, at, op: 'revive', note: str(o?.why) || `撤回（${was}）已還原` }]
+    }
+    s.version = version
+    s.updatedAt = at
+    deriveStatus(s)
+    s.changelog.push({ version, at, mode: 'revive', revived: pick, why: str(o?.why) })
+    return { state: s, revived: pick }
+}
+
+
+/**
+ * 本質是否待重寫之衍生原因(不寫 essence.stale):本質所引主張失撐 → 回傳其 id;另有持久之 stale(取代／撤回所致)由呼叫端另讀
+ *
+ * @param {Object} s 輸入狀態
+ * @param {Object} [u] 輸入 unsupportedOf 之產物(免重算)
+ * @returns {Array} 回傳本質所引而失撐之主張 id 陣列
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }], essence: { text: '本質', claims: ['C1'] } }).state
+ * const t = withdrawSources(s, { withdraw: [{ id: 'n1', title: '甲筆記', reason: '刪除' }], at: 'T1' }).state
+ * console.log(essenceLostOf(s), essenceLostOf(t))
+ * // => [] [ 'C1' ]
+ */
+export function essenceLostOf(s, u) {
+    const un = u || unsupportedOf(s)
+    return (isarr(s?.essence?.claims) ? s.essence.claims : []).filter((id) => un.items.has(id))
+}
+
+
+/**
+ * 本質之需求(檢定標準 ES6 v2;提煉段之本質專步與符合度掃描同一判定):有效主張 > 0 而無本質 → 'missing';
+ *   本質待重寫(所引主張已被取代／撤回——持久之 essence.stale;或所引主張之出處已撤——衍生)→ 'stale';其餘 ''
+ *
+ * @param {Object} s 輸入狀態
+ * @returns {Object} 回傳 { need:''|'missing'|'stale', live:Integer(有效主張數:非終態、未隔離、未失撐——本質只能引之), staleWhy:String(待重寫之原因,呈現用;無則'') }
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }] }).state
+ * console.log(essenceNeedOf(s), JSON.stringify(essenceNeedOf(coreStateOf({}).state)))
+ * // => { need: 'missing', live: 1, staleWhy: '' } {"need":"","live":0,"staleWhy":""}
+ */
+export function essenceNeedOf(s) {
+    const un = unsupportedOf(s)
+    const live = (s?.claims || []).filter((c) => !TERMINAL_SET.has(c.status) && !un.items.has(c.id) && !un.held.has(c.id)).length
+    const lost = essenceLostOf(s, un)
+    const staleWhy = [isobj(s?.essence?.stale) ? `所引〔${s.essence.stale.from}〕已被取代或撤回` : '', lost.length ? `所引〔${lost.join('〕〔')}〕之出處已撤` : ''].filter(Boolean).join('；')
+    const need = !live ? '' : (!str(s?.essence?.text) ? 'missing' : (staleWhy ? 'stale' : ''))
+    return { need, live, staleWhy }
+}
+
+
+/**
+ * 撤出處／恢復(純函數,無 AI;刪除筆記之墓碑驅動):只有「非終態條目之出處」受影響時才升知識版本並寫沿革,
+ *   只影響略過、逾限或終態條目者只記 withdrawn(呼叫端落盤即 rev+1)
+ *
+ *   恢復時,理由為「出處已撤他篇無支持」(檢定標準 ES8 之撤回)而出處含被恢復之筆記者一併還原(⑱;同一次升版,revived 列出)
+ *
+ * @param {Object} state 輸入狀態(不修改,回傳新狀態)
+ * @param {Object} o 輸入 { withdraw:[{ id, title, reason }], restore:[id], at }
+ * @returns {Object} 回傳 { state, changed:Boolean(withdrawn 有增減), bumped:Boolean(升版), withdrawn:Array(id), restored:Array(id), affected:Array(條目 id), revived:Array(主張 id) }
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }, { text: '乙', sources: ['n1', 'n2'] }] }).state
+ * const r = withdrawSources(s, { withdraw: [{ id: 'n1', title: '甲筆記', reason: '刪除' }], at: 'T1' })
+ * console.log(r.changed, r.bumped, Object.keys(r.state.withdrawn), liveSourcesOf(r.state.claims[1], r.state))
+ * // => true true [ 'n1' ] [ 'n2' ]
+ */
+export function withdrawSources(state, o = {}) {
+    const s = clone(state)
+    if (!isobj(s.withdrawn)) s.withdrawn = {}
+    const consumed = new Set(s.consumed || [])
+    const at = str(o?.at)
+    const W0 = withdrawnOf(s)
+    const withdrawn = []
+    for (const e of isarr(o?.withdraw) ? o.withdraw : []) {
+        const id = str(e?.id)
+        if (!id || W0.has(id) || !consumed.has(id) || withdrawn.includes(id)) continue
+        s.withdrawn[id] = { at, title: str(e?.title) || id, reason: str(e?.reason) || 'deleted' }
+        withdrawn.push(id)
+    }
+    const restored = []
+    for (const x of isarr(o?.restore) ? o.restore : []) {
+        const id = str(x)
+        if (!W0.has(id) || restored.includes(id)) continue
+        delete s.withdrawn[id]
+        restored.push(id)
+    }
+    const changed = withdrawn.length + restored.length > 0
+    if (!changed) return { state, changed: false, bumped: false, withdrawn, restored, affected: [], revived: [] }
+    const ids = new Set([...withdrawn, ...restored])
+    // ES8 之撤回(出處已撤他篇無支持):其出處筆記恢復即還原(⑱)
+    const back = new Set(restored)
+    const revived = (s.claims || []).filter((c) => c.status === 'retracted' && c.retractReason === '出處已撤他篇無支持' && (c.sources || []).some((y) => back.has(y))).map((c) => c.id)
+    const affected = allItemsOf(s).filter((x) => !TERMINAL_SET.has(x.status) && (x.sources || []).some((y) => ids.has(y))).map((x) => x.id)
+    const sideHit = (s.disputes || []).filter((d) => d.status !== 'retracted' && (d.sides || []).some((sd) => (sd.sources || []).some((y) => ids.has(y)))).map((d) => d.id)
+    const hit = uniq([...affected, ...sideHit, ...revived])
+    if (!hit.length) return { state: s, changed: true, bumped: false, withdrawn, restored, affected: [], revived: [] }
+    s.version += 1
+    s.updatedAt = at
+    for (const c of s.claims) {
+        if (!revived.includes(c.id)) continue
+        Object.assign(c, { status: 'active', retractReason: '', statusNote: '' })
+        c.history = [...(isarr(c.history) ? c.history : []), { version: s.version, at, op: 'revive', note: '出處筆記已還原，撤回（出處已撤他篇無支持）隨之還原' }]
+    }
+    if (revived.length) deriveStatus(s)
+    s.changelog.push({ version: s.version, at, mode: withdrawn.length ? 'withdraw' : 'restore', withdrawn, restored, affected: hit, ...(revived.length ? { revived } : {}) })
+    return { state: s, changed: true, bumped: true, withdrawn, restored, affected: hit, revived }
+}
+
+
+/**
  * 重算衍生狀態:主張被「未解決且未撤回之爭議」某方引用即 contested,否則 active(終態不動);essence 之出處＝所引主張出處之聯集
  *
  * @param {Object} s 輸入狀態(就地修改)
  * @returns {Array} 回傳狀態有變動之主張 id 陣列
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }, { text: '乙', sources: ['n2'] }], disputes: [{ question: '丙', sides: [{ position: '一方', claims: ['C1'], sources: ['n1'] }, { position: '他方', claims: [], sources: ['n2'] }] }] }).state
+ * deriveStatus(s)
+ * console.log(s.claims.map((c) => c.status))
+ * // => [ 'contested', 'active' ]
  */
 export function deriveStatus(s) {
     const cited = new Set()
@@ -170,8 +808,14 @@ export function deriveStatus(s) {
         for (const sd of d.sides || []) for (const cid of sd.claims || []) cited.add(cid)
     }
     const changed = []
+    // 隔離(⑲)與出處排除集(⑳)只對非終態主張:已轉終態(撤回、取代、合併、拆分)者移出
+    for (const k of ['held', 'srcExcluded']) {
+        if (!isobj(s[k])) continue
+        for (const id of Object.keys(s[k])) if (!s.claims.some((c) => c.id === id && !TERMINAL_SET.has(c.status))) delete s[k][id]
+        if (!Object.keys(s[k]).length) delete s[k]
+    }
     for (const c of s.claims) {
-        if (TERMINAL.has(c.status)) continue
+        if (TERMINAL_SET.has(c.status)) continue
         const want = cited.has(c.id) ? 'contested' : 'active'
         if (c.status !== want) {
             c.status = want
@@ -184,1315 +828,21 @@ export function deriveStatus(s) {
 }
 
 
-/**
- * 套用差量:逐操作原子(不合規者拒收並記原因,其餘照套);新項 id 由程式配發(單調、永不重用);出處只增;
- * 同一差量內之新項可以 ref 互引(他處寫 '@ref');規則見檔頭【操作語意之取捨】
- *
- * @param {Object} state 輸入目前狀態(不修改,回傳新狀態)
- * @param {Object} delta 輸入差量 { ops:[...] }(skipped 等其他欄位由呼叫端處理)
- * @param {Object} [ctx={}] 輸入脈絡，非物件視為{}
- * @param {Array} [ctx.batch=[]] 輸入本批筆記 [{ code:'N1', id }]；出處只能引本批(以代號或 id 皆可)
- * @param {String} [ctx.mode='delta'] 輸入 'delta'｜'consolidate'
- * @param {Array} [ctx.claimKinds] 輸入許可之主張種類，預設 DEFAULT_CLAIM_KINDS
- * @param {Object} [ctx.limits] 輸入長度上限，逐鍵覆寫 DEFAULT_LIMITS
- * @param {Array} [ctx.withhold=[]] 輸入本次暫緩之操作名(如審查失敗之降級:終態操作不套用)，被暫緩者記入 withheld(帶 resolved＝@ref 已換實際 id 之操作)；
- *   個別操作帶 _withhold:true 者亦暫緩(審查漏裁決之終態操作)
- * @param {Function} [ctx.keyOf] 輸入概念名正規化函數(related 去重用)，預設去空白小寫
- * @param {String} [ctx.self=''] 輸入本核心之概念名(related 去自身用)
- * @param {String} [ctx.at=''] 輸入時刻字串(寫入 history 與 changelog)
- * @param {Object} [ctx.meta={}] 輸入寫入 changelog 之附加欄位(如 provider、reviewed)
- * @returns {Object} 回傳 { state, applied:Array({index,op,id?,sources,noop?}), rejected:Array({index,op,reason,sources}), withheld:Array({index,op,sources}), touched:Array(id), overLimit:Integer(逾建議上限而放行之欄數), lengthChecked:Integer(受長度檢查之欄數) }
- */
-export function applyDelta(state, delta, ctx = {}) {
-    if (!isobj(ctx)) ctx = {}
-    const s = clone(state)
-    const mode = ctx.mode === 'consolidate' ? 'consolidate' : 'delta'
-    const allowed = mode === 'consolidate' ? CONSOLIDATE_OPS : DELTA_OPS
-    const kinds = isarr(ctx.claimKinds) && ctx.claimKinds.length ? ctx.claimKinds : DEFAULT_CLAIM_KINDS
-    const limits = { ...DEFAULT_LIMITS, ...(isobj(ctx.limits) ? ctx.limits : {}) }
-    const withhold = new Set(isarr(ctx.withhold) ? ctx.withhold : [])
-    const keyOf = typeof ctx.keyOf === 'function' ? ctx.keyOf : (x) => String(x || '').replace(/\s+/g, '').toLowerCase()
-    const at = str(ctx.at)
-    const version = s.version + 1
-    const ops = isobj(delta) && isarr(delta.ops) ? delta.ops : []
-
-    // 本批代號 → 筆記 id(亦接受完整 id)
-    const codeMap = new Map()
-    for (const b of isarr(ctx.batch) ? ctx.batch : []) {
-        if (!isobj(b) || !str(b.id)) continue
-        codeMap.set(str(b.id), str(b.id))
-        if (str(b.code)) codeMap.set(str(b.code).toUpperCase(), str(b.id))
-    }
-    const toNote = (x) => codeMap.get(str(x)) || codeMap.get(str(x).toUpperCase()) || null
-    const srcOf = (v) => uniq(strs(v).map(toNote).filter(Boolean))
-    const preIds = new Set(allItems(s).map((x) => x.id))
-
-    const applied = []
-    const rejected = []
-    const withheld = []
-    const touched = new Set()
-    let overLimit = 0
-    let lengthChecked = 0
-    const opSources = (op) => uniq([...srcOf(op?.sources), ...(isarr(op?.sides) ? op.sides.flatMap((sd) => srcOf(sd?.sources)) : []), ...(isarr(op?.sides_add) ? op.sides_add.flatMap((sd) => srcOf(sd?.sources)) : [])])
-    // 回報用序號:經 applyVerdicts 剔除後之操作帶 _i(提案原序號),回報一律用原序號
-    const rep = (index, op) => (Number.isInteger(op?._i) ? op._i : index)
-    const reject = (index, op, reason) => {
-        rejected.push({ index: rep(index, op), op: str(op?.op) || '?', reason, sources: opSources(op) })
-    }
-
-    // ── 前置掃描:ref 登記(重複者皆拒)、跨操作衝突(既有項至多一個改狀態操作;confirm 與終態操作不並存)──
-    const refState = new Map() // ref → { id:null|String, rejected:Boolean }
-    const refDup = new Set()
-    ops.forEach((op) => {
-        const ref = str(op?.ref)
-        if (!ref || !['add', 'dispute_add', 'param_add', 'question_add'].includes(op?.op)) return
-        if (refState.has(ref)) refDup.add(ref)
-        else refState.set(ref, { id: null, rejected: false })
-    })
-    // 被審查剔除之新項(applyVerdicts 之 droppedRefs):引用它們之保留操作拒收時寫明「已被審查剔除(理由)」,
-    //   不再以「不存在」之類之理由掩蓋上游之剔除;同名 ref 仍由存活操作定義者不登記
-    for (const [ref, why] of Object.entries(isobj(ctx.droppedRefs) ? ctx.droppedRefs : {})) {
-        if (!refState.has(ref)) refState.set(ref, { id: null, rejected: true, dropped: str(why) || '審查剔除' })
-    }
-    const stateOps = new Map() // 既有 id → 改狀態操作之索引
-    const confirmOps = new Map()
-    const terminalOps = new Map()
-    ops.forEach((op, index) => {
-        if (!isobj(op)) return
-        const targets = op.op === 'merge' ? strs(op.from) : (['revise', 'supersede', 'retract', 'contest', 'dispute_dissolve'].includes(op.op) ? [str(op.id)] : [])
-        for (const t of targets) {
-            if (!preIds.has(t)) continue
-            stateOps.set(t, [...(stateOps.get(t) || []), index])
-            if (['supersede', 'retract', 'dispute_dissolve'].includes(op.op) || op.op === 'merge') terminalOps.set(t, [...(terminalOps.get(t) || []), index])
-        }
-        if (op.op === 'confirm' && preIds.has(str(op.id))) confirmOps.set(str(op.id), [...(confirmOps.get(str(op.id)) || []), index])
-    })
-    const conflict = new Map() // index → 原因
-    for (const [t, idx] of stateOps) if (idx.length > 1) for (const i of idx) conflict.set(i, `同一項目 ${t} 有多個改狀態操作`)
-    for (const [t, idx] of terminalOps) {
-        if (!confirmOps.has(t)) continue
-        for (const i of [...idx, ...confirmOps.get(t)]) conflict.set(i, `同一項目 ${t} 同時被確認與取代／撤回`)
-    }
-
-    // 處理順序:新增主張 → 新增爭議／參數／問題 → 其餘依原序(「先引用、後定義」亦可解析)
-    const phaseOf = (op) => (op?.op === 'add' ? 0 : ['dispute_add', 'param_add', 'question_add'].includes(op?.op) ? 1 : 2)
-    const order = ops.map((op, index) => ({ op, index })).sort((a, b) => phaseOf(a.op) - phaseOf(b.op) || a.index - b.index)
-    const newId = (key) => {
-        const p = PREFIX_OF_KEY[key]
-        const n = Math.max(Number(s.nextId[p]) || 1, 1)
-        s.nextId[p] = n + 1
-        return `${p}${n}`
-    }
-    // 解析引用:'@ref' → 已配發之 id;所依之新項未成立 → 依賴失敗,dep 為寫明根因之拒收理由(被審查剔除／被程式拒收);一般 id 須存在
-    const resolveRef = (x) => {
-        const v = str(x)
-        if (v.startsWith('@')) {
-            const r = refState.get(v.slice(1))
-            if (!r) return { id: null, reason: `ref「${v}」未定義` }
-            if (!r.id) return { id: null, reason: 'dependency-rejected', dep: r.dropped ? `所引 ${v} 已被審查剔除（${r.dropped}）` : `所引 ${v} 已被拒收（${r.why || '未成立'}）` }
-            return { id: r.id }
-        }
-        return findItem(s, v) ? { id: v } : { id: null, reason: `引用之項目 ${v || '(空)'} 不存在` }
-    }
-    // 操作之目標 id 亦可為同一差量新項之「@ref」(新增處理在前,此時已配發;如把本批新主張 contest 進既有爭議——真實模型驗收實測);
-    //   所依之新項未成立 → 依賴失敗(dep＝寫明根因之拒收理由)
-    const targetOf = (x) => {
-        const v = str(x)
-        if (!v.startsWith('@')) return { hit: findItem(s, v), shown: v, dep: '' }
-        const r = resolveRef(v)
-        return { hit: r.id ? findItem(s, r.id) : null, shown: v, dep: r.dep || '' }
-    }
-    // 引用須為指定種類(之非終態)項:不成立時回寫明根因之理由——依賴失敗、ref 未定義、不存在、種類不符、終態各自寫明,
-    //   不以「不存在或為終態」概括(1.0.5 真實模型驗收實測:本質引用爭議之 @ref 被報「不存在或為終態」,看不出錯在種類)
-    //   依賴失敗另回 dep(各引用點原樣使用,不加前綴——「所引 @x 已被審查剔除(理由)」於全部引用點同一句)
-    const refOfKind = (x, keys, opt = {}) => {
-        const r = resolveRef(x)
-        if (!r.id) return { id: null, why: r.dep || r.reason, dep: r.dep || '' }
-        const h = findItem(s, r.id)
-        const shown = str(x) === r.id ? r.id : `${str(x)}＝${r.id}`
-        if (!keys.includes(h.key)) return { id: null, why: `${shown} 為${NAME_OF_KEY[h.key] || h.key}，須為${keys.map((k) => NAME_OF_KEY[k] || k).join('或')}` }
-        if (opt.live !== false && TERMINAL.has(h.item.status)) return { id: null, why: `${shown} 已${h.item.status === 'retracted' ? '撤回' : '取代'}` }
-        return { id: r.id, hit: h }
-    }
-    // 操作之目標(id)須為指定種類:不成立時回寫明根因之理由——依賴失敗(dep)、ref 未定義、不存在、種類不符;終態由各操作依其語意自判
-    //   (1.0.5 之 refOfKind 只用於引用欄,目標欄仍把「種類不符」報成「不存在」,2026-10-01 補齊)
-    const targetOfKind = (x, keys, noun = '目標') => {
-        const tg = targetOf(x)
-        if (!tg.hit) {
-            const v = str(x)
-            return { hit: null, why: tg.dep || (v.startsWith('@') && !refState.has(v.slice(1)) ? `ref「${v}」未定義` : `${noun} ${tg.shown || '(空)'} 不存在`) }
-        }
-        if (!keys.includes(tg.hit.key)) {
-            const shown = str(x) === tg.hit.item.id ? tg.hit.item.id : `${str(x)}＝${tg.hit.item.id}`
-            return { hit: null, why: `目標 ${shown} 為${NAME_OF_KEY[tg.hit.key]}，須為${keys.map((k) => NAME_OF_KEY[k]).join('或')}` }
-        }
-        return { hit: tg.hit, why: '' }
-    }
-    // 「方」之索引:接受整數、數字字串與「side1／side 1」(提示詞以 `side k` 標示,模型可能照抄);其餘回 null
-    const parseSide = (v) => {
-        if (Number.isInteger(v)) return v
-        const m = typeof v === 'string' ? /^\s*(?:side\s*)?(\d+)\s*$/i.exec(v) : null
-        return m ? Number(m[1]) : null
-    }
-    const sideRange = (d) => ((d.sides || []).length ? `現有 side 0～${d.sides.length - 1}` : '無任何一方')
-    const hist = (item, op, note, before) => {
-        item.history = isarr(item.history) ? item.history : []
-        item.history.push({ version, at, op, ...(note ? { note } : {}), ...(before ? { before } : {}) })
-    }
-    // 文字中之引用:〔id〕須存在;〔@ref〕須為本差量宣告之 ref(落盤前換成實際 id;所指新項被剔除或拒收者去掉標記,見下方 linkCodes)。
-    //   文字中之提及不是結構引用:所指新項不成立時只去掉標記、不連帶拒收本操作——與「同差量稍後才失敗者去掉標記」同一處置
-    //   (1.0.5 對已被剔除者拒收,同一情形依先後兩種結果;且文字提及使內容連帶遺失,2026-10-01 改)
-    const danglingIn = (v) => {
-        for (const m of v.matchAll(REF_RE)) if (!findItem(s, m[1])) return `文字引用懸空：〔${m[1]}〕`
-        for (const m of v.matchAll(TEMP_REF_RE)) if (!refState.has(m[1])) return `文字引用懸空：〔@${m[1]}〕（ref 未定義）`
-        return ''
-    }
-    // 文字欄:長度(逾 2 倍拒收、逾上限計數)與文字中之引用;fields 未給即取該種類之全部文字欄
-    const textProblem = (key, obj, fields) => {
-        for (const f of fields || TEXT_FIELDS[key] || []) {
-            const vals = ARRAY_FIELDS.has(f) ? strs(obj[f]) : [str(obj[f])]
-            for (const v of vals) {
-                const lim = limits[f]
-                if (lim && v.length > lim * 2) return `${f} 過長（${v.length} 字，上限 ${lim}）`
-                const dg = danglingIn(v)
-                if (dg) return dg
-            }
-        }
-        return ''
-    }
-    // 逾建議上限(1～2 倍、放行者)之欄數與受檢欄數:比率供驗收「超長 ≤10%」(安裝方 §3 #5)
-    const countOver = (key, obj) => {
-        for (const f of TEXT_FIELDS[key] || []) {
-            const vals = (ARRAY_FIELDS.has(f) ? strs(obj[f]) : [str(obj[f])]).filter(Boolean)
-            if (!limits[f] || !vals.length) continue
-            lengthChecked++
-            if (vals.some((v) => v.length > limits[f])) overLimit++
-        }
-    }
-    const markRef = (ref, id) => {
-        if (ref && refState.has(ref)) refState.get(ref).id = id
-    }
-    const failRef = (op, why) => {
-        const ref = str(op?.ref)
-        if (ref && refState.has(ref)) Object.assign(refState.get(ref), { rejected: true, why: str(why) })
-    }
-    const live = (hit) => hit && !TERMINAL.has(hit.item.status)
-    let essenceSeen = false
-    // 審查存疑之落帳:爭議上留最新一則(含累計次數),另寫沿革(沿革只增,舊存疑可追溯)
-    const markDoubt = (op, entry) => {
-        const did = op.op === 'contest' ? resolveRef(op.dispute).id : entry.id
-        const d = did ? findItem(s, did)?.item : null
-        if (!d || !isarr(d.sides)) return
-        const note = str(op._doubt.note).slice(0, (limits.note || 120) * 2) || '（審查未附說明）'
-        const prev = isobj(d.doubt) ? d.doubt : null
-        d.doubt = { reason: str(op._doubt.reason) || '非對立', note, version, at, op: op.op, ...(op.op === 'contest' ? { claim: entry.id, side: parseSide(op.side) } : {}), count: (prev?.count || 0) + 1 }
-        hist(d, 'doubt', `${d.doubt.reason}：${note}`)
-        touched.add(d.id)
-    }
-
-    for (const { op, index } of order) {
-        const fail = (reason) => {
-            failRef(op, reason)
-            reject(index, op, reason)
-        }
-        if (!isobj(op) || !allowed.includes(op.op)) {
-            fail(isobj(op) && [...DELTA_OPS, ...CONSOLIDATE_OPS].includes(op.op) ? `${mode === 'consolidate' ? '整併' : '增量'}模式不可用「${op.op}」` : '未知操作')
-            continue
-        }
-        const ref = str(op.ref)
-        if (ref && refDup.has(ref)) {
-            fail(`ref「${ref}」重複`)
-            continue
-        }
-        if (conflict.has(index)) {
-            fail(conflict.get(index))
-            continue
-        }
-        if (withhold.has(op.op) || op._withhold === true) {
-            failRef(op)
-            withheld.push({ index: rep(index, op), op: op.op, sources: opSources(op), _op: op })
-            continue
-        }
-        const needSrc = (v) => {
-            const got = srcOf(v)
-            return got.length ? got : null
-        }
-        const done = (entry) => applied.push({ index: rep(index, op), op: op.op, sources: [], ...entry })
-        const nApplied = applied.length
-
-        switch (op.op) {
-        case 'add': {
-            const kind = str(op.kind || op.type)
-            if (!kinds.includes(kind)) {
-                fail(`種類「${kind}」不在許可清單（${kinds.join('、')}）`)
-                break
-            }
-            if (!str(op.text)) {
-                fail('缺 text')
-                break
-            }
-            const src = needSrc(op.sources)
-            if (!src) {
-                fail('無本批出處')
-                break
-            }
-            const tp = textProblem('claims', op)
-            if (tp) {
-                fail(tp)
-                break
-            }
-            // 與既有(非終態)主張全文相同 → 改記為 confirm
-            const dup = s.claims.find((c) => !TERMINAL.has(c.status) && sameText(c.text) === sameText(op.text))
-            if (dup) {
-                const add = src.filter((x) => !dup.sources.includes(x))
-                dup.sources = uniq([...dup.sources, ...src])
-                if (add.length) hist(dup, 'confirm', 'add 與既有主張同文，改記為確認')
-                touched.add(dup.id)
-                markRef(ref, dup.id)
-                done({ id: dup.id, sources: src, asConfirm: true, noop: add.length === 0 })
-                break
-            }
-            const id = newId('claims')
-            markRef(ref, id)
-            const c = {
-                id,
-                kind,
-                facet: str(op.facet),
-                text: str(op.text),
-                conditions: strs(op.conditions),
-                pros: strs(op.pros),
-                cons: strs(op.cons),
-                period: str(op.period),
-                critique: str(op.critique),
-                basis: str(op.basis),
-                sources: src,
-                origin: 'note',
-                status: 'active',
-                statusNote: '',
-                validPeriod: '',
-                supersededBy: '',
-                mergedInto: '',
-                retractReason: '',
-                evidence: { level: '', basis: '', trace: '' },
-                addedIn: version,
-                history: [{ version, at, op: 'add' }],
-            }
-            countOver('claims', c)
-            s.claims.push(c)
-            touched.add(id)
-            done({ id, sources: src })
-            break
-        }
-        case 'confirm': {
-            const tk = targetOfKind(op.id, ['claims', 'parameters', 'disputes'])
-            const hit = tk.hit
-            if (!hit) {
-                fail(tk.why)
-                break
-            }
-            if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 已${hit.item.status === 'retracted' ? '撤回' : '取代'}`)
-                break
-            }
-            const src = needSrc(op.sources)
-            if (!src) {
-                fail('無本批出處')
-                break
-            }
-            const it = hit.item
-            if (hit.key === 'disputes') {
-                // 確認爭議:出處加到指定之一方(side 索引,0 起),未指定者加到爭議本身
-                const given = op.side !== undefined && op.side !== null && op.side !== ''
-                const k = given ? parseSide(op.side) : null
-                const side = k === null ? null : it.sides[k]
-                if (given && !side) {
-                    fail(`爭議 ${it.id} 無 side ${str(op.side)}（${sideRange(it)}）`)
-                    break
-                }
-                if (side) side.sources = uniq([...(side.sources || []), ...src])
-            }
-            const add = src.filter((x) => !(it.sources || []).includes(x))
-            it.sources = uniq([...(it.sources || []), ...src])
-            if (add.length) hist(it, 'confirm')
-            touched.add(it.id)
-            done({ id: it.id, sources: src, noop: add.length === 0 })
-            break
-        }
-        case 'revise': {
-            const tk = targetOfKind(op.id, Object.keys(REVISABLE))
-            const hit = tk.hit
-            if (!hit) {
-                fail(tk.why)
-                break
-            }
-            if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 為終態，不可修訂`)
-                break
-            }
-            if (!str(op.reason)) {
-                fail('缺 reason')
-                break
-            }
-            let src = []
-            if (mode === 'delta') {
-                src = needSrc(op.sources)
-                if (!src) {
-                    fail('無本批出處')
-                    break
-                }
-            }
-            const f = isobj(op.fields) ? op.fields : {}
-            const keys = Object.keys(f).filter((k) => REVISABLE[hit.key].includes(k))
-            if (!keys.length) {
-                fail('無可改之欄位')
-                break
-            }
-            if (keys.includes('kind') && !kinds.includes(str(f.kind))) {
-                fail(`種類「${str(f.kind)}」不在許可清單`)
-                break
-            }
-            const next = {}
-            for (const k of keys) next[k] = k === 'snapshot' ? f[k] === true : (ARRAY_FIELDS.has(k) ? strs(f[k]) : str(f[k]))
-            if ((hit.key === 'claims' && keys.includes('text') && !next.text) || (hit.key === 'parameters' && ((keys.includes('name') && !next.name) || (keys.includes('value') && !next.value)))) {
-                fail('必要欄位不可改為空')
-                break
-            }
-            const tp = textProblem(hit.key, { ...hit.item, ...next })
-            if (tp) {
-                fail(tp)
-                break
-            }
-            const it = hit.item
-            const before = {}
-            for (const k of keys) before[k] = clone(it[k] ?? '')
-            Object.assign(it, next)
-            it.sources = uniq([...(it.sources || []), ...src])
-            hist(it, 'revise', str(op.reason), before)
-            countOver(hit.key, it)
-            touched.add(it.id)
-            done({ id: it.id, sources: src })
-            break
-        }
-        case 'supersede': {
-            const tk = targetOfKind(op.id, ['claims', 'parameters'])
-            const hit = tk.hit
-            if (!hit) {
-                fail(tk.why)
-                break
-            }
-            if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 已為終態`)
-                break
-            }
-            if (!str(op.reason)) {
-                fail('缺 reason')
-                break
-            }
-            if (!str(op.validPeriod)) {
-                fail('缺 validPeriod（舊觀點成立期間；年份不詳可寫「較早之研究」或「不詳」）')
-                break
-            }
-            const src = needSrc(op.sources)
-            if (!src) {
-                fail('無本批出處')
-                break
-            }
-            let by = ''
-            if (str(op.by)) {
-                const r = refOfKind(op.by, [hit.key], { live: false })
-                if (!r.id || r.id === hit.item.id) {
-                    fail(r.id ? '取代者不可為自身' : (r.dep || `取代者 ${r.why}`))
-                    break
-                }
-                by = r.id
-            }
-            const it = hit.item
-            Object.assign(it, { status: 'superseded', statusNote: str(op.reason), validPeriod: str(op.validPeriod), supersededBy: by })
-            it.sources = uniq([...(it.sources || []), ...src])
-            hist(it, 'supersede', str(op.reason))
-            touched.add(it.id)
-            done({ id: it.id, sources: src })
-            break
-        }
-        case 'retract': {
-            const tk = targetOfKind(op.id, Object.keys(PREFIX_OF_KEY))
-            const hit = tk.hit
-            if (!hit) {
-                fail(tk.why)
-                break
-            }
-            if (TERMINAL.has(hit.item.status)) {
-                fail(`目標 ${hit.item.id} 已為終態`)
-                break
-            }
-            const reason = str(op.reason)
-            if (!RETRACT_REASONS.includes(reason)) {
-                fail(`撤回理由須為：${RETRACT_REASONS.join('、')}`)
-                break
-            }
-            const src = srcOf(op.sources)
-            const it = hit.item
-            // 「重複」須指明存活之同種類項,出處併入之(否則存活者得不到被撤回者之出處,出處累積失真)
-            let into = null
-            if (reason === '重複') {
-                const r = resolveRef(op.into)
-                const h = r.id ? findItem(s, r.id) : null
-                if (!h || h.key !== hit.key || h.item.id === it.id || !live(h)) {
-                    fail(r.dep || '理由「重複」須帶 into（存活之同種類項）')
-                    break
-                }
-                into = h.item
-            }
-            it.status = 'retracted'
-            it.retractReason = reason
-            it.statusNote = str(op.note) || (into ? `與 ${into.id} 重複` : reason)
-            if (into) {
-                it.mergedInto = into.id
-                into.sources = uniq([...(into.sources || []), ...(it.sources || [])])
-                hist(into, 'retract', `併入重複項 ${it.id} 之出處`)
-                touched.add(into.id)
-            }
-            hist(it, 'retract', it.statusNote)
-            touched.add(it.id)
-            done({ id: it.id, sources: src })
-            break
-        }
-        case 'contest': {
-            const tk = targetOfKind(op.id, ['claims'], '目標主張')
-            const hit = tk.hit
-            if (!hit) {
-                fail(tk.why)
-                break
-            }
-            if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 已為終態`)
-                break
-            }
-            if (!str(op.reason)) {
-                fail('缺 reason')
-                break
-            }
-            const r = refOfKind(op.dispute, ['disputes'], { live: false })
-            if (!r.id) {
-                fail(!str(op.dispute) ? 'contest 須連既有或同一差量新建之爭議' : (r.dep || `所連爭議 ${r.why}`))
-                break
-            }
-            const d = findItem(s, r.id).item
-            if (d.status !== 'open') {
-                fail(`爭議 ${d.id} 已非未解決`)
-                break
-            }
-            const k = parseSide(op.side)
-            const side = k === null ? null : d.sides[k]
-            if (!side) {
-                fail(`爭議 ${d.id} 無 side ${str(op.side) || '(未給)'}（contest 須指明 side；${sideRange(d)}）`)
-                break
-            }
-            const src = needSrc(op.sources)
-            if (!src) {
-                fail('無本批出處')
-                break
-            }
-            side.claims = uniq([...(side.claims || []), hit.item.id])
-            side.sources = uniq([...(side.sources || []), ...src])
-            d.sources = uniq([...(d.sources || []), ...src])
-            hist(hit.item, 'contest', `${d.id}：${str(op.reason)}`)
-            hist(d, 'contest', `${hit.item.id} 列入 side ${k}`)
-            touched.add(hit.item.id)
-            touched.add(d.id)
-            done({ id: hit.item.id, sources: src })
-            break
-        }
-        case 'dispute_add':
-        case 'dispute_update': {
-            const isAdd = op.op === 'dispute_add'
-            let d = null
-            if (!isAdd) {
-                const tk = targetOfKind(op.id, ['disputes'], '目標爭議')
-                const hit = tk.hit
-                if (!hit) {
-                    fail(tk.why)
-                    break
-                }
-                if (TERMINAL.has(hit.item.status)) {
-                    fail(`爭議 ${hit.item.id} 已撤回`)
-                    break
-                }
-                d = hit.item
-                if (!str(op.note)) {
-                    fail('缺 note')
-                    break
-                }
-                if (op.status !== undefined && !['open', 'resolved'].includes(op.status)) {
-                    fail('status 須為 open／resolved')
-                    break
-                }
-            }
-            else if (!str(op.question)) {
-                fail('缺 question')
-                break
-            }
-            const rawSides = isAdd ? (isarr(op.sides) ? op.sides : []) : (isarr(op.sides_add) ? op.sides_add : [])
-            if (isAdd && rawSides.length < 2) {
-                fail('少於兩方')
-                break
-            }
-            const sides = []
-            let bad = ''
-            for (const sd of rawSides) {
-                if (!str(sd?.position)) {
-                    bad = '有一方缺立場'
-                    break
-                }
-                const claims = []
-                for (const x of strs(sd?.claims)) {
-                    const r = refOfKind(x, ['claims'])
-                    if (!r.id) {
-                        bad = r.why
-                        break
-                    }
-                    claims.push(r.id)
-                }
-                if (bad) break
-                const src = srcOf(sd?.sources)
-                if (!src.length && !claims.length) {
-                    bad = '有一方無本批出處亦無所引主張'
-                    break
-                }
-                const tp = textProblem('disputes', sd, ['position', 'conditions'])
-                if (tp) {
-                    bad = tp
-                    break
-                }
-                sides.push({ position: str(sd.position), conditions: strs(sd?.conditions), claims, sources: src })
-            }
-            if (bad) {
-                fail(bad)
-                break
-            }
-            const newSrc = uniq([...srcOf(op.sources), ...sides.flatMap((x) => x.sources)])
-            if (!newSrc.length) {
-                fail('無本批出處')
-                break
-            }
-            const tp = textProblem('disputes', isAdd ? { question: op.question } : { note: op.note })
-            if (tp) {
-                fail(tp)
-                break
-            }
-            if (isAdd) {
-                // 同篇正反不成爭議:各方之出處(本批出處＋所引主張之出處)聯集只有 1 篇 → 拒收
-                const perSide = sides.map((sd) => uniq([...sd.sources, ...sd.claims.flatMap((cid) => findItem(s, cid)?.item?.sources || [])]))
-                if (uniq(perSide.flat()).length < 2) {
-                    fail('各方出處只有同一篇（同篇正反不成爭議）')
-                    break
-                }
-                const id = newId('disputes')
-                markRef(ref, id)
-                d = { id, question: str(op.question), sides, sources: newSrc, status: 'open', note: str(op.note), origin: 'note', evidence: { level: '', basis: '', trace: '' }, addedIn: version, history: [{ version, at, op: 'dispute_add' }] }
-                s.disputes.push(d)
-            }
-            else {
-                d.sides.push(...sides)
-                if (op.status) d.status = op.status
-                d.note = str(op.note)
-                d.sources = uniq([...(d.sources || []), ...newSrc])
-                hist(d, 'dispute_update', str(op.note))
-            }
-            touched.add(d.id)
-            for (const sd of sides) for (const cid of sd.claims) touched.add(cid)
-            done({ id: d.id, sources: newSrc })
-            break
-        }
-        case 'dispute_dissolve': {
-            // 拆解硬配之對立(檔頭⑧):爭議轉終態,只有立場文字之方轉為獨立主張——內容與出處全留,只拿掉對立標籤
-            const tk = targetOfKind(op.id, ['disputes'], '目標爭議')
-            const hit = tk.hit
-            if (!hit) {
-                fail(tk.why)
-                break
-            }
-            if (TERMINAL.has(hit.item.status)) {
-                fail(`爭議 ${hit.item.id} 已撤回`)
-                break
-            }
-            const reason = str(op.reason)
-            if (!reason) {
-                fail('缺 reason（兩方為何不是對立）')
-                break
-            }
-            const tp = textProblem('disputes', { note: reason })
-            if (tp) {
-                fail(tp)
-                break
-            }
-            const d = hit.item
-            // 各方之去處(內容與出處全留):只有立場文字之方 → 轉為主張;引主張之方其「方層出處」(confirm side／contest 所加,
-            //   不在所引主張出處內者)→ 只引一條有效主張則併入其出處,否則以該方立場另立一條主張——拆解後這些出處仍被有效項引用
-            //   種類取 kinds[k](k＝side 索引;不在許可清單者取清單第一項;種類可由 domain 自訂)
-            const kindsIn = isarr(op.kinds) ? op.kinds.map((x) => str(x)) : []
-            const plan = []
-            const merges = []
-            let bad = ''
-            for (const [k, sd] of (d.sides || []).entries()) {
-                const cited = (sd.claims || []).map((cid) => findItem(s, cid)).filter((h) => live(h))
-                const covered = new Set(cited.flatMap((h) => h.item.sources || []))
-                const extra = (sd.sources || []).filter((x) => !covered.has(x))
-                if ((sd.claims || []).length && !extra.length) continue
-                if (cited.length === 1 && extra.length) {
-                    merges.push({ k, claim: cited[0].item, extra })
-                    continue
-                }
-                const c0 = { text: str(sd.position), conditions: strs(sd.conditions) }
-                const p = textProblem('claims', c0, ['text', 'conditions'])
-                const src = (sd.claims || []).length ? extra : (sd.sources || [])
-                if (p || !src.length) {
-                    bad = `side ${k} 無法轉為主張：${p || '無出處'}`
-                    break
-                }
-                plan.push({ k, sd, c0, src, kind: kinds.includes(kindsIn[k]) ? kindsIn[k] : kinds[0] })
-            }
-            if (bad) {
-                fail(bad)
-                break
-            }
-            for (const m of merges) {
-                m.claim.sources = uniq([...(m.claim.sources || []), ...m.extra])
-                hist(m.claim, 'dispute_dissolve', `併入 ${d.id} side ${m.k} 之方層出處`)
-                touched.add(m.claim.id)
-            }
-            for (const x of plan) {
-                const id = newId('claims')
-                const c = { id, kind: x.kind, facet: '', text: x.c0.text, conditions: x.c0.conditions, pros: [], cons: [], period: '', critique: '', basis: '', sources: [...x.src], origin: 'dispute', status: 'active', statusNote: '', validPeriod: '', supersededBy: '', mergedInto: '', retractReason: '', evidence: { level: '', basis: '', trace: '' }, addedIn: version, history: [{ version, at, op: 'dispute_dissolve', note: `拆自 ${d.id} side ${x.k}` }] }
-                countOver('claims', c)
-                s.claims.push(c)
-                x.sd.claims = uniq([...(x.sd.claims || []), id])
-                touched.add(id)
-            }
-            Object.assign(d, { status: 'retracted', retractReason: '非對立', statusNote: reason })
-            hist(d, 'dispute_dissolve', reason)
-            touched.add(d.id)
-            for (const sd of d.sides || []) for (const cid of sd.claims || []) touched.add(cid)
-            done({ id: d.id })
-            break
-        }
-        case 'param_add': {
-            if (!str(op.name) || !str(op.value)) {
-                fail('缺 name 或 value')
-                break
-            }
-            const src = needSrc(op.sources)
-            if (!src) {
-                fail('無本批出處')
-                break
-            }
-            let claim = ''
-            if (str(op.claim)) {
-                const r = refOfKind(op.claim, ['claims'], { live: false })
-                if (!r.id) {
-                    fail(r.dep || `所依主張 ${r.why}`)
-                    break
-                }
-                claim = r.id
-            }
-            const p0 = { name: op.name, value: op.value, conditions: op.conditions, period: op.period }
-            const tp = textProblem('parameters', p0)
-            if (tp) {
-                fail(tp)
-                break
-            }
-            const id = newId('parameters')
-            markRef(ref, id)
-            const p = { id, name: str(op.name), value: str(op.value), conditions: str(op.conditions), period: str(op.period), snapshot: op.snapshot === true, claim, sources: src, origin: 'note', status: 'active', statusNote: '', validPeriod: '', supersededBy: '', retractReason: '', evidence: { level: '', basis: '', trace: '' }, addedIn: version, history: [{ version, at, op: 'param_add' }] }
-            countOver('parameters', p)
-            s.parameters.push(p)
-            touched.add(id)
-            done({ id, sources: src })
-            break
-        }
-        case 'question_add': {
-            if (!str(op.text)) {
-                fail('缺 text')
-                break
-            }
-            const tp = textProblem('questions', { text: op.text })
-            if (tp) {
-                fail(tp)
-                break
-            }
-            const src = srcOf(op.sources)
-            const id = newId('questions')
-            markRef(ref, id)
-            s.questions.push({ id, text: str(op.text), status: 'open', resolution: '', sources: src, retractReason: '', addedIn: version, history: [{ version, at, op: 'question_add' }] })
-            touched.add(id)
-            done({ id, sources: src })
-            break
-        }
-        case 'question_resolve': {
-            const tk = targetOfKind(op.id, ['questions'], '目標問題')
-            const hit = tk.hit
-            if (!hit) {
-                fail(tk.why)
-                break
-            }
-            if (hit.item.status !== 'open') {
-                fail(`問題 ${hit.item.id} 已非未解`)
-                break
-            }
-            if (!str(op.resolution)) {
-                fail('缺 resolution')
-                break
-            }
-            const src = needSrc(op.sources)
-            if (!src) {
-                fail('無本批出處')
-                break
-            }
-            const tp = textProblem('questions', { resolution: op.resolution })
-            if (tp) {
-                fail(tp)
-                break
-            }
-            Object.assign(hit.item, { status: 'resolved', resolution: str(op.resolution), sources: uniq([...hit.item.sources, ...src]) })
-            hist(hit.item, 'question_resolve')
-            touched.add(hit.item.id)
-            done({ id: hit.item.id, sources: src })
-            break
-        }
-        case 'essence': {
-            if (essenceSeen) {
-                fail('同一差量只能有一個 essence')
-                break
-            }
-            const text = str(op.text)
-            if (!text || !str(op.reason)) {
-                fail('缺 text 或 reason')
-                break
-            }
-            // 本質為硬上限(逾即拒,不同於主張各欄之「2 倍拒收、1～2 倍計數」):安裝方驗收 §3 #5「本質 ≤220 字」屬程式判定(2026-09-29 定稿版)
-            if (limits.essence && text.length > limits.essence) {
-                fail(`essence 過長（${text.length} 字，上限 ${limits.essence}）`)
-                break
-            }
-            const claims = []
-            let why = ''
-            for (const x of strs(op.claims)) {
-                const r = refOfKind(x, ['claims'])
-                if (!r.id) {
-                    why = r.why
-                    break
-                }
-                claims.push(r.id)
-            }
-            if (why) {
-                fail(why)
-                break
-            }
-            if (!claims.length) {
-                fail('essence 須引至少一條主張（claims）')
-                break
-            }
-            const dang = danglingIn(text)
-            if (dang) {
-                fail(dang)
-                break
-            }
-            essenceSeen = true
-            if (s.essence.text) s.essenceHistory.push({ version: s.version, at: s.essence.at || '', text: s.essence.text, reason: str(op.reason) })
-            s.essence = { text, claims: uniq(claims), sources: [], at }
-            done({ id: 'essence' })
-            break
-        }
-        case 'related_add':
-        case 'related_prune': {
-            const cs = strs(op.concepts)
-            if (!cs.length) {
-                fail('缺 concepts')
-                break
-            }
-            const selfKey = keyOf(ctx.self)
-            if (op.op === 'related_add') {
-                const have = new Set(s.related.map(keyOf))
-                for (const c of cs) {
-                    const k = keyOf(c)
-                    if (!k || k === selfKey || have.has(k)) continue
-                    have.add(k)
-                    s.related.push(c)
-                }
-            }
-            else {
-                const drop = new Set(cs.map(keyOf))
-                s.related = s.related.filter((c) => !drop.has(keyOf(c)))
-            }
-            done({})
-            break
-        }
-        case 'merge': {
-            const ri = refOfKind(op.into, ['claims', 'parameters', 'questions'])
-            if (!ri.id) {
-                fail(ri.dep || `into ${ri.why}`)
-                break
-            }
-            const into = ri.hit
-            if (!str(op.reason)) {
-                fail('缺 reason')
-                break
-            }
-            const from = uniq(strs(op.from))
-            if (!from.length || from.includes(into.item.id)) {
-                fail('from 為空或含 into')
-                break
-            }
-            const badFrom = from.map((id) => refOfKind(id, [into.key])).find((r) => !r.id)
-            if (badFrom) {
-                fail(badFrom.dep || `from ${badFrom.why}`)
-                break
-            }
-            const hits = from.map((id) => findItem(s, id))
-            if (str(op.text) && into.key === 'claims') {
-                const tp = textProblem('claims', { text: op.text })
-                if (tp) {
-                    fail(tp)
-                    break
-                }
-            }
-            for (const h of hits) {
-                Object.assign(h.item, { status: 'superseded', statusNote: `併入 ${into.item.id}：${str(op.reason)}`, mergedInto: into.item.id, supersededBy: into.item.id })
-                hist(h.item, 'merge', `併入 ${into.item.id}`)
-                into.item.sources = uniq([...(into.item.sources || []), ...(h.item.sources || [])])
-                touched.add(h.item.id)
-            }
-            // 被併之主張若被爭議某方或本質引用,改指向 into(引用不懸空、contested 衍生正確)
-            if (into.key === 'claims') {
-                const map = new Set(from)
-                for (const d of s.disputes) {
-                    for (const sd of d.sides || []) {
-                        if ((sd.claims || []).some((x) => map.has(x))) {
-                            sd.claims = uniq(sd.claims.map((x) => (map.has(x) ? into.item.id : x)))
-                            touched.add(d.id)
-                        }
-                    }
-                }
-                s.essence.claims = uniq((s.essence.claims || []).map((x) => (map.has(x) ? into.item.id : x)))
-                for (const p of s.parameters) {
-                    if (map.has(p.claim)) {
-                        p.claim = into.item.id
-                        touched.add(p.id)
-                    }
-                }
-                if (str(op.text)) {
-                    hist(into.item, 'merge', str(op.reason), { text: into.item.text })
-                    into.item.text = str(op.text)
-                    countOver('claims', { text: into.item.text })
-                }
-            }
-            hist(into.item, 'merge', `併入 ${from.join('、')}`)
-            touched.add(into.item.id)
-            done({ id: into.item.id })
-            break
-        }
-        case 'refacet': {
-            const from = str(op.from)
-            const to = str(op.to)
-            if (!from || !to || from === to) {
-                fail('refacet 須有不同之 from 與 to')
-                break
-            }
-            const hit = s.claims.filter((c) => !TERMINAL.has(c.status) && c.facet === from)
-            if (!hit.length) {
-                fail(`無面向為「${from}」之主張`)
-                break
-            }
-            for (const c of hit) {
-                hist(c, 'refacet', `${from} → ${to}`, { facet: from })
-                c.facet = to
-                touched.add(c.id)
-            }
-            done({})
-            break
-        }
-        default:
-            fail('未知操作')
-        }
-        // 審查存疑(檔頭⑧):附於爭議類操作、且該操作套用成功者,記於其爭議——不移除、不改狀態;被拒收之操作不記
-        if (isobj(op._doubt) && applied.length > nApplied) markDoubt(op, applied[applied.length - 1])
-    }
-
-    // 文字中殘留之本批代號(如「N4 指出…」)換成筆記連結 [[id]]:代號只在本批有效,留在狀態裡,下一批同名之代號即指向別篇
-    //   (2026-09-29 真實模型驗收實測:爭議註記寫「N4 指出」)。長度與同文比對以模型原文為準(上方逐操作已查),此處只改存入之文字。
-    //   〔@ref〕同理換成〔實際 id〕;所指之新項被審查剔除、被拒收或於同差量稍後才失敗者無 id 可換,去掉該標記(不留短命識別碼)
-    const linkCodes = (v) => (typeof v === 'string'
-        ? v.replace(/(?<![A-Za-z0-9])N\d+(?![0-9])/g, (m) => (codeMap.has(m) ? `[[${codeMap.get(m)}]]` : m))
-            .replace(TEMP_REF_RE, (m, ref) => {
-                const id = refState.get(ref)?.id
-                return id ? `〔${id}〕` : ''
-            })
-        : v)
-    const linkFields = (obj, fields) => {
-        for (const f of fields) {
-            if (isarr(obj?.[f])) obj[f] = obj[f].map(linkCodes)
-            else if (typeof obj?.[f] === 'string') obj[f] = linkCodes(obj[f])
-        }
-    }
-    for (const id of touched) {
-        const hit = findItem(s, id)
-        if (!hit) continue
-        linkFields(hit.item, [...(TEXT_FIELDS[hit.key] || []), 'statusNote', 'validPeriod'])
-        for (const sd of isarr(hit.item.sides) ? hit.item.sides : []) linkFields(sd, ['position', 'conditions'])
-        for (const h of isarr(hit.item.history) ? hit.item.history : []) if (h.version === version) linkFields(h, ['note'])
-        if (isobj(hit.item.doubt) && hit.item.doubt.version === version) linkFields(hit.item.doubt, ['note'])
-    }
-    if (essenceSeen) linkFields(s.essence, ['text'])
-
-    deriveStatus(s)
-    if (applied.length) {
-        s.version = version
-        s.updatedAt = at
-        const byOp = {}
-        for (const a of applied) byOp[a.op] = (byOp[a.op] || 0) + 1
-        s.changelog.push({ version, at, mode, batch: [...new Set(codeMap.values())], applied: byOp, rejected: rejected.length, withheld: withheld.length, ...(isobj(ctx.meta) ? ctx.meta : {}) })
-        if (mode === 'consolidate') s.lastConsolidated = version
-    }
-    // 暫緩之操作:@ref 換成本差量實際配發之 id(供存入待審;所依之新項被拒者 resolved 為 null)
-    for (const w of withheld) {
-        const o = { ...w._op }
-        delete o._i
-        delete o._withhold
-        let ok = true
-        const fix = (v) => {
-            const x = str(v)
-            if (!x.startsWith('@')) return x
-            const id = refState.get(x.slice(1))?.id
-            if (!id) ok = false
-            return id || ''
-        }
-        for (const k of ['id', 'by', 'into', 'dispute']) if (o[k] !== undefined) o[k] = fix(o[k])
-        if (isarr(o.from)) o.from = o.from.map(fix)
-        linkFields(o, ['reason', 'validPeriod', 'note', 'text']) // 待審於日後另一批送審,本批代號同樣須換成連結
-        o.sources = w.sources
-        w.resolved = ok ? o : null
-        delete w._op
-    }
-    // 回報依提案原序號排列(處理順序為相序,與提案順序不同)
-    const byIndex = (a, b) => a.index - b.index
-    return { state: s, applied: applied.sort(byIndex), rejected: rejected.sort(byIndex), withheld: withheld.sort(byIndex), touched: [...touched], overLimit, lengthChecked }
-}
-
-
-/**
- * 暫緩之終態操作存入待審(審查失敗或漏裁決時;其筆記因此算涵蓋——操作被保存,不是被丟棄)
- *
- * 同一目標已有待審者,新者取代舊者;超過上限丟最舊。
- *
- * @param {Object} state 輸入狀態(不修改,回傳新狀態)
- * @param {Array} withheld 輸入 applyDelta 之 withheld(各帶 resolved)
- * @param {Object} [opt={}] 輸入設定物件
- * @param {String} [opt.at=''] 輸入時刻
- * @param {String} [opt.reason=''] 輸入暫緩原因(如「審查失敗」)
- * @returns {Object} 回傳 { state, queued:Integer, dropped:Array(被丟之待審) }
- */
-export function queuePendingReview(state, withheld, opt = {}) {
-    if (!isobj(opt)) opt = {}
-    const s = clone(state)
-    const q = isarr(s.pendingReview) ? s.pendingReview : []
-    let queued = 0
-    for (const w of isarr(withheld) ? withheld : []) {
-        if (!w?.resolved) continue
-        const key = `${w.resolved.op}|${w.resolved.id || w.resolved.into || ''}`
-        const k = q.findIndex((x) => `${x.op.op}|${x.op.id || x.op.into || ''}` === key)
-        const entry = { op: w.resolved, sources: w.sources || [], at: str(opt.at), version: s.version, reason: str(opt.reason) }
-        if (k >= 0) q.splice(k, 1, entry)
-        else q.push(entry)
-        queued++
-    }
-    const dropped = q.length > PENDING_REVIEW_CAP ? q.splice(0, q.length - PENDING_REVIEW_CAP) : []
-    s.pendingReview = q
-    return { state: s, queued, dropped }
-}
-
-
-/**
- * 取出仍有效之待審操作(目標已為終態或不存在者丟棄),供下次審查以獨立差量裁決
- *
- * @param {Object} state 輸入狀態
- * @returns {Object} 回傳 { ops:Array(可交審查之操作,各帶 sources), stale:Array(丟棄之待審) }
- */
-export function pendingReviewOps(state) {
-    const ops = []
-    const stale = []
-    for (const e of isarr(state?.pendingReview) ? state.pendingReview : []) {
-        const t = findItem(state, e?.op?.op === 'merge' ? e.op.into : e?.op?.id)
-        if (!t || TERMINAL.has(t.item.status)) stale.push(e)
-        else ops.push({ ...e.op, sources: e.sources || e.op.sources || [] })
-    }
-    return { ops, stale }
-}
-
-
-/** 審查剔除之理由(列舉);「性質標錯」指操作類別用錯(如應立爭議卻寫成取代或待解問題),標籤錯誤以 fix 改正 */
-export const DROP_REASONS = ['離題', '無出處支持', '同篇', '重複', '性質標錯', '捏造']
-
-/** 新增主張(add)與參數(param_add)之剔除理由:其標籤(種類 kind、證據性質 basis、快照 snapshot)可由審查以 fix 改正,故不收「性質標錯」——可修者不刪。
- *  審查仍以此理由剔除者為無效裁決、按未裁決保留(與爭議類理由不合同一機制)。
- *  (2026-10-01;安裝方 1.0.5 正式環境實測:審查以「性質標錯」剔除內容正確之新主張,引用它之爭議連帶拒收,一天 11 項;
- *  當時提示詞只寫「fix 修正文字欄位」而未告知可改 kind／basis) */
-export const NEW_ITEM_DROP_REASONS = DROP_REASONS.filter((r) => r !== '性質標錯')
-
-/** 爭議類操作只接受之剔除理由——只收形式理由(對爭議類操作之直接裁決,審查不可把真實爭議藏掉;安裝方 r3 實測「審計挑、修訂刪」使爭議流失)。
- *  「兩方非對立」屬內容判斷,審查以 doubt(存疑)表達:爭議照立並加註,拆解另由提案／整併端以 dispute_dissolve 提出、審查明列保留
- *  (1.0.4 曾以「非對立」剔除,預設審查席之同系模型實測把真爭議當非對立剔除;2026-09-29 三獨立審定案 E′,檔頭⑧)。
- *  間接路徑:剔除爭議所引之新項時爭議連帶拒收——新增主張之標籤錯誤已不可剔除(NEW_ITEM_DROP_REASONS),其餘理由之連帶一律記 WARN「提煉審查自相矛盾」 */
-export const DISPUTE_DROP_REASONS = ['離題', '同篇']
-
-/** 存疑之理由(裁決 action:'doubt';只適用於爭議類操作);舊寫法 drop＋「非對立」視同存疑 */
-export const DOUBT_REASONS = ['非對立']
-
-/** 拆解操作(dispute_dissolve)之剔除理由:剔除＝保留爭議,另可以「對立成立」剔除 */
-export const DISSOLVE_DROP_REASONS = [...DROP_REASONS, '對立成立']
-
 /** 模型可列入 skipped 之理由(支持既有主張之筆記須 confirm,不可列 skipped) */
-export const SKIP_REASONS = ['離題', '無可用知識', '品質不足']
+export const SKIP_REASONS = [OFFTOPIC_REASON, '無可用知識', '品質不足']
 
-/** 審查 fix 可改之欄位(依操作;不得新增出處:sources 只可刪減)——審查提示詞自此表列出本批各操作可改之欄位(提示詞與程式同一來源) */
-export const FIXABLE_FIELDS = {
-    add: ['text', 'conditions', 'pros', 'cons', 'period', 'critique', 'facet', 'basis', 'kind', 'sources'],
-    confirm: ['sources'],
-    revise: ['fields', 'reason', 'sources'],
-    supersede: ['reason', 'validPeriod', 'sources'],
-    retract: ['reason', 'note'],
-    contest: ['reason', 'sources'],
-    dispute_add: ['question', 'note'],
-    dispute_update: ['note', 'status'],
-    dispute_dissolve: ['reason', 'kinds'],
-    param_add: ['name', 'value', 'conditions', 'period', 'snapshot', 'sources'],
-    question_add: ['text'],
-    question_resolve: ['resolution', 'sources'],
-    essence: ['text', 'claims', 'reason'],
-    related_add: ['concepts'],
-}
-const DISPUTE_OPS = new Set(['dispute_add', 'dispute_update', 'contest'])
-const NEW_ITEM_OPS = new Set(['add', 'param_add'])
+/** 重審專用之略過理由:只列於重審段、只對本批之重審筆記有效(coverageOf 之 recheckIds);
+ *  一般批之 SKIP_REASONS 不變(它內插於一般起草提示詞,改了即改所有一般批)。「非對立」為新衝突判為非對立時之合法落點 */
+export const RECHECK_SKIP_REASONS = Object.freeze(['重審無須變更', '非對立'])
 
+/** 重審之略過理由之具名取值(RECHECK_SKIP_REASONS 之同值;重審段之提示詞以名取,不以位置):unchanged＝重審無須變更(所列條目皆仍成立)、notOpposed＝非對立(新判衝突而兩方並非對立) */
+export const RECHECK_SKIP = Object.freeze({ unchanged: RECHECK_SKIP_REASONS[0], notOpposed: RECHECK_SKIP_REASONS[1] })
 
-/** 操作中所有「指向項目」之欄位值(含同差量之 '@ref') */
-function refFields(o) {
-    const one = [o?.id, o?.by, o?.into, o?.dispute, o?.claim]
-    const many = [o?.from, o?.claims, ...(isarr(o?.sides) ? o.sides.map((sd) => sd?.claims) : []), ...(isarr(o?.sides_add) ? o.sides_add.map((sd) => sd?.claims) : [])]
-    return [...one, ...many.flatMap((x) => (isarr(x) ? x : []))].filter((x) => typeof x === 'string')
-}
+/** 終審致不涵蓋之筆記之落帳理由前綴(coverageOf 之 dropped):終審剔除之操作之出處、終審刪去之出處;前綴後接裁決之理由 */
+export const ACCEPT_DROP_PREFIXES = Object.freeze({ dropped: '終審剔除：', removed: '終審刪去出處：' })
 
-
-/**
- * 套用審查裁決(逐操作:keep／drop／doubt／fix;於配號前套用,故不產生跳號)——審查不得新增操作,fix 不得增加出處
- *
- * @param {Object} delta 輸入提案 { ops:[...] }
- * @param {Array} verdicts 輸入裁決 [{ i, action:'keep'|'drop'|'doubt'|'fix', reason?, note?, fields? }]，未裁決之操作視為 keep；
- *   doubt(存疑)只適用於爭議類操作:照保留並帶 _doubt,由 applyDelta 記於爭議;舊寫法 drop＋「非對立」視同 doubt
- * @param {Object} [opt={}] 輸入設定物件，非物件視為{}(保留供擴充)
- * @returns {Object} 回傳 { delta:{ ops }(保留與修正者,各帶 _i＝提案原序號), dropped:Array({index,op,reason,note,sources}), fixed:Array(index),
- *   removed:Array({note,reason})(fix 刪去之出處), unverdicted:Array(index)(未得有效裁決者;其中終態操作由呼叫端比照降級), verdictRejected:Array({i,reason}),
- *   doubted:Array({index,op,reason,note,legacy}), droppedRefs:Object(被剔除之新項 ref → 剔除理由；交 applyDelta 之 ctx.droppedRefs),
- *   conflicts:Array({kept,dropped,ref,reason})(保留之操作引用被剔除之新項) }
- */
-export function applyVerdicts(delta, verdicts, opt = {}) {
-    if (!isobj(opt)) opt = {}
-    const ops = isobj(delta) && isarr(delta.ops) ? delta.ops : []
-    const byI = new Map()
-    const verdictRejected = []
-    for (const v of isarr(verdicts) ? verdicts : []) {
-        const i = v?.i
-        if (!Number.isInteger(i) || i < 0 || i >= ops.length) {
-            verdictRejected.push({ i, reason: 'i 無效' })
-            continue
-        }
-        if (byI.has(i)) {
-            verdictRejected.push({ i, reason: '同一操作重複裁決' })
-            continue
-        }
-        byI.set(i, v)
-    }
-    const kept = []
-    const dropped = []
-    const fixed = []
-    const removed = []
-    const unverdicted = []
-    const doubted = []
-    // 審查之說明(自由文字):單行、限長——入日誌與存疑,不因審查之文字連累提案之操作
-    const noteOf = (v) => oneLine(v?.note).slice(0, 240)
-    const srcOf = (o) => uniq([...strs(o?.sources), ...(isarr(o?.sides) ? o.sides.flatMap((sd) => strs(sd?.sources)) : []), ...(isarr(o?.sides_add) ? o.sides_add.flatMap((sd) => strs(sd?.sources)) : [])])
-    ops.forEach((op, i) => {
-        const v = byI.get(i)
-        let action = str(v?.action)
-        // 舊寫法相容:爭議類操作之 drop＋「非對立」＝存疑(1.0.4 之寫法;使用方自訂之審查提示詞不致把爭議移除)
-        const legacy = action === 'drop' && DISPUTE_OPS.has(op?.op) && DOUBT_REASONS.includes(str(v?.reason))
-        if (legacy) action = 'doubt'
-        if (!v || !action) {
-            unverdicted.push(i)
-            kept.push({ ...op, _i: i })
-            return
-        }
-        if (action === 'keep') {
-            kept.push({ ...op, _i: i })
-            return
-        }
-        if (action === 'doubt') {
-            if (!DISPUTE_OPS.has(op?.op)) {
-                verdictRejected.push({ i, reason: `存疑只適用於爭議類操作（dispute_add、dispute_update、contest；收到 ${str(op?.op) || '?'}）` })
-                unverdicted.push(i)
-                kept.push({ ...op, _i: i })
-                return
-            }
-            const reason = DOUBT_REASONS.includes(str(v.reason)) ? str(v.reason) : DOUBT_REASONS[0]
-            const note = noteOf(v)
-            doubted.push({ index: i, op: str(op.op), reason, note, legacy })
-            kept.push({ ...op, _i: i, _doubt: { reason, note, legacy } })
-            return
-        }
-        if (action === 'drop') {
-            const reason = str(v.reason)
-            let okList = DROP_REASONS
-            if (op?.op === 'dispute_dissolve') okList = DISSOLVE_DROP_REASONS
-            else if (DISPUTE_OPS.has(op?.op)) okList = DISPUTE_DROP_REASONS
-            else if (NEW_ITEM_OPS.has(op?.op)) okList = NEW_ITEM_DROP_REASONS
-            if (!okList.includes(reason)) {
-                // 新增主張／參數之「性質標錯」:標籤可由 fix 改正,不予剔除(按未裁決保留,內容不失;引用它之操作不連帶拒收)
-                const who = DISPUTE_OPS.has(op?.op) ? '爭議類操作' : (NEW_ITEM_OPS.has(op?.op) ? '新增主張／參數' : '操作')
-                const hint = NEW_ITEM_OPS.has(op?.op) && DROP_REASONS.includes(reason) ? '——標籤（種類、證據性質、快照）請以 fix 改正' : ''
-                verdictRejected.push({ i, reason: `${who}之剔除理由須為：${okList.join('、')}（收到「${reason}」${hint}）` })
-                unverdicted.push(i)
-                kept.push({ ...op, _i: i })
-                return
-            }
-            dropped.push({ index: i, op: str(op?.op) || '?', reason, note: noteOf(v), sources: srcOf(op), ref: str(op?.ref) })
-            return
-        }
-        if (action === 'fix') {
-            const allow = FIXABLE_FIELDS[op?.op] || []
-            const f = isobj(v.fields) ? v.fields : {}
-            const keys = Object.keys(f).filter((k) => allow.includes(k))
-            if (!keys.length) {
-                verdictRejected.push({ i, reason: 'fix 無可改之欄位' })
-                unverdicted.push(i)
-                kept.push({ ...op, _i: i })
-                return
-            }
-            const next = { ...op, _i: i }
-            for (const k of keys) {
-                if (k === 'sources') {
-                    const orig = strs(op.sources)
-                    const sub = strs(f.sources).filter((x) => orig.includes(x))
-                    if (!sub.length) continue // 不得增加出處;刪到全無請用 drop
-                    next.sources = sub
-                    for (const x of orig) if (!sub.includes(x)) removed.push({ note: x, reason: str(v.reason) })
-                }
-                else if (k === 'fields') next.fields = { ...(isobj(op.fields) ? op.fields : {}), ...(isobj(f.fields) ? f.fields : {}) }
-                else next[k] = f[k]
-            }
-            fixed.push(i)
-            kept.push(next)
-            return
-        }
-        verdictRejected.push({ i, reason: `未知裁決「${action}」` })
-        unverdicted.push(i)
-        kept.push({ ...op, _i: i })
-    })
-    // 被剔除之新項(帶 ref)→ 交 applyDelta:引用它們之保留操作拒收時寫明因果;並列出「保留之操作引用被剔除之新項」(依賴衝突)
-    const keptRefs = new Set(kept.map((o) => str(o?.ref)).filter(Boolean))
-    const droppedRefs = {}
-    for (const x of dropped) if (x.ref && !keptRefs.has(x.ref)) droppedRefs[x.ref] = x.reason
-    const conflicts = []
-    for (const o of kept) {
-        for (const f of refFields(o)) {
-            const ref = f.startsWith('@') ? f.slice(1) : ''
-            const x = ref && droppedRefs[ref] ? dropped.find((d) => d.ref === ref) : null
-            if (x) conflicts.push({ kept: o._i, keptOp: str(o.op), dropped: x.index, droppedOp: x.op, ref: f, reason: x.reason })
-        }
-    }
-    return { delta: { ...(isobj(delta) ? delta : {}), ops: kept }, dropped, fixed, removed, unverdicted, verdictRejected, doubted, droppedRefs, conflicts }
-}
-
-
-/**
- * 本批筆記之涵蓋計算:被已套用操作引用(used)、模型列入 skipped(理由須在 SKIP_REASONS)、被審查剔除之操作所引用(dropped)皆算涵蓋;
- * 其餘(含只被程式拒收或暫緩之操作引用者)為未涵蓋——值得重試(多為引用問題)
- *
- * @param {Object} o 輸入物件
- * @param {Array} o.batch 輸入本批 [{ code, id }]
- * @param {Array} [o.applied=[]] 輸入 applyDelta 之 applied(各帶 sources)
- * @param {Array} [o.skipped=[]] 輸入模型之 skipped [{ note:'N3'|id, reason }]
- * @param {Array} [o.dropped=[]] 輸入 applyVerdicts 之 dropped(各帶 sources 與 reason)
- * @param {Array} [o.queued=[]] 輸入存入待審之暫緩操作(applyDelta 之 withheld 中 resolved 非 null 者,各帶 sources)——操作已保存,其筆記算涵蓋
- * @param {Array} [o.removed=[]] 輸入審查 fix 刪去之出處 [{ note, reason }](審查已判定,算涵蓋)
- * @returns {Object} 回傳 { used:Array(id), pending:Array(id), skipped:Array({note,reason}), dropped:Array({note,reason}), uncovered:Array(id), badSkipped:Array }
- */
-export function coverageOf(o) {
-    const batch = (isarr(o?.batch) ? o.batch : []).filter((b) => isobj(b) && str(b.id))
-    const byCode = new Map()
-    for (const b of batch) {
-        byCode.set(str(b.id), str(b.id))
-        if (str(b.code)) byCode.set(str(b.code).toUpperCase(), str(b.id))
-    }
-    const toNote = (x) => byCode.get(str(x)) || byCode.get(str(x).toUpperCase()) || null
-    const used = new Set((isarr(o?.applied) ? o.applied : []).flatMap((a) => (isarr(a?.sources) ? a.sources : [])).filter((id) => byCode.has(id)))
-    const skipped = []
-    const badSkipped = []
-    const seen = new Set(used)
-    for (const k of isarr(o?.skipped) ? o.skipped : []) {
-        const id = toNote(k?.note)
-        const reason = str(k?.reason)
-        if (!id || !SKIP_REASONS.includes(reason)) {
-            badSkipped.push({ note: str(k?.note), reason })
-            continue
-        }
-        if (seen.has(id)) continue
-        seen.add(id)
-        skipped.push({ note: id, reason })
-    }
-    const pending = []
-    for (const q of isarr(o?.queued) ? o.queued : []) {
-        for (const x of isarr(q?.sources) ? q.sources : []) {
-            const id = toNote(x)
-            if (!id || seen.has(id)) continue
-            seen.add(id)
-            pending.push(id)
-        }
-    }
-    const dropped = []
-    const addDrop = (x, reason) => {
-        const id = toNote(x)
-        if (!id || seen.has(id)) return
-        seen.add(id)
-        dropped.push({ note: id, reason })
-    }
-    for (const d of isarr(o?.dropped) ? o.dropped : []) {
-        for (const x of isarr(d?.sources) ? d.sources : []) addDrop(x, `審查剔除：${str(d.reason)}`)
-    }
-    for (const r of isarr(o?.removed) ? o.removed : []) addDrop(r?.note, `審查刪去出處：${str(r?.reason) || '未說明'}`)
-    const uncovered = batch.map((b) => str(b.id)).filter((id) => !seen.has(id))
-    return { used: [...used], pending, skipped, dropped, uncovered, badSkipped }
-}
-
-
-/**
- * 本批落帳:已涵蓋與「未涵蓋達上限」者計入 consumed,略過／剔除／逾限之理由記入 skipped(不改版號)
- *
- * @param {Object} state 輸入狀態(不修改,回傳新狀態)
- * @param {Object} cov 輸入 coverageOf 之產出
- * @param {Object} [opt={}] 輸入設定物件
- * @param {Array} [opt.exhausted=[]] 輸入未涵蓋且已達重試上限之筆記 id(記「未涵蓋逾限」)
- * @returns {Object} 回傳新狀態
- */
-export function commitBatch(state, cov, opt = {}) {
-    const s = clone(state)
-    if (!isobj(opt)) opt = {}
-    const exhausted = isarr(opt.exhausted) ? opt.exhausted.map(str).filter(Boolean) : []
-    const notes = [...(cov?.used || []), ...(cov?.pending || []), ...(cov?.skipped || []).map((x) => x.note), ...(cov?.dropped || []).map((x) => x.note), ...exhausted]
-    s.consumed = uniq([...s.consumed, ...notes])
-    const reasons = [...(cov?.skipped || []), ...(cov?.dropped || []), ...exhausted.map((note) => ({ note, reason: '未涵蓋逾限' }))]
-    for (const r of reasons) s.skipped.push({ note: r.note, reason: r.reason, version: s.version })
-    return s
-}
-
+/** 未涵蓋達上限而出隊之筆記於 skipped 之理由(檢定標準 ES15:須有待判登錄) */
+export const EXHAUSTED_REASON = '未涵蓋逾限'
 
 /**
  * 不變式自檢(套用與落帳之後):違反者回傳說明字串陣列,空陣列＝通過
@@ -1503,12 +853,48 @@ export function commitBatch(state, cov, opt = {}) {
  * @param {Array} [opt.touched=[]] 輸入本次被操作觸及之 id(applyDelta 之 touched)；未觸及者除衍生欄位(active／contested、evidence)外須逐欄不變
  * @returns {Array} 回傳違反說明陣列
  */
+/**
+ * 同一爭議之不同方引同一主張者(非終態之爭議;「D1→C3」):兩方立場相反卻指向同一條——不變式只報新產生者(既有狀態之違反屬存量掃描)
+ *
+ * @param {Object} s 輸入狀態
+ * @returns {Array} 回傳「爭議 id→主張 id」字串陣列
+ */
+function sharedSideClaimsOf(s) {
+    const out = []
+    for (const d of s?.disputes || []) {
+        if (TERMINAL_SET.has(d.status)) continue
+        const seen = new Map()
+        for (const [k, sd] of (d.sides || []).entries()) {
+            for (const cid of sd?.claims || []) {
+                if (seen.has(cid) && seen.get(cid) !== k) out.push(`${d.id}→${cid}`)
+                else seen.set(cid, k)
+            }
+        }
+    }
+    return [...new Set(out)]
+}
+
+/**
+ * 核心狀態之不變式檢查(寫入前後比對):id 不重複、既有項不遺失、出處只增、沿革不被改寫、終態項不被改動、爭議之方與其出處／所引主張不減、
+ *   終態須有理由、取代鏈不成環、引用不懸空;被觸及之條目(opt.touched)可改其內容,其餘條目之非衍生欄位被改即違反
+ *
+ * @param {Object} before 輸入寫入前之狀態
+ * @param {Object} after 輸入欲寫之狀態
+ * @param {Object} [opt={}] 輸入設定物件，非物件視為{}
+ * @param {Array} [opt.touched=[]] 輸入本次被觸及(允許改動)之條目 id
+ * @returns {Array} 回傳違反說明陣列(空＝通過)
+ * @example
+ * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }] }).state
+ * const lost = { ...s, claims: [] }
+ * console.log(checkInvariants(s, s), checkInvariants(s, lost))
+ * // => [] [ '既有項遺失：C1' ]
+ */
 export function checkInvariants(before, after, opt = {}) {
     const out = []
     if (!isobj(opt)) opt = {}
     const touched = new Set(isarr(opt.touched) ? opt.touched : [])
     const idsAfter = new Map()
-    for (const x of allItems(after)) {
+    for (const x of allItemsOf(after)) {
         if (idsAfter.has(x.id)) out.push(`id 重複：${x.id}`)
         idsAfter.set(x.id, x)
     }
@@ -1521,10 +907,10 @@ export function checkInvariants(before, after, opt = {}) {
         if (isarr(y.sides)) for (const sd of y.sides) delete sd.evidence
         return y
     }
-    for (const x of allItems(before)) {
+    for (const x of allItemsOf(before)) {
         const y = idsAfter.get(x.id)
         if (!y) {
-            out.push(`舊項遺失：${x.id}`)
+            out.push(`既有項遺失：${x.id}`)
             continue
         }
         const miss = (x.sources || []).filter((sid) => !(y.sources || []).includes(sid))
@@ -1532,7 +918,9 @@ export function checkInvariants(before, after, opt = {}) {
         const hx = isarr(x.history) ? x.history : []
         const hy = isarr(y.history) ? y.history : []
         if (hy.length < hx.length || !eq(hy.slice(0, hx.length), hx)) out.push(`沿革被改寫：${x.id}`)
-        if (TERMINAL.has(x.status) && !eq(derivedFree(x), derivedFree({ ...y, history: hx }))) out.push(`終態項被改動：${x.id}`)
+        // 可還原之撤回被還原(⑱):前為可還原理由之撤回、後非終態且沿革尾為 revive——終態不可逆之唯一例外(仍須在 touched 內)
+        const revived = x.status === 'retracted' && REVIVABLE_RETRACT.includes(x.retractReason) && !TERMINAL_SET.has(y.status) && hy[hy.length - 1]?.op === 'revive'
+        if (TERMINAL_SET.has(x.status) && !revived && !eq(derivedFree(x), derivedFree({ ...y, history: hx }))) out.push(`終態項被改動：${x.id}`)
         if (!touched.has(x.id) && !eq(derivedFree(x), derivedFree(y))) out.push(`未觸及之項被改動：${x.id}`)
         if (isarr(x.sides)) {
             if ((y.sides || []).length < x.sides.length) out.push(`爭議之方減少：${x.id}`)
@@ -1540,17 +928,22 @@ export function checkInvariants(before, after, opt = {}) {
                 const ys = y.sides?.[k] || {}
                 if ((sd.sources || []).some((sid) => !(ys.sources || []).includes(sid))) out.push(`爭議某方出處減少：${x.id} side ${k}`)
                 for (const cid of sd.claims || []) {
-                    const merged = idsAfter.get(cid)?.mergedInto
-                    if (!(ys.claims || []).includes(cid) && !(merged && (ys.claims || []).includes(merged))) out.push(`爭議某方所引主張遺失：${x.id} side ${k}→${cid}`)
+                    // 所引主張被合併 → 改指 into;被拆分 → 改指拆出條之一(applyDelta 之 merge／split 皆如此改寫引用)
+                    const after1 = idsAfter.get(cid)
+                    const has = (id) => (ys.claims || []).includes(id)
+                    const redirected = (after1?.mergedInto && has(after1.mergedInto)) || (isarr(after1?.splitInto) && after1.splitInto.some(has))
+                    if (!has(cid) && !redirected) out.push(`爭議某方所引主張遺失：${x.id} side ${k}→${cid}`)
                 }
             })
         }
     }
     for (const c of after.claims) {
-        if (TERMINAL.has(c.status) && !c.statusNote) out.push(`終態無理由：${c.id}`)
-        if (c.status === 'superseded' && !c.validPeriod && !c.mergedInto) out.push(`取代無成立期間：${c.id}`)
-        if (c.status === 'retracted' && !RETRACT_REASONS.includes(c.retractReason)) out.push(`撤回理由不合：${c.id}`)
+        const split = isarr(c.splitInto) && c.splitInto.length > 0
+        if (TERMINAL_SET.has(c.status) && !c.statusNote) out.push(`終態無理由：${c.id}`)
+        if (c.status === 'superseded' && !c.validPeriod && !c.mergedInto && !split) out.push(`取代無成立期間：${c.id}`)
+        if (c.status === 'retracted' && !RETRACT_REASONS.includes(c.retractReason) && !PROGRAM_RETRACT_REASONS.includes(c.retractReason)) out.push(`撤回理由不合：${c.id}`)
         for (const k of ['supersededBy', 'mergedInto']) if (c[k] && !idsAfter.has(c[k])) out.push(`${k} 懸空：${c.id}→${c[k]}`)
+        if (split) for (const x of c.splitInto) if (!idsAfter.has(x)) out.push(`splitInto 懸空：${c.id}→${x}`)
     }
     // 取代鏈無環
     for (const c of after.claims) {
@@ -1568,10 +961,20 @@ export function checkInvariants(before, after, opt = {}) {
     for (const d of after.disputes) {
         for (const sd of d.sides || []) for (const cid of sd.claims || []) if (!idsAfter.has(cid)) out.push(`爭議引用懸空：${d.id}→${cid}`)
     }
+    // 同一爭議之不同方不得引同一主張(把兩方所引之主張併為一條、方之引用改寫皆會致此):只報方數未變而新產生者——方數增加者(爭議併爭議之
+    //   各方原樣併入、新增一方)不在此列,其同一主張見於兩方為既有之方原樣帶入
+    const sharedBefore = new Set(sharedSideClaimsOf(before))
+    const sidesBefore = new Map((before?.disputes || []).map((d) => [d.id, (d.sides || []).length]))
+    for (const key of sharedSideClaimsOf(after)) {
+        if (sharedBefore.has(key)) continue
+        const did = key.split('→')[0]
+        const d = after.disputes.find((x) => x.id === did)
+        if (sidesBefore.has(did) && sidesBefore.get(did) === (d?.sides || []).length) out.push(`爭議之不同方引同一主張：${key}`)
+    }
     for (const p of after.parameters) if (p.claim && !idsAfter.has(p.claim)) out.push(`參數引用懸空：${p.id}→${p.claim}`)
     for (const cid of after.essence?.claims || []) {
         const c = idsAfter.get(cid)
-        if (!c || TERMINAL.has(c.status)) out.push(`本質所引主張懸空或為終態：${cid}`)
+        if (!c || TERMINAL_SET.has(c.status)) out.push(`本質所引主張懸空或為終態：${cid}`)
     }
     for (const e of after.pendingReview || []) {
         for (const id of [e?.op?.id, e?.op?.by, e?.op?.into, ...(isarr(e?.op?.from) ? e.op.from : [])]) {
@@ -1581,8 +984,27 @@ export function checkInvariants(before, after, opt = {}) {
     // consumed 只增,且涵蓋所有出處(出處必為確實讀過之筆記)
     const consumed = new Set(after.consumed || [])
     if ((before.consumed || []).some((x) => !consumed.has(x))) out.push('已用筆記減少')
-    const orphan = uniq(allItems(after).flatMap((x) => x.sources || []).filter((sid) => !consumed.has(sid)))
+    const orphan = uniq(allItemsOf(after).flatMap((x) => x.sources || []).filter((sid) => !consumed.has(sid)))
     if (orphan.length) out.push(`出處不在已用筆記內：${orphan.slice(0, 5).join('、')}`)
+    // 出處版本紀錄與撤出處只對已用筆記;關聯變更之重審項與經夥伴入批之邊亦然,夥伴候選則只對未消化者(⑰)
+    for (const k of ['seen', 'withdrawn', 'impactRecheck', 'via']) {
+        const extra = Object.keys(isobj(after[k]) ? after[k] : {}).filter((id) => !consumed.has(id))
+        if (extra.length) out.push(`${k} 含未消化之筆記：${extra.slice(0, 5).join('、')}`)
+    }
+    // 隔離(⑲)只收非終態之主張
+    const badHeld = Object.keys(isobj(after.held) ? after.held : {}).filter((id) => {
+        const c = idsAfter.get(id)
+        return !c || !str(id).startsWith('C') || TERMINAL_SET.has(c.status)
+    })
+    if (badHeld.length) out.push(`held 含非主張或終態之條目：${badHeld.slice(0, 5).join('、')}`)
+    // 出處排除集(⑳):只對非終態主張,且受排除者須在其出處欄內
+    const badExcl = Object.entries(isobj(after.srcExcluded) ? after.srcExcluded : {}).filter(([id, e]) => {
+        const c = idsAfter.get(id)
+        return !c || !str(id).startsWith('C') || TERMINAL_SET.has(c.status) || !isarr(e?.ids) || e.ids.some((n) => !(c.sources || []).includes(n))
+    }).map(([id]) => id)
+    if (badExcl.length) out.push(`srcExcluded 含非主張、終態或不在出處欄之筆記：${badExcl.slice(0, 5).join('、')}`)
+    const eaten = Object.keys(isobj(after.partners) ? after.partners : {}).filter((id) => consumed.has(id))
+    if (eaten.length) out.push(`partners 含已消化之筆記：${eaten.slice(0, 5).join('、')}`)
     // 本質沿革只增;本質改寫時前一版須入沿革
     const eh0 = before.essenceHistory || []
     const eh1 = after.essenceHistory || []
@@ -1603,83 +1025,4 @@ export function checkInvariants(before, after, opt = {}) {
 }
 
 
-/**
- * 規則表 → 提示詞文字(機制:依優先序編號;提案、審查、整併共用同一份——同一類規則只定義一次、注入各步)
- *
- * @param {Array} rules 輸入規則陣列 [{ id, text, priority }]
- * @returns {String} 回傳編號後之規則文字
- * @example
- * console.log(renderRules([{ id: 'b', text: '乙', priority: 2 }, { id: 'a', text: '甲', priority: 1 }]))
- * // => 1. 甲
- * // 2. 乙
- */
-export function renderRules(rules) {
-    return (isarr(rules) ? rules : [])
-        .filter((r) => r && String(r.text || '').trim())
-        .slice().sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99))
-        .map((r, k) => `${k + 1}. ${String(r.text).trim()}`)
-        .join('\n')
-}
-
-
-/**
- * 狀態之提示詞摘要(機制預設;domain 可自組):本質、主張(非終態)、爭議(未撤回)、參數、待解問題、相關概念;終態項只列 id 與一句
- *
- * @param {Object} state 輸入狀態
- * @param {Object} [opt={}] 輸入設定物件
- * @param {Boolean} [opt.full=false] 輸入是否附出處篇數以外之全部欄位(整併用)
- * @returns {String} 回傳摘要文字；狀態為空時回傳「（尚無內容）」
- */
-export function stateDigest(state, opt = {}) {
-    if (!isobj(opt)) opt = {}
-    const s = state || emptyState()
-    const lines = []
-    const j = (arr) => (isarr(arr) ? arr.filter(Boolean).join('；') : '')
-    const ev = (x) => (x.evidence?.level ? `證據${x.evidence.level}` : '證據未評估')
-    if (s.essence?.text) lines.push(`【本質】${s.essence.text}${(s.essence.claims || []).length ? `（依〔${s.essence.claims.join('〕〔')}〕）` : ''}`)
-    const claims = s.claims.filter((c) => !TERMINAL.has(c.status))
-    if (claims.length) {
-        lines.push(`【主張】共 ${claims.length} 條`)
-        for (const c of claims) {
-            const parts = [`〔${c.id}〕[${c.kind}${c.facet ? `｜${c.facet}` : ''}] ${c.text}`]
-            if (c.conditions?.length) parts.push(`條件：${j(c.conditions)}`)
-            if (opt.full && c.pros?.length) parts.push(`利：${j(c.pros)}`)
-            if (opt.full && c.cons?.length) parts.push(`弊：${j(c.cons)}`)
-            if (c.period) parts.push(`時期：${c.period}`)
-            if (opt.full && c.critique) parts.push(`銳評：${c.critique}`)
-            parts.push(`${ev(c)}、出處 ${(c.sources || []).length} 篇${c.status === 'contested' ? '、有爭議' : ''}`)
-            lines.push(parts.join('｜'))
-        }
-    }
-    const disputes = s.disputes.filter((d) => d.status !== 'retracted')
-    if (disputes.length) {
-        lines.push('【爭議】（各方以 side k 標示，k 即操作之 "side" 值，自 0 起）')
-        for (const d of disputes) {
-            const sides = (d.sides || []).map((sd, k) => `side ${k}：${sd.position}${(sd.claims || []).length ? `（引〔${sd.claims.join('〕〔')}〕）` : ''}`).join('｜')
-            // 審查存疑只顯示至其後第一次提案落盤(存疑產生之提案落帳時 proposedAt 即其時刻):給提案端至少一次拆解之機會,
-            //   但不讓同一則懷疑逐批呈現而累積成拆解(第二方被第一方之懷疑帶著走);md 與審查所見之觸及條目常駐
-            const doubt = d.status === 'open' && isobj(d.doubt) && str(d.doubt.at) >= str(s.proposedAt) ? `｜審查存疑（${d.doubt.reason}）：${d.doubt.note}` : ''
-            lines.push(`〔${d.id}〕${d.status === 'resolved' ? '（已解決）' : ''}${d.question}｜${sides}${doubt}`)
-        }
-    }
-    const params = s.parameters.filter((p) => !TERMINAL.has(p.status))
-    if (params.length) {
-        lines.push('【參數】')
-        for (const p of params) lines.push(`〔${p.id}〕${p.name}＝${p.value}${p.conditions ? `（${p.conditions}）` : ''}${p.period ? `｜時期：${p.period}` : ''}${p.claim ? `｜依〔${p.claim}〕` : ''}`)
-    }
-    const qs = s.questions.filter((q) => q.status === 'open')
-    if (qs.length) {
-        lines.push('【待解問題】')
-        for (const q of qs) lines.push(`〔${q.id}〕${q.text}`)
-    }
-    if (s.related.length) lines.push(`【相關概念】${s.related.join('、')}`)
-    if ((s.pendingReview || []).length) {
-        lines.push(`【待審（審查失敗或未得裁決而暫緩之不可逆操作——取代、撤回、合併、拆解；勿重複提出）】${s.pendingReview.map((e) => `〔${e.op.id || e.op.into}〕${e.op.op}${e.op.by ? `→〔${e.op.by}〕` : ''}`).join('、')}`)
-    }
-    const gone = allItems(s).filter((x) => TERMINAL.has(x.status))
-    if (gone.length) lines.push(`【已取代／撤回】${gone.map((x) => `〔${x.id}〕${x.status === 'retracted' ? `撤回（${x.retractReason}）` : `取代${x.mergedInto ? `（併入〔${x.mergedInto}〕）` : ''}`}`).join('、')}`)
-    return lines.length ? lines.join('\n') : '（尚無內容）'
-}
-
-
-export default { STATE_VERSION, DELTA_OPS, CONSOLIDATE_OPS, RETRACT_REASONS, TERMINAL_OPS, PENDING_REVIEW_CAP, DROP_REASONS, NEW_ITEM_DROP_REASONS, DISPUTE_DROP_REASONS, DOUBT_REASONS, DISSOLVE_DROP_REASONS, FIXABLE_FIELDS, SKIP_REASONS, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, emptyState, upgradeState, findItem, deriveStatus, applyDelta, queuePendingReview, pendingReviewOps, applyVerdicts, coverageOf, commitBatch, checkInvariants, renderRules, stateDigest }
+export default { STATE_VERSION, FOREIGN_STATE_CODE, CORRUPT_STATE_CODE, TERMINAL_STATUSES, TERMINAL_SET, HASH_FIELD_SEP, KEY_OF_PREFIX, DISPUTE_OPS, REF_FIELDS, ITEM_TEXT_FIELDS, SIDE_TEXT_FIELDS, allItemsOf, lengthCapOf, codeMapOf, noteOfCode, notesOfCodes, parseSide, opSidesOf, opIdOf, DELTA_OPS, CONSOLIDATE_OPS, SPLIT_PART_MIN, SPLIT_COVER_MIN, MERGE_KEEP_MIN, REPORTED_BASIS, OFFTOPIC_REASON, RETRACT_REASONS, PROGRAM_RETRACT_REASONS, REVIVABLE_RETRACT, DISSOLVED_RETRACT_REASON, holdItems, releaseHeld, reviveItems, TERMINAL_OPS, TERMINAL_OP_LABELS, PENDING_REVIEW_CAP, SKIP_REASONS, RECHECK_SKIP_REASONS, RECHECK_SKIP, ACCEPT_DROP_PREFIXES, EXHAUSTED_REASON, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, emptyState, normalizeState, findItem, dissolveSidesOf, withdrawnOf, liveSourcesOf, citedNotesOf, excludedSourcesOf, supportingSourcesOf, setExcluded, unsupportedOf, essenceLostOf, withdrawSources, essenceNeedOf, deriveStatus, checkInvariants }

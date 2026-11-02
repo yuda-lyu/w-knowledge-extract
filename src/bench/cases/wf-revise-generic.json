@@ -1,0 +1,259 @@
+{
+  "v": 1,
+  "note": "工作流類(修訂 wf-revise;結構合規)之通用題組:每案給整合後之操作(帶 _oid)、意見(審計意見與程式意見〔檢定標準、超限〕)與材料;應然 fixed＝須被補丁改正(改寫保有原文過半)或依合法理由(重複,或高嚴重度之離題／捏造)移除之操作、untouched＝須逐字保留者、notWorse＝檢定標準問題不增、blockedNone＝補丁皆合補丁守門(中、低嚴重度之意見只能改寫、不可移除;移除須理由合格;新增須對應意見)。含數字未紮根與超限之程式意見,以及語氣超出出處之意見(收窄語氣並寫明條件或期間,即出處修訂之能力)。各案情境各自獨立,材料皆為合成之中立情境。",
+  "cases": [
+    {
+      "id": "r01",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "社區圖書館週末開放", "text": "某社區圖書館自去年起週末開放，週末之借閱量約占全週兩成；館方表示，若未增派人力，閉館後之整理時間不足。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "社區圖書館週末開放後，週末借閱量約占全週三成", "conditions": ["某社區圖書館之統計"], "critique": "僅單一館之觀察", "pros": ["擴大服務時段"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "週末開放若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_1", "severity": "中", "type": "捏造", "detail": "出處為約占兩成，非三成", "fix": "改為約占全週兩成" }]
+      },
+      "expect": { "fixed": ["a1_1"], "untouched": ["a1_2"], "notWorse": true, "blockedNone": true },
+      "why": "a1_1 之占比與出處不符，依意見改為兩成即可（中嚴重度不可移除）；a1_2 無意見應逐字保留"
+    },
+    {
+      "id": "r02",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "社區圖書館週末開放", "text": "某社區圖書館自去年起週末開放，週末之借閱量約占全週兩成；館方表示，若未增派人力，閉館後之整理時間不足。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "pitfall", "text": "週末開放若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "未增派人力而週末開放時，閉館整理之時間會不夠", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_2", "severity": "中", "type": "重複", "detail": "與 a1_1 同義", "fix": "移除" }]
+      },
+      "expect": { "fixed": ["a1_2"], "untouched": ["a1_1"], "blockedNone": true },
+      "why": "a1_2 與 a1_1 重複，依重複之意見移除合補丁守門；a1_1 應逐字保留"
+    },
+    {
+      "id": "r03",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "盆栽澆水後之處理", "text": "某園藝社建議，盆栽澆水後宜放在通風處，待表土稍乾；每次澆水量以盆底流出少量水為度。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "每次澆水量以盆底流出少量水為度", "conditions": ["某園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["避免積水"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "盆栽澆水後須放在通風處至少 3 小時，待表土稍乾", "conditions": ["某園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["避免表土長期潮濕"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_2", "severity": "中", "type": "檢定標準", "detail": "「3 小時」不見於所引出處（數字未紮根）", "fix": "刪去該數字，或改用出處中之數字" }]
+      },
+      "expect": { "fixed": ["a1_2"], "untouched": ["a1_1"], "notWorse": true, "blockedNone": true },
+      "why": "a1_2 之「3 小時」為出處所無，依程式意見刪去數字即可（保有原文過半）；a1_1 無意見，應逐字保留"
+    },
+    {
+      "id": "r04",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "冷氣出風不順暢", "text": "某維修行指出，冷氣出風不順暢時，應先檢查濾網是否阻塞並清洗乾淨，再檢查室外機周圍是否堆放雜物而妨礙散熱，接著確認排水管是否暢通無阻，仍未改善時才請專人到府檢修，並由專人視情況更換零件，以免冷氣再度故障。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "冷氣出風不順暢時，應先檢查濾網是否阻塞並清洗乾淨，再檢查室外機周圍是否堆放雜物而妨礙散熱，接著確認排水管是否暢通無阻，仍未改善時才請專人到府檢修，並由專人視情況更換零件，以免冷氣再度故障", "conditions": ["某維修行之建議"], "critique": "僅單一維修行之建議", "pros": ["循序排除原因"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "室外機周圍堆放雜物會妨礙散熱", "conditions": ["室外機周圍堆放雜物時"], "critique": "僅單一維修行之說明", "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_1", "severity": "中", "type": "超限", "detail": "text 逾 90 字上限", "fix": "精簡至 90 字內，保留主要步驟" }]
+      },
+      "expect": { "fixed": ["a1_1"], "untouched": ["a1_2"], "notWorse": true, "blockedNone": true },
+      "why": "a1_1 之 text 逾上限，依程式意見精簡（刪去尾段，保有原文過半）即可；a1_2 無意見，應逐字保留"
+    },
+    {
+      "id": "r05",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "候車資訊", "text": "某市公車站牌加裝電子看板，顯示下一班車之到站時間；看板亦顯示路線與終點站。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "公車站牌加裝電子看板，顯示下一班車之到站時間", "conditions": ["某市之站牌"], "critique": "僅單一城市之觀察", "pros": ["乘客可掌握到站時間"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "電子看板亦顯示路線與終點站", "conditions": ["某市之站牌"], "critique": "僅單一城市之觀察", "pros": ["乘客易辨識路線"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" },
+          { "op": "add", "kind": "rule", "text": "公車站牌之電子看板可顯示下一班車之到站時間", "conditions": ["某市之站牌"], "critique": "僅單一城市之觀察", "pros": ["乘客可掌握到站時間"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a2_1" }
+        ],
+        "issues": [{ "ref": "a2_1", "severity": "中", "type": "重複", "detail": "與 a1_1 同義", "fix": "移除" }]
+      },
+      "expect": { "fixed": ["a2_1"], "untouched": ["a1_1", "a1_2"], "blockedNone": true },
+      "why": "a2_1 與 a1_1 同指看板顯示到站時間，依重複之意見移除合補丁守門；a1_1、a1_2 無意見，應逐字保留"
+    },
+    {
+      "id": "r06",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "觀星裝備", "text": "某天文社建議，初學者以雙筒望遠鏡入門較為經濟；觀星時攜帶紅光手電筒，可保持暗適應。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "初學者以雙筒望遠鏡入門較為經濟", "conditions": ["某天文社之建議"], "critique": "僅單一社團之建議", "pros": ["成本較低"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "觀星時攜帶紅光手電筒，可保持暗適應", "conditions": ["某天文社之建議"], "critique": "僅單一社團之建議", "pros": ["保持暗適應"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" },
+          { "op": "add", "kind": "rule", "text": "烤箱預熱後再放入食材，烘烤較均勻", "conditions": ["家用烤箱"], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a2_1" }
+        ],
+        "issues": [{ "ref": "a2_1", "severity": "高", "type": "離題", "detail": "談烤箱預熱，與觀星裝備無關", "fix": "移除" }]
+      },
+      "expect": { "fixed": ["a2_1"], "untouched": ["a1_1", "a1_2"], "blockedNone": true },
+      "why": "a2_1 談烤箱，與出處及本題組無關，經高嚴重度之離題意見，移除合補丁守門；a1_1、a1_2 無意見，應逐字保留"
+    },
+    {
+      "id": "r07",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "蒸魚火候", "text": "某烹飪教室指出，蒸魚水滾後再放入魚，蒸至魚眼凸出即可熄火。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "蒸魚水滾後再放入魚", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["魚肉較嫩"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "蒸至魚眼凸出即可熄火", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["避免蒸過頭"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" },
+          { "op": "add", "kind": "rule", "text": "蒸魚時加入啤酒可完全去除腥味", "conditions": ["蒸魚時"], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a2_1" }
+        ],
+        "issues": [{ "ref": "a2_1", "severity": "高", "type": "捏造", "detail": "出處未提啤酒與去腥", "fix": "移除" }]
+      },
+      "expect": { "fixed": ["a2_1"], "untouched": ["a1_1", "a1_2"], "blockedNone": true },
+      "why": "a2_1 之啤酒去腥為出處所無，經高嚴重度之捏造意見，移除合補丁守門；a1_1、a1_2 無意見，應逐字保留"
+    },
+    {
+      "id": "r08",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "登山杖使用", "text": "某登山社建議，下坡時使用登山杖可減輕膝蓋負擔；登山杖長度宜依個人身高調整。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "登山杖長度宜依個人身高調整", "conditions": ["某登山社之建議"], "critique": "僅單一社團之建議", "pros": ["使用較省力"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "下坡時使用登山杖可完全免除膝蓋負擔", "conditions": ["某登山社之建議"], "critique": "僅單一社團之建議", "pros": ["減輕膝蓋負擔"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_2", "severity": "中", "type": "捏造", "detail": "出處只說可減輕膝蓋負擔，並非完全免除", "fix": "改為減輕膝蓋負擔" }]
+      },
+      "expect": { "fixed": ["a1_2"], "untouched": ["a1_1"], "notWorse": true, "blockedNone": true },
+      "why": "a1_2 誇大了出處（減輕而非免除），但意見僅為中嚴重度，不可移除，應改寫為減輕膝蓋負擔；a1_1 無意見，應逐字保留"
+    },
+    {
+      "id": "r09",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "導覽解說節奏", "text": "某博物館之導覽員表示，每個展品之解說控制在兩分鐘內，參觀者較能專注；團體過大時後排聽不清楚。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "每個展品之解說控制在兩分鐘內，必能使所有參觀者專注", "conditions": [], "critique": "僅單一館之說明", "pros": ["參觀者較能專注"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "團體過大時後排聽不清楚", "conditions": ["團體過大時"], "critique": "僅單一館之說明", "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_1", "severity": "中", "type": "語氣過強", "detail": "出處只說參觀者較能專注，並非必能，亦非所有參觀者", "fix": "收窄語氣，並於條件寫明為某博物館導覽員之說明" }]
+      },
+      "expect": { "fixed": ["a1_1"], "untouched": ["a1_2"], "notWorse": true, "blockedNone": true },
+      "why": "a1_1 之語氣超出出處（必能、所有參觀者），應改寫為較能專注並於條件寫明限於某館導覽員之說明，不可移除；此即出處修訂（support-revise）之收斂措辭、補條件之能力；a1_2 無意見應逐字保留"
+    },
+    {
+      "id": "r10",
+      "holdout": false,
+      "input": {
+        "state": { "claims": [{ "id": "C1", "kind": "rule", "text": "幼犬每日分次餵食，較一次餵食不易腹瀉", "conditions": ["某動物醫院之建議"], "critique": "僅單一醫院之建議", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n0"] }] },
+        "sources": [
+          { "id": "n0", "title": "幼犬餵食次數", "text": "某動物醫院建議，幼犬每日分次餵食，較一次餵食不易腹瀉。" },
+          { "id": "n1", "title": "另一診所之餵食建議", "text": "另一家動物診所指出，幼犬每日分次餵食，較一次餵食不易腹瀉；成犬之餵食次數則無特別建議。" }
+        ],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "revise", "id": "C1", "fields": { "text": "幼犬每日分次餵食必可根治腹瀉" }, "reason": "以另一診所之說明強化主張", "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "成犬之餵食次數無特別建議", "conditions": ["另一家動物診所之說明"], "critique": "僅單一診所之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_1", "severity": "中", "type": "語氣過強", "detail": "出處只說較一次餵食不易腹瀉，並非可根治", "fix": "把修訂後之文字收窄為較一次餵食不易腹瀉" }]
+      },
+      "expect": { "fixed": ["a1_1"], "untouched": ["a1_2"], "notWorse": true, "blockedNone": true },
+      "why": "a1_1 之修訂把原主張改成可根治，超出出處，應把修訂後之文字收窄為較不易腹瀉（改 fields 內之 text，保有原文過半），不可移除；此即出處修訂（support-revise）之收斂措辭能力；a1_2 無意見應逐字保留"
+    },
+    {
+      "id": "r11",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "紙類回收", "text": "某社區之回收站規定，紙類須壓平並捆紮後投入；潮濕或沾油之紙類不予回收。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "pitfall", "text": "潮濕或沾油之紙類不予回收", "conditions": ["紙類潮濕或沾油時"], "critique": "僅單一社區之規定", "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "紙類須壓平並捆紮後，於 7 日內投入回收", "conditions": ["某社區回收站之規定"], "critique": "僅單一社區之規定", "pros": ["便於後續處理"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_2", "severity": "中", "type": "檢定標準", "detail": "「7 日」不見於所引出處（數字未紮根）", "fix": "刪去該數字，或改用出處中之數字" }]
+      },
+      "expect": { "fixed": ["a1_2"], "untouched": ["a1_1"], "notWorse": true, "blockedNone": true },
+      "why": "a1_2 之「7 日內」為出處所無，依程式意見刪去數字即可（保有原文過半）；a1_1 無意見，應逐字保留"
+    },
+    {
+      "id": "r12",
+      "holdout": false,
+      "input": {
+        "sources": [{ "id": "n1", "title": "樂器保養", "text": "某樂器行表示，小提琴弦約每半年更換一次，使用頻繁者更換較勤；演奏後以軟布擦去琴身松香粉。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "演奏後以軟布擦去琴身松香粉", "conditions": ["某樂器行之建議"], "critique": "僅單一店家之建議", "pros": ["保持琴身清潔"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "rule", "text": "小提琴弦每半年更換一次，使用頻繁者必須每月更換", "conditions": ["某樂器行之建議"], "critique": "僅單一店家之建議", "pros": ["維持音色"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_2" },
+          { "op": "add", "kind": "rule", "text": "社區公園之落葉須每週清掃", "conditions": ["社區公園"], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a2_1" }
+        ],
+        "issues": [
+          { "ref": "a1_2", "severity": "中", "type": "語氣過強", "detail": "出處只說使用頻繁者更換較勤，並未說每月", "fix": "改為使用頻繁者更換較勤" },
+          { "ref": "a2_1", "severity": "高", "type": "離題", "detail": "談公園落葉，與樂器保養無關", "fix": "移除" }
+        ]
+      },
+      "expect": { "fixed": ["a1_2", "a2_1"], "untouched": ["a1_1"], "notWorse": true, "blockedNone": true },
+      "why": "a1_2 之每月為出處所無，只是中嚴重度，應改寫為使用頻繁者更換較勤（不可移除）；a2_1 離題且為高嚴重度，應移除；a1_1 無意見，應逐字保留"
+    },
+    {
+      "id": "rh1",
+      "holdout": true,
+      "input": {
+        "sources": [{ "id": "n1", "title": "泳池水質", "text": "某游泳池每日開放前檢測水質；池水濁度偏高時暫停開放並換水。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "游泳池每日開放前檢測水質", "conditions": ["某游泳池之作法"], "critique": "僅單一泳池之作法", "pros": ["及早發現水質變化"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "池水濁度偏高時須暫停開放，並於 2 小時內換水", "conditions": ["濁度偏高時"], "critique": "僅單一泳池之作法", "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_2", "severity": "中", "type": "檢定標準", "detail": "「2 小時」不見於所引出處（數字未紮根）", "fix": "刪去該數字，或改用出處中之數字" }]
+      },
+      "expect": { "fixed": ["a1_2"], "untouched": ["a1_1"], "notWorse": true, "blockedNone": true },
+      "why": "a1_2 之「2 小時內」為出處所無，依程式意見刪去數字即可（保有原文過半）；a1_1 無意見，應逐字保留"
+    },
+    {
+      "id": "rh2",
+      "holdout": true,
+      "input": {
+        "sources": [{ "id": "n1", "title": "掛號郵件投遞", "text": "某郵局表示，掛號郵件須由收件人或同住成員簽收；無人簽收時投遞員僅留通知單，郵件改存郵局。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "掛號郵件須由收件人或同住成員簽收", "conditions": ["某郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["確保郵件送達本人"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "無人簽收時投遞員僅留通知單，郵件改存郵局", "conditions": ["無人簽收時"], "critique": "僅單一郵局之說明", "sources": ["N1"], "_oid": "a1_2" },
+          { "op": "add", "kind": "pitfall", "text": "投遞員遇無人簽收時只留通知單，郵件改為存放於郵局", "conditions": ["無人簽收時"], "critique": "僅單一郵局之說明", "sources": ["N1"], "_oid": "a2_2" }
+        ],
+        "issues": [{ "ref": "a2_2", "severity": "中", "type": "重複", "detail": "與 a1_2 同義", "fix": "移除" }]
+      },
+      "expect": { "fixed": ["a2_2"], "untouched": ["a1_1", "a1_2"], "blockedNone": true },
+      "why": "a2_2 與 a1_2 同指無人簽收時留通知單、郵件改存郵局，依重複之意見移除合補丁守門；a1_1、a1_2 無意見，應逐字保留"
+    },
+    {
+      "id": "rh3",
+      "holdout": true,
+      "input": {
+        "sources": [{ "id": "n1", "title": "平交道通過注意", "text": "某鐵道單位提醒，平交道柵欄放下時不得闖越；車輛通過前須先確認前方有足夠空間可完全駛離。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "平交道柵欄放下時不得闖越，否則必出事故", "conditions": ["某鐵道單位之提醒"], "critique": "僅單一單位之提醒", "pros": ["避免與列車衝突"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "通過平交道前未確認前方空間，可能無法完全駛離", "conditions": ["通過平交道前"], "critique": "僅單一單位之提醒", "sources": ["N1"], "_oid": "a1_2" }
+        ],
+        "issues": [{ "ref": "a1_1", "severity": "中", "type": "語氣過強", "detail": "出處只說不得闖越，未說否則必出事故", "fix": "刪去必出事故之斷言" }]
+      },
+      "expect": { "fixed": ["a1_1"], "notWorse": true },
+      "why": "a1_1 之「必出事故」超出出處，只是中嚴重度，應改寫為不得闖越（保有原文過半），不可移除；改寫不得使檢定標準問題增加"
+    },
+    {
+      "id": "rh4",
+      "holdout": true,
+      "input": {
+        "sources": [{ "id": "n1", "title": "手語練習", "text": "某手語班觀察到，每週固定練習較易記住手勢；只看影片自學，容易養成錯誤之手勢。" }],
+        "batch": ["n1"],
+        "ops": [
+          { "op": "add", "kind": "rule", "text": "每週固定練習較易記住手勢", "conditions": ["某手語班之觀察"], "critique": "僅單一班級之觀察", "pros": ["較易記住手勢"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a1_1" },
+          { "op": "add", "kind": "pitfall", "text": "只看影片自學，容易養成錯誤之手勢", "conditions": ["只看影片自學時"], "critique": "僅單一班級之觀察", "sources": ["N1"], "_oid": "a1_2" },
+          { "op": "add", "kind": "rule", "text": "手語班學員越多，學習成效必定越好", "conditions": ["手語班"], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["N1"], "_oid": "a2_1" }
+        ],
+        "issues": [{ "ref": "a2_1", "severity": "高", "type": "捏造", "detail": "出處未談學員人數與成效", "fix": "移除" }]
+      },
+      "expect": { "fixed": ["a2_1"], "untouched": ["a1_1", "a1_2"], "blockedNone": true },
+      "why": "a2_1 之學員人數與成效為出處所無，經高嚴重度之捏造意見，移除合補丁守門；a1_1、a1_2 無意見，應逐字保留"
+    }
+  ]
+}

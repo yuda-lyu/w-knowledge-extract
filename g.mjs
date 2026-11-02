@@ -8,115 +8,128 @@ let { createKnowledgeExtract } = WKnowledgeExtract
 let test = async () => {
     let ms = []
 
-    //workDir, 知識庫根目錄(唯一必填): db/log/state/knowledge 等皆由此展開
+    //workDir, 知識庫根目錄(唯一必填): db/log/state/knowledge/tmp 等皆由此展開, 筆記 md 位於 knowledge/notes, 核心知識 md 與狀態檔寫入 knowledge/core
     let workDir = './_test_knowledge_extract'
     fs.rmSync(workDir, { recursive: true, force: true })
+    let notesDir = `${workDir}/knowledge/notes`
+    fs.mkdirSync(notesDir, { recursive: true })
 
-    //items與pages, 模擬來源之文章清單與內文頁, 實務上由內建 rss/grid/article 抓取器連網取得
-    let items = [
-        { url: 'https://example.com/post/checkpointing', title: '以梯度檢查點換取訓練記憶體', time: '2026-09-01' },
-        { url: 'https://example.com/post/mixed-precision', title: '混合精度訓練之記憶體與速度取捨', time: '2026-09-02' },
+    //notes, 模擬摘要套件交出之筆記(記錄與 md), 實務上由 w-knowledge-summarize 寫入同一個 workDir, 關聯由 w-knowledge-relate 完成(relatedAt 非空代表已關聯)
+    let landNote = (id, title, concepts, summary, points) => {
+        let file = `${notesDir}/${id}.md`
+        let md = [
+            '---',
+            `title: "${title}"`,
+            `slug: "${id}"`,
+            `concepts: [${concepts.map((c) => `"${c}"`).join(', ')}]`,
+            'type: "note"',
+            '---',
+            '',
+            `# ${title}`,
+            '',
+            '## 一句話重點',
+            '',
+            summary,
+            '',
+            '## 核心知識',
+            '',
+            ...points.map((p) => `- ${p}`),
+            '',
+        ].join('\n')
+        fs.writeFileSync(file, md, 'utf8')
+        return { id, title, category: '方法與技術', concepts, summary, claimType: '實證研究', evidenceLevel: '中', file, createdAt: '2026-09-01T00:00:00+08:00', relatedAt: '2026-09-02T00:00:00+08:00', extractedAt: '' }
+    }
+    let notes = [
+        landNote('accretion-disk', '黑洞吸積盤之輻射機制', ['黑洞', '吸積盤'], '吸積盤氣體因摩擦加熱，並以 X 射線輻射出重力位能。', ['盤內緣溫度可達百萬度以上']),
+        landNote('black-hole-spin', '以鐵譜線輪廓量測黑洞自旋', ['黑洞', '自旋'], '由 X 射線光譜中鐵譜線的輪廓，可推估吸積盤內緣位置與黑洞自旋。', ['譜線輪廓愈寬，內緣愈靠近黑洞']),
+        landNote('jet-launching', '相對論噴流之發射', ['黑洞', '噴流'], '吸積盤磁場把部分物質沿自旋軸加速成相對論噴流。', ['噴流功率與自旋及磁場強度相關']),
     ]
-    let pages = {
-        'https://example.com/post/checkpointing': '梯度檢查點只保存部分層之激活值，反向傳播時重算其餘層，以約三成額外計算換取大幅降低之激活記憶體。'.repeat(8),
-        'https://example.com/post/mixed-precision': '混合精度以半精度進行前向與反向計算並保留單精度主權重，搭配損失縮放避免梯度下溢，可降低記憶體並加速訓練。'.repeat(8),
-    }
 
-    //notesOf, 模擬萃取結果(依標題對應), 實務上由 AI 依內建萃取 prompt 產出
-    let notesOf = {
-        '以梯度檢查點換取訓練記憶體': { title: '梯度檢查點以重算換記憶體', category: '方法與技術', summary: '只保存部分激活值，反向時重算其餘層。', key_points: ['以約三成額外計算換取激活記憶體大幅下降'], concepts: ['訓練記憶體優化', '梯度檢查點'], claim_type: '實務經驗', evidence_level: '中' },
-        '混合精度訓練之記憶體與速度取捨': { title: '混合精度訓練之取捨', category: '方法與技術', summary: '半精度計算搭配單精度主權重與損失縮放。', key_points: ['損失縮放可避免梯度下溢'], concepts: ['訓練記憶體優化', '混合精度'], claim_type: '實務經驗', evidence_level: '中' },
+    //aiAdapter, AI 調度層替身(cfg.aiAdapter 為正當擴充口): 依提示詞首句判斷 3+3 工作流之角色並作答, 離線可跑
+    //  起草(三席)每篇筆記提一條「規則」主張並立本質, 整合收入第一份候選, 審計無意見, 終審逐條保留
+    let calls = []
+    let roleOf = (prompt) => {
+        let roles = [[/^你是.*?的提煉器。/, 'draft'], [/^你是.*?的整合員。/, 'integrate'], [/^你是.*?的審計員。/, 'audit'], [/^你是.*?的修訂員。以下是「/, 'revise'], [/^你是.*?的終審員。/, 'accept']]
+        return (roles.find(([re]) => re.test(prompt)) || [null, 'other'])[1]
     }
-
-    //answer, 模擬 AI 回應: 依 prompt 種類(預篩/萃取/關聯/提煉之提案與審查)回傳固定之 JSON, 實務上為內建 AI 調度層(w-dispatch-ai, 金鑰放 workDir/.env)
-    let answer = (prompt) => {
-        if (prompt.includes('的預篩器')) {
-            let n = Number((prompt.match(/以下 (\d+) 篇/) || [])[1]) || 0
-            return Array.from({ length: n }, (_, i) => ({ index: i + 1, relevant: true, reason: '含方法論' }))
-        }
-        if (prompt.includes('的萃取器')) {
-            return [...prompt.matchAll(/--- 第(\d+)篇 ---\n標題：(.*)/g)].map((m) => ({ index: Number(m[1]), relevant: true, ...notesOf[m[2]] }))
-        }
-        if (prompt.includes('的關聯建立器')) {
-            return prompt.split(/--- 第\d+篇（待建立關聯）---/).slice(1).map((block, i) => {
-                let to = (block.match(/- slug: (\S+)｜/) || [])[1]
-                return { index: i + 1, relations: to ? [{ to, type: '互補搭配', reason: '兩者皆為降低訓練記憶體之手段，可併用' }] : [] }
-            })
-        }
-        if (prompt.includes('的提煉器')) {
-            //提煉之提案: 只回差量操作(新增/確認/取代…), 出處寫本批代號 N1、N2…, 由程式逐條套用並檢查
-            let codes = [...prompt.matchAll(/^### (N\d+) /gm)].map((m) => m[1])
+    let answerOf = {
+        draft: (prompt) => {
+            let batch = [...prompt.matchAll(/^### (N\d+) (\S*)/gm)].map((m) => ({ code: m[1], title: m[2] }))
+            let ann = { critique: '僅單一案例', pros: ['出處未載'], cons: ['出處未載'] }
             return {
                 ops: [
-                    { op: 'add', ref: 'a', kind: 'principle', text: '訓練記憶體可用重算或降精度換取', basis: '實務經驗', sources: codes },
-                    { op: 'add', ref: 'b', kind: 'rule', text: '若激活記憶體不足則先開梯度檢查點', basis: '實務經驗', sources: [codes[0]] },
-                    { op: 'essence', text: '訓練記憶體主要耗在激活值與權重精度，可用重算或降精度換取', claims: ['@a', '@b'], reason: '首版' },
+                    ...batch.map((n, k) => ({ op: 'add', ref: `r${k}`, kind: 'rule', text: `主張：${n.title}`, basis: '案例', sources: [n.code], ...ann })),
+                    { op: 'essence', text: '黑洞周圍之吸積盤、自旋與噴流彼此相扣', claims: ['@r0'], reason: '首版' },
                 ],
                 skipped: [],
             }
-        }
-        if (prompt.includes('的審查員')) {
-            //提煉之審查: 逐條裁決 keep/drop/fix/doubt(取代/撤回/合併/拆解須明列), 此處全數保留
-            return { verdicts: [...prompt.matchAll(/^i=(\d+) /gm)].map((m) => ({ i: Number(m[1]), action: 'keep' })) }
-        }
-        return null
-    }
-
-    //aiAdapter, 以 AI 調度層替身取代內建(cfg.aiAdapter 為正當擴充口, 測試與離線示範皆走這裡)
-    let aiAdapter = {
-        callJson: async (prompt, check) => {
-            let data = answer(prompt)
-            if (data && check(data)) {
-                return { ok: true, data, error: '', skipped: false, attempts: 1, preview: '' }
-            }
-            return { ok: false, data: null, error: '無對應回應', skipped: false, attempts: 1, preview: '' }
         },
+        integrate: (prompt) => {
+            let sec = prompt.split(/^【候選 (\d+)】$/m)[2] || ''
+            let ops = sec.split('\n').filter((l) => /^a\d+_\d+（/.test(l)).map((l) => {
+                let op = JSON.parse(l.slice(l.indexOf('{')))
+                delete op._oid
+                return { ...op, via: [l.match(/^(a\d+_\d+)（/)[1]] }
+            })
+            return { ops, skipped: [] }
+        },
+        audit: () => ({ issues: [] }),
+        revise: () => ({ edits: [], adds: [], removes: [] }),
+        accept: (prompt) => ({ verdicts: [...prompt.matchAll(/^i=(\d+) \{.*\}$/gm)].map((m) => ({ i: Number(m[1]), action: 'keep' })) }),
+    }
+    let answer = (prompt, opt) => {
+        let role = roleOf(prompt)
+        calls.push(role)
+        let json = (answerOf[role] || (() => null))(prompt)
+        let ok = json !== null && (typeof opt?.check !== 'function' || opt.check(json))
+        return ok ? { ok: true, json, providerId: `stub-${role}`, ms: 1, tried: [{ providerId: `stub-${role}`, outcome: 'ok' }] } : { ok: false, error: '替身形狀不合', tried: [] }
+    }
+    let wkf = {
+        runFanout: async ({ task, agents }) => ({ ok: true, agents: agents.map((a) => answer(task, a)) }),
+        callAi: async (prompt, opt) => answer(prompt, opt),
+    }
+    let aiAdapter = {
+        getWkf: () => wkf,
+        seatSpec: (seat) => (seat ? { use: seat.use, fallback: [], timeoutMs: 60000 } : null),
         recordCall: () => {},
-        drainStats: () => '',
-        aiUsageToday: () => ({ today: '', used: 0, byKey: {}, chain: '', providers: [], skipped: [] }),
     }
 
-    //flow, 總組裝: 內建 prompt/版型/LMDB/鎖/索引全走預設, 只置換抓取器與 AI 調度層
+    //flow, 總組裝: 內建設定/詞彙/提示詞/檢定標準/LMDB/鎖/日誌/執行摘要走預設, 只置換 AI 調度層; extract 僅調降新核心門檻與批量以適應 3 篇筆記
     let silent = { info: () => {}, warn: () => {}, error: () => {} }
     let flow = createKnowledgeExtract({
         workDir,
         data: {
-            seedSources: [{ kind: 'rss', tier: 1, name: '範例部落格', url: 'https://example.com/feed', lang: 'zh' }],
-            vocab: { domain: '機器學習' }, //主題範圍(選填), 預篩/萃取/關聯/提煉之 prompt 據此限定, 未給即不限主題
+            vocab: { domain: '天文學' }, //主題範圍(選填), 提示詞之領域句據此限定, 未給即不限主題
         },
-        fetch: { minSourceIntervalMs: 0 }, //設定覆寫(逐鍵): 同一來源最短重抓間隔預設 6 小時, 此處設 0 使第二輪即重抓以展示去重
-        knowledge: { distillMinNotes: 2 }, //新核心門檻(主標籤可提煉篇數)預設 6, 此處設 2 使兩篇即可展示提煉
-        fetchers: [
-            { id: 'rss', kinds: ['rss'], fetch: () => items }, //同 id 置換內建 rss 抓取器
-            { id: 'article', role: 'detail', match: () => true, fetch: (doc) => ({ ok: true, text: pages[doc.url] }) }, //置換內建正文抓取器
-        ],
+        extract: { minNotes: 2, notesPerConcept: 3, perRun: 1 },
         aiAdapter,
-        deadlineMs: 3600000, //整輪時間預算(實務上給 scheduleLimitMin 由排程上限推導)
-        afterRun: false, //停用收尾巡檢(預設每輪寫監控紀錄 md)
+        scheduleLimitMin: 60, //排程執行上限(分鐘), 整輪時間預算與鎖陳舊期限由此推導
+        afterRun: false, //無收尾鉤子
         logFactory: () => silent, //靜音日誌(預設每輪寫 log/<day>/<stamp>-run.log)
     })
 
-    //run, 第一輪: 抓取 → 彙整(預篩→萃取) → 關聯 → 提煉 → 索引
-    let r1 = await flow.run()
-    ms.push({ round1: `ok[${r1.ok}], ` + r1.stages.map((s) => `${s.name}[${s.status}]`).join(', ') })
-    for (let s of r1.stages) {
-        ms.push({ [s.name]: s.result.summary })
-    }
+    //stores, 寫入筆記記錄(實務上由摘要套件寫入, 此處直接插入作為輸入)
+    let stores = flow.openStores()
+    await stores.notes.insertNew(notes)
+    await flow.closeStores(stores)
 
-    //knowledge, 產出之知識 md(筆記/核心/關聯總覽/索引)
-    let notes = fs.readdirSync(`${workDir}/knowledge/notes`).filter((f) => f.endsWith('.md'))
-    let cores = fs.readdirSync(`${workDir}/knowledge/core`).filter((f) => f.endsWith('.md'))
-    ms.push({ files: `筆記 ${notes.length} 篇, 核心 ${cores.length} 則, 關聯總覽 ${fs.existsSync(`${workDir}/knowledge/relations/graph.json`)}` })
-    let index = fs.readFileSync(`${workDir}/knowledge/index.md`, 'utf8')
-    ms.push({ index: index.split('\n').find((l) => l.startsWith('- 知識筆記')) })
+    //run, 一輪: 選題 → 3+3 工作流(起草→整合→審計→終審)→ 套用 → 寫狀態檔與核心 md
+    let r = await flow.run()
+    ms.push({ round: `ok[${r.ok}], ` + r.stages.map((s) => `${s.name}[${s.status}]`).join(', ') })
+    ms.push({ summary: r.stages[0].result.summary })
 
-    //core, 核心知識 md 為狀態檔(同目錄 .state.json)之投影: 主張帶編號〔C1〕、證據等級與逐條出處
-    let core = fs.readFileSync(`${workDir}/knowledge/core/${cores[0]}`, 'utf8')
-    ms.push({ core: core.split('\n').filter((l) => l.startsWith('- 〔') || l.startsWith('  - 出處')) })
-
-    //run, 第二輪: 重抓同一來源但文章皆已抓過(去重不入庫), 筆記已關聯(relatedAt 持久化), 核心無新筆記(不重提煉)
-    let r2 = await flow.run()
-    ms.push({ round2: r2.stages.slice(0, 4).map((s) => `${s.name}: ${s.result.summary}`) })
+    //stores, 讀回結果(狀態檔為真理, 核心 md 與 cores 記錄為其投影)
+    stores = flow.openStores()
+    let cs = await stores.cores.select()
+    ms.push({ cores: cs.map((c) => `${c.concept}｜${c.noteCount} 篇`) })
+    let ns = await stores.notes.select()
+    ms.push({ extracted: ns.map((n) => `${n.id}｜${n.extractedAt ? '已提煉' : '未提煉'}`).sort() })
+    await flow.closeStores(stores)
+    let files = fs.readdirSync(`${workDir}/knowledge/core`).sort()
+    ms.push({ coreFiles: files.map((f) => f.replace(cs[0].id, '<核心 id>')) })
+    let md = fs.readFileSync(`${workDir}/knowledge/core/${cs[0].id}.md`, 'utf8')
+    ms.push({ mdSection: md.split('\n').filter((l) => l.startsWith('## ')) })
+    ms.push({ calls })
 
     //clear
     fs.rmSync(workDir, { recursive: true, force: true })
@@ -129,31 +142,19 @@ await test()
         console.log(err)
     })
 // => ms [
-//   { round1: 'ok[true], 抓取[ok], 彙整[ok], 關聯[ok], 提煉[ok], 索引[ok]' },
-//   { '抓取': '來源 1 個、新文件 2、素材 2、轉錄 0、放棄 0｜線索消化 0、新來源 0' },
-//   { '彙整': '處理 2、新知識 2、略過 0、線索 0（AI 1 次）｜預篩 2 篇放行 2（AI 1 次）' },
-//   { '關聯': '處理 2、關聯 2 條、衝突 0 組（AI 1 次）' },
-//   { '提煉': '概念 1、更新 1 則核心、消化 2 篇（AI 2 次）' },
-//   { '索引': '筆記 2、核心 1、關聯 2' },
-//   { files: '筆記 2 篇, 核心 1 則, 關聯總覽 true' },
-//   { index: '- 知識筆記 2 篇｜核心知識 1 則｜關聯 2 條' },
+//   { round: 'ok[true], 提煉[ok]' },
+//   { summary: '概念 1、更新 1 則核心、消化 3 篇（AI 6 次）' },
+//   { cores: [ '黑洞｜3 篇' ] },
 //   {
-//     core: [
-//       '- 〔C1〕有一說：訓練記憶體可用重算或降精度換取（證據低）',
-//       '  - 出處：[[梯度檢查點以重算換記憶體-8c408b65]]、[[混合精度訓練之取捨-1b729654]]',
-//       '- 〔C2〕有一說：若激活記憶體不足則先開梯度檢查點（證據低）',
-//       '  - 出處：[[梯度檢查點以重算換記憶體-8c408b65]]'
+//     extracted: [
+//       'accretion-disk｜已提煉',
+//       'black-hole-spin｜已提煉',
+//       'jet-launching｜已提煉'
 //     ]
 //   },
+//   { coreFiles: [ '<核心 id>.md', '<核心 id>.state.json' ] },
+//   { mdSection: [ '## 本質', '## 可操作規則', '## 提煉自' ] },
 //   {
-//     round2: [
-//       '抓取: 來源 1 個、新文件 0、素材 0、轉錄 0、放棄 0｜線索消化 0、新來源 0',
-//       '彙整: 處理 0、新知識 0、略過 0、線索 0（AI 0 次）',
-//       '關聯: 處理 0、關聯 0 條、衝突 0 組（AI 0 次）',
-//       '提煉: 概念 0、更新 0 則核心、消化 0 篇（AI 0 次）'
-//     ]
+//     calls: [ 'draft', 'draft', 'draft', 'integrate', 'audit', 'accept' ]
 //   }
 // ]
-
-
-//node g.mjs
