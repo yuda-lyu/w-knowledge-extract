@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    
+    <meta charset="utf-8">
+    <title>standards/registry.mjs - Documentation</title>
+    
+    
+    <script src="scripts/prettify/prettify.js"></script>
+    <script src="scripts/prettify/lang-css.js"></script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc.css">
+    <script src="scripts/nav.js" defer></script>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+
+<input type="checkbox" id="nav-trigger" class="nav-trigger" />
+<label for="nav-trigger" class="navicon-button x">
+  <div class="navicon"></div>
+</label>
+
+<label for="nav-trigger" class="overlay"></label>
+
+<nav >
+    
+    
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#ACCEPT_DROP_PREFIXES">ACCEPT_DROP_PREFIXES</a></li><li><a href="global.html#AI_ADAPTER_OPT">AI_ADAPTER_OPT</a></li><li><a href="global.html#AI_NEED">AI_NEED</a></li><li><a href="global.html#ALL_OPS">ALL_OPS</a></li><li><a href="global.html#ANNOTATION_KEYS">ANNOTATION_KEYS</a></li><li><a href="global.html#ANNOTATION_TEXT_KEYS">ANNOTATION_TEXT_KEYS</a></li><li><a href="global.html#ANNOTATION_UNSTATED">ANNOTATION_UNSTATED</a></li><li><a href="global.html#ARCHIVE_TAGS">ARCHIVE_TAGS</a></li><li><a href="global.html#ATTEMPTS_FILE">ATTEMPTS_FILE</a></li><li><a href="global.html#AUDIT_FLAG_TYPES">AUDIT_FLAG_TYPES</a></li><li><a href="global.html#BATCHED_RECHECK_REASONS">BATCHED_RECHECK_REASONS</a></li><li><a href="global.html#CACHE_FORMAT">CACHE_FORMAT</a></li><li><a href="global.html#CAPTURE_KEYS">CAPTURE_KEYS</a></li><li><a href="global.html#CATEGORY_FALLBACK_KEYS">CATEGORY_FALLBACK_KEYS</a></li><li><a href="global.html#CFG_KEYS">CFG_KEYS</a></li><li><a href="global.html#CLAIM_HOLD_NEXT">CLAIM_HOLD_NEXT</a></li><li><a href="global.html#CLAIM_OBJECT">CLAIM_OBJECT</a></li><li><a href="global.html#CLI">CLI</a></li><li><a href="global.html#COLLECTION_KEYS">COLLECTION_KEYS</a></li><li><a href="global.html#CONFLICT_DISPOSITIONS">CONFLICT_DISPOSITIONS</a></li><li><a href="global.html#CONFLICT_TRIES_MAX">CONFLICT_TRIES_MAX</a></li><li><a href="global.html#CONSOLIDATE_OPS">CONSOLIDATE_OPS</a></li><li><a href="global.html#CONSTRUCTIVE_OPS">CONSTRUCTIVE_OPS</a></li><li><a href="global.html#CONTENT_CACHE_FILE">CONTENT_CACHE_FILE</a></li><li><a href="global.html#CONTENT_KEY_VERSION">CONTENT_KEY_VERSION</a></li><li><a href="global.html#CORE_FIX_STDS">CORE_FIX_STDS</a></li><li><a href="global.html#CORE_HOLD_OBJECT">CORE_HOLD_OBJECT</a></li><li><a href="global.html#CORE_SECTION_TITLES">CORE_SECTION_TITLES</a></li><li><a href="global.html#CORE_STANDARDS">CORE_STANDARDS</a></li><li><a href="global.html#CORE_STATUS">CORE_STATUS</a></li><li><a href="global.html#CORRUPT_STATE_CODE">CORRUPT_STATE_CODE</a></li><li><a href="global.html#DATA_KEYS">DATA_KEYS</a></li><li><a href="global.html#DATA_SHAPES">DATA_SHAPES</a></li><li><a href="global.html#DEFAULT_CLAIM_KINDS">DEFAULT_CLAIM_KINDS</a></li><li><a href="global.html#DEFAULT_LIMITS">DEFAULT_LIMITS</a></li><li><a href="global.html#DELTA_ENTRIES">DELTA_ENTRIES</a></li><li><a href="global.html#DELTA_OPS">DELTA_OPS</a></li><li><a href="global.html#DESTRUCTIVE_OPS">DESTRUCTIVE_OPS</a></li><li><a href="global.html#DISPOSITION_NOTES">DISPOSITION_NOTES</a></li><li><a href="global.html#DISPUTE_BLANK">DISPUTE_BLANK</a></li><li><a href="global.html#DISPUTE_CHECK_DEF">DISPUTE_CHECK_DEF</a></li><li><a href="global.html#DISPUTE_DROP_REASONS">DISPUTE_DROP_REASONS</a></li><li><a href="global.html#DISPUTE_ID">DISPUTE_ID</a></li><li><a href="global.html#DISPUTE_OPS">DISPUTE_OPS</a></li><li><a href="global.html#DISPUTE_VERDICTS">DISPUTE_VERDICTS</a></li><li><a href="global.html#DISPUTE_WHY">DISPUTE_WHY</a></li><li><a href="global.html#DISPUTE_WORD">DISPUTE_WORD</a></li><li><a href="global.html#DISSOLVED_RETRACT_REASON">DISSOLVED_RETRACT_REASON</a></li><li><a href="global.html#DISSOLVE_DROP_REASONS">DISSOLVE_DROP_REASONS</a></li><li><a href="global.html#DOUBT_REASONS">DOUBT_REASONS</a></li><li><a href="global.html#DRAFTERS">DRAFTERS</a></li><li><a href="global.html#DROP_REASONS">DROP_REASONS</a></li><li><a href="global.html#E">E</a></li><li><a href="global.html#EDGE_SEEN_FILE">EDGE_SEEN_FILE</a></li><li><a href="global.html#ES11">ES11</a></li><li><a href="global.html#ES14">ES14</a></li><li><a href="global.html#ES14_OBJECT">ES14_OBJECT</a></li><li><a href="global.html#ES15">ES15</a></li><li><a href="global.html#ES15_OBJECT">ES15_OBJECT</a></li><li><a href="global.html#ES8">ES8</a></li><li><a href="global.html#ES9">ES9</a></li><li><a href="global.html#ES_BY_MISMATCH">ES_BY_MISMATCH</a></li><li><a href="global.html#ES_CASE_CONCEPT">ES_CASE_CONCEPT</a></li><li><a href="global.html#ES_CASE_PAGE_SIZE">ES_CASE_PAGE_SIZE</a></li><li><a href="global.html#ES_CASE_STDS">ES_CASE_STDS</a></li><li><a href="global.html#ES_NOT_NOFIELDS">ES_NOT_NOFIELDS</a></li><li><a href="global.html#EX">EX</a></li><li><a href="global.html#EXHAUSTED_REASON">EXHAUSTED_REASON</a></li><li><a href="global.html#EXTRACT_AI_DEFAULT">EXTRACT_AI_DEFAULT</a></li><li><a href="global.html#EXTRACT_AI_SCHEMA">EXTRACT_AI_SCHEMA</a></li><li><a href="global.html#EXTRACT_AI_STANDARD_IDS">EXTRACT_AI_STANDARD_IDS</a></li><li><a href="global.html#EXTRACT_API_HINT">EXTRACT_API_HINT</a></li><li><a href="global.html#EXTRACT_AUDITED_STANDARD_IDS">EXTRACT_AUDITED_STANDARD_IDS</a></li><li><a href="global.html#EXTRACT_BENCH_CASES_FILES">EXTRACT_BENCH_CASES_FILES</a></li><li><a href="global.html#EXTRACT_BENCH_MODELS">EXTRACT_BENCH_MODELS</a></li><li><a href="global.html#EXTRACT_BENCH_ROLES">EXTRACT_BENCH_ROLES</a></li><li><a href="global.html#EXTRACT_BENCH_ROLE_IDS">EXTRACT_BENCH_ROLE_IDS</a></li><li><a href="global.html#EXTRACT_BENCH_USAGE">EXTRACT_BENCH_USAGE</a></li><li><a href="global.html#EXTRACT_CAPACITY_DESC">EXTRACT_CAPACITY_DESC</a></li><li><a href="global.html#EXTRACT_DATA_KEYS">EXTRACT_DATA_KEYS</a></li><li><a href="global.html#EXTRACT_DEFAULT">EXTRACT_DEFAULT</a></li><li><a href="global.html#EXTRACT_DIRS">EXTRACT_DIRS</a></li><li><a href="global.html#EXTRACT_DOMAIN_KEYS">EXTRACT_DOMAIN_KEYS</a></li><li><a href="global.html#EXTRACT_DOMAIN_MEMBERS">EXTRACT_DOMAIN_MEMBERS</a></li><li><a href="global.html#EXTRACT_FEATURES">EXTRACT_FEATURES</a></li><li><a href="global.html#EXTRACT_GUIDE_FIELDS">EXTRACT_GUIDE_FIELDS</a></li><li><a href="global.html#EXTRACT_HOLD_DEADLINE_DAYS">EXTRACT_HOLD_DEADLINE_DAYS</a></li><li><a href="global.html#EXTRACT_HOLD_NEXT">EXTRACT_HOLD_NEXT</a></li><li><a href="global.html#EXTRACT_HOLD_OBJECTS">EXTRACT_HOLD_OBJECTS</a></li><li><a href="global.html#EXTRACT_LEDGER_CORRUPT_WORD">EXTRACT_LEDGER_CORRUPT_WORD</a></li><li><a href="global.html#EXTRACT_LEDGER_SHAPES">EXTRACT_LEDGER_SHAPES</a></li><li><a href="global.html#EXTRACT_LEDGER_STEP_PREFIX">EXTRACT_LEDGER_STEP_PREFIX</a></li><li><a href="global.html#EXTRACT_LOG_KNOWN">EXTRACT_LOG_KNOWN</a></li><li><a href="global.html#EXTRACT_LOG_MUST_SEE">EXTRACT_LOG_MUST_SEE</a></li><li><a href="global.html#EXTRACT_LOG_PARSE">EXTRACT_LOG_PARSE</a></li><li><a href="global.html#EXTRACT_PANEL_WHY">EXTRACT_PANEL_WHY</a></li><li><a href="global.html#EXTRACT_PANEL_WHY_LABELS">EXTRACT_PANEL_WHY_LABELS</a></li><li><a href="global.html#EXTRACT_PROMPT_SIGS">EXTRACT_PROMPT_SIGS</a></li><li><a href="global.html#EXTRACT_REPORT_KEYS">EXTRACT_REPORT_KEYS</a></li><li><a href="global.html#EXTRACT_SCAN_OBJECT">EXTRACT_SCAN_OBJECT</a></li><li><a href="global.html#EXTRACT_SCHEMA">EXTRACT_SCHEMA</a></li><li><a href="global.html#EXTRACT_SEATS">EXTRACT_SEATS</a></li><li><a href="global.html#EXTRACT_SEAT_KEYS">EXTRACT_SEAT_KEYS</a></li><li><a href="global.html#EXTRACT_SEAT_LABELS">EXTRACT_SEAT_LABELS</a></li><li><a href="global.html#EXTRACT_SETTING_TYPES">EXTRACT_SETTING_TYPES</a></li><li><a href="global.html#EXTRACT_STAGE_KEYS">EXTRACT_STAGE_KEYS</a></li><li><a href="global.html#EXTRACT_STANDARDS">EXTRACT_STANDARDS</a></li><li><a href="global.html#EXTRACT_STATE_FILES">EXTRACT_STATE_FILES</a></li><li><a href="global.html#EXTRACT_STORE_KEYS">EXTRACT_STORE_KEYS</a></li><li><a href="global.html#EXTRACT_STUCK_TRIES">EXTRACT_STUCK_TRIES</a></li><li><a href="global.html#EXTRACT_TAP_STAGE_KEYS">EXTRACT_TAP_STAGE_KEYS</a></li><li><a href="global.html#EXTRACT_UNGATED_WRITE_ENTRIES">EXTRACT_UNGATED_WRITE_ENTRIES</a></li><li><a href="global.html#EXTRACT_VOCAB_DEFAULT">EXTRACT_VOCAB_DEFAULT</a></li><li><a href="global.html#EXTRACT_VOCAB_KEYS">EXTRACT_VOCAB_KEYS</a></li><li><a href="global.html#EXTRACT_VOCAB_NULL_AS">EXTRACT_VOCAB_NULL_AS</a></li><li><a href="global.html#FEATURE_EXTRA">FEATURE_EXTRA</a></li><li><a href="global.html#FEATURE_TABLE">FEATURE_TABLE</a></li><li><a href="global.html#FIX">FIX</a></li><li><a href="global.html#FIXABLE_FIELDS">FIXABLE_FIELDS</a></li><li><a href="global.html#FIX_KEYS">FIX_KEYS</a></li><li><a href="global.html#FOREIGN_STATE_CODE">FOREIGN_STATE_CODE</a></li><li><a href="global.html#FROZEN_SEATS">FROZEN_SEATS</a></li><li><a href="global.html#HASH_FIELD_SEP">HASH_FIELD_SEP</a></li><li><a href="global.html#HOLD_STALE_HOW_PREFIX">HOLD_STALE_HOW_PREFIX</a></li><li><a href="global.html#HOLD_UNDO_HOW">HOLD_UNDO_HOW</a></li><li><a href="global.html#HOLD_VOID_HOWS">HOLD_VOID_HOWS</a></li><li><a href="global.html#IMPACT_LEDGER_FILE">IMPACT_LEDGER_FILE</a></li><li><a href="global.html#IMPACT_REASONS">IMPACT_REASONS</a></li><li><a href="global.html#IMPACT_RETRY_FILE">IMPACT_RETRY_FILE</a></li><li><a href="global.html#ISSUE_TYPES">ISSUE_TYPES</a></li><li><a href="global.html#ITEM_PREFIX">ITEM_PREFIX</a></li><li><a href="global.html#ITEM_TEXT_FIELDS">ITEM_TEXT_FIELDS</a></li><li><a href="global.html#KEY_OF_PREFIX">KEY_OF_PREFIX</a></li><li><a href="global.html#KIND_LABELS">KIND_LABELS</a></li><li><a href="global.html#LANG_HELP">LANG_HELP</a></li><li><a href="global.html#LEAK_PHRASES">LEAK_PHRASES</a></li><li><a href="global.html#LEDGER_ERROR_CHARS">LEDGER_ERROR_CHARS</a></li><li><a href="global.html#LOCALES">LOCALES</a></li><li><a href="global.html#MATERIAL_STDS">MATERIAL_STDS</a></li><li><a href="global.html#MERGE_KEEP_MIN">MERGE_KEEP_MIN</a></li><li><a href="global.html#META_PATHS">META_PATHS</a></li><li><a href="global.html#MIN_ATTEMPT_MS">MIN_ATTEMPT_MS</a></li><li><a href="global.html#MODES">MODES</a></li><li><a href="global.html#NAMESPACES">NAMESPACES</a></li><li><a href="global.html#NEGATIONS">NEGATIONS</a></li><li><a href="global.html#NEW_ITEM_DROP_REASONS">NEW_ITEM_DROP_REASONS</a></li><li><a href="global.html#NEW_OPS">NEW_OPS</a></li><li><a href="global.html#NOTE_CODE_RE">NOTE_CODE_RE</a></li><li><a href="global.html#NOTE_LINK_RE">NOTE_LINK_RE</a></li><li><a href="global.html#NOTE_SECTIONS">NOTE_SECTIONS</a></li><li><a href="global.html#NO_FAIL_HALTS">NO_FAIL_HALTS</a></li><li><a href="global.html#NO_MATERIAL_DETAIL">NO_MATERIAL_DETAIL</a></li><li><a href="global.html#NO_MATERIAL_TEXT">NO_MATERIAL_TEXT</a></li><li><a href="global.html#NO_TOP_CACHE_FILE">NO_TOP_CACHE_FILE</a></li><li><a href="global.html#NO_TOP_FORMAT">NO_TOP_FORMAT</a></li><li><a href="global.html#OFFTOPIC_REASON">OFFTOPIC_REASON</a></li><li><a href="global.html#OPTIONAL_DOMAIN_MEMBERS">OPTIONAL_DOMAIN_MEMBERS</a></li><li><a href="global.html#ORDER">ORDER</a></li><li><a href="global.html#ORPHAN_BLANK">ORPHAN_BLANK</a></li><li><a href="global.html#ORPHAN_CHECK_DEF">ORPHAN_CHECK_DEF</a></li><li><a href="global.html#ORPHAN_VERDICTS">ORPHAN_VERDICTS</a></li><li><a href="global.html#OWNER">OWNER</a></li><li><a href="global.html#OWN_KEYS">OWN_KEYS</a></li><li><a href="global.html#PAGES">PAGES</a></li><li><a href="global.html#PAIR_SEP">PAIR_SEP</a></li><li><a href="global.html#PANEL_DEF">PANEL_DEF</a></li><li><a href="global.html#PANEL_MODES">PANEL_MODES</a></li><li><a href="global.html#PANEL_PATH">PANEL_PATH</a></li><li><a href="global.html#PANEL_ROWS">PANEL_ROWS</a></li><li><a href="global.html#PART_TEXT_KEYS">PART_TEXT_KEYS</a></li><li><a href="global.html#PENDING_DROPPED_FILE">PENDING_DROPPED_FILE</a></li><li><a href="global.html#PENDING_REVIEW_CAP">PENDING_REVIEW_CAP</a></li><li><a href="global.html#PER_CORE_OBJECTS">PER_CORE_OBJECTS</a></li><li><a href="global.html#PIPELINE_NAME">PIPELINE_NAME</a></li><li><a href="global.html#PRED_TYPES">PRED_TYPES</a></li><li><a href="global.html#PROGRAM_RETRACT_REASONS">PROGRAM_RETRACT_REASONS</a></li><li><a href="global.html#PROGRESS_STDS">PROGRESS_STDS</a></li><li><a href="global.html#PROJECTED_SECTION">PROJECTED_SECTION</a></li><li><a href="global.html#PROMPT_DOMAIN">PROMPT_DOMAIN</a></li><li><a href="global.html#PROMPT_KEYS">PROMPT_KEYS</a></li><li><a href="global.html#PROPOSE_BLANK">PROPOSE_BLANK</a></li><li><a href="global.html#REBASELINE_FILE">REBASELINE_FILE</a></li><li><a href="global.html#RECHECK_REASONS">RECHECK_REASONS</a></li><li><a href="global.html#RECHECK_SKIP">RECHECK_SKIP</a></li><li><a href="global.html#RECHECK_SKIP_REASONS">RECHECK_SKIP_REASONS</a></li><li><a href="global.html#REF_FIELDS">REF_FIELDS</a></li><li><a href="global.html#REGEN_FILE">REGEN_FILE</a></li><li><a href="global.html#RELATE_KEYS">RELATE_KEYS</a></li><li><a href="global.html#REMOVE_TYPES">REMOVE_TYPES</a></li><li><a href="global.html#REPORTED_BASIS">REPORTED_BASIS</a></li><li><a href="global.html#REQUIRED_STORES">REQUIRED_STORES</a></li><li><a href="global.html#RETRACT_REASONS">RETRACT_REASONS</a></li><li><a href="global.html#REVISABLE_KINDS">REVISABLE_KINDS</a></li><li><a href="global.html#REVISE_BLANK">REVISE_BLANK</a></li><li><a href="global.html#REVISE_CASE_KINDS">REVISE_CASE_KINDS</a></li><li><a href="global.html#REVISE_INNER">REVISE_INNER</a></li><li><a href="global.html#REVIVABLE_RETRACT">REVIVABLE_RETRACT</a></li><li><a href="global.html#REVIVE_GATE_STDS">REVIVE_GATE_STDS</a></li><li><a href="global.html#ROLE_DEFS">ROLE_DEFS</a></li><li><a href="global.html#RUNTIME_OPT_KEYS">RUNTIME_OPT_KEYS</a></li><li><a href="global.html#SECTIONS">SECTIONS</a></li><li><a href="global.html#SEV_HIGH">SEV_HIGH</a></li><li><a href="global.html#SIDE_TEXT_FIELDS">SIDE_TEXT_FIELDS</a></li><li><a href="global.html#SIDE_TEXT_KEYS">SIDE_TEXT_KEYS</a></li><li><a href="global.html#SKIP_REASONS">SKIP_REASONS</a></li><li><a href="global.html#SPLIT_COVER_MIN">SPLIT_COVER_MIN</a></li><li><a href="global.html#SPLIT_PART_MIN">SPLIT_PART_MIN</a></li><li><a href="global.html#STAGE">STAGE</a></li><li><a href="global.html#STATE_REPAIR_FUSE">STATE_REPAIR_FUSE</a></li><li><a href="global.html#STATE_VERSION">STATE_VERSION</a></li><li><a href="global.html#STD_ISSUE_TYPE">STD_ISSUE_TYPE</a></li><li><a href="global.html#STOCK_STDS">STOCK_STDS</a></li><li><a href="global.html#STREAK_MODES">STREAK_MODES</a></li><li><a href="global.html#SUMMARIZE_KEYS">SUMMARIZE_KEYS</a></li><li><a href="global.html#SUPPORT_BLANK">SUPPORT_BLANK</a></li><li><a href="global.html#SUPPORT_CHECK_DEF">SUPPORT_CHECK_DEF</a></li><li><a href="global.html#SUPPORT_GATE_WHY">SUPPORT_GATE_WHY</a></li><li><a href="global.html#SUPPORT_KINDS">SUPPORT_KINDS</a></li><li><a href="global.html#SUPPORT_KIND_TEXT">SUPPORT_KIND_TEXT</a></li><li><a href="global.html#SUPPORT_PAGE_CHARS">SUPPORT_PAGE_CHARS</a></li><li><a href="global.html#SUPPORT_REVISE_DEF">SUPPORT_REVISE_DEF</a></li><li><a href="global.html#SUPPORT_VERDICTS">SUPPORT_VERDICTS</a></li><li><a href="global.html#SUPPORT_WORD">SUPPORT_WORD</a></li><li><a href="global.html#SYNONYM_BLANK">SYNONYM_BLANK</a></li><li><a href="global.html#SYNONYM_CHECK_DEF">SYNONYM_CHECK_DEF</a></li><li><a href="global.html#SYNONYM_LEDGER_KEY">SYNONYM_LEDGER_KEY</a></li><li><a href="global.html#SYNONYM_PAGE_SIZE">SYNONYM_PAGE_SIZE</a></li><li><a href="global.html#SYNONYM_PROPOSE_DEF">SYNONYM_PROPOSE_DEF</a></li><li><a href="global.html#SYNONYM_STATE_FILE">SYNONYM_STATE_FILE</a></li><li><a href="global.html#SYNONYM_VERDICTS">SYNONYM_VERDICTS</a></li><li><a href="global.html#T">T</a></li><li><a href="global.html#TARGET_FIELDS">TARGET_FIELDS</a></li><li><a href="global.html#TARGET_KEYS">TARGET_KEYS</a></li><li><a href="global.html#TERMINAL_OPS">TERMINAL_OPS</a></li><li><a href="global.html#TERMINAL_OP_LABELS">TERMINAL_OP_LABELS</a></li><li><a href="global.html#TERMINAL_SET">TERMINAL_SET</a></li><li><a href="global.html#TERMINAL_STATUSES">TERMINAL_STATUSES</a></li><li><a href="global.html#TOP_TEXT_KEYS">TOP_TEXT_KEYS</a></li><li><a href="global.html#UNASSESSED">UNASSESSED</a></li><li><a href="global.html#UNSET_SEAT">UNSET_SEAT</a></li><li><a href="global.html#URGENT_RECHECK_REASONS">URGENT_RECHECK_REASONS</a></li><li><a href="global.html#VERDICT_MIN_REASON">VERDICT_MIN_REASON</a></li><li><a href="global.html#WF_ACCEPT_DEF">WF_ACCEPT_DEF</a></li><li><a href="global.html#WF_AUDIT_DEF">WF_AUDIT_DEF</a></li><li><a href="global.html#WF_BLANK">WF_BLANK</a></li><li><a href="global.html#WF_CONSOLIDATE_DEF">WF_CONSOLIDATE_DEF</a></li><li><a href="global.html#WF_DRAFT_DEF">WF_DRAFT_DEF</a></li><li><a href="global.html#WF_ESSENCE_DEF">WF_ESSENCE_DEF</a></li><li><a href="global.html#WF_INTEGRATE_DEF">WF_INTEGRATE_DEF</a></li><li><a href="global.html#WF_PENDING_DEF">WF_PENDING_DEF</a></li><li><a href="global.html#WF_REVISE_DEF">WF_REVISE_DEF</a></li><li><a href="global.html#WF_STRUCTURAL">WF_STRUCTURAL</a></li><li><a href="global.html#WKnowledgeExtract">WKnowledgeExtract</a></li><li><a href="global.html#WORK_SEAT_LABELS">WORK_SEAT_LABELS</a></li><li><a href="global.html#acceptOpsOf">acceptOpsOf</a></li><li><a href="global.html#agreedLabelsOf">agreedLabelsOf</a></li><li><a href="global.html#aiCallLogOf">aiCallLogOf</a></li><li><a href="global.html#allItemsOf">allItemsOf</a></li><li><a href="global.html#annotationProblems">annotationProblems</a></li><li><a href="global.html#applyCoreStockFix">applyCoreStockFix</a></li><li><a href="global.html#applyCtxOf">applyCtxOf</a></li><li><a href="global.html#applyDelta">applyDelta</a></li><li><a href="global.html#applyImpact">applyImpact</a></li><li><a href="global.html#applyPatch">applyPatch</a></li><li><a href="global.html#applyRefAliases">applyRefAliases</a></li><li><a href="global.html#applySupportFixes">applySupportFixes</a></li><li><a href="global.html#applyVerdicts">applyVerdicts</a></li><li><a href="global.html#applyWithInvariants">applyWithInvariants</a></li><li><a href="global.html#attempts">attempts</a></li><li><a href="global.html#auditDomainOf">auditDomainOf</a></li><li><a href="global.html#auditExtractStandards">auditExtractStandards</a></li><li><a href="global.html#backoffDaysOf">backoffDaysOf</a></li><li><a href="global.html#bagOf">bagOf</a></li><li><a href="global.html#batchSizeOf">batchSizeOf</a></li><li><a href="global.html#bestContainment">bestContainment</a></li><li><a href="global.html#bodyHashOf">bodyHashOf</a></li><li><a href="global.html#bracketRefs">bracketRefs</a></li><li><a href="global.html#buildAcceptAppendix">buildAcceptAppendix</a></li><li><a href="global.html#buildAuditPrompt">buildAuditPrompt</a></li><li><a href="global.html#buildIntegratePrompt">buildIntegratePrompt</a></li><li><a href="global.html#buildRevisePrompt">buildRevisePrompt</a></li><li><a href="global.html#byProblems">byProblems</a></li><li><a href="global.html#callVia">callVia</a></li><li><a href="global.html#callerOf">callerOf</a></li><li><a href="global.html#cancelRebaseline">cancelRebaseline</a></li><li><a href="global.html#casesFileOf">casesFileOf</a></li><li><a href="global.html#cfgOf">cfgOf</a></li><li><a href="global.html#checkAudit">checkAudit</a></li><li><a href="global.html#checkCore">checkCore</a></li><li><a href="global.html#checkDisputeChecks">checkDisputeChecks</a></li><li><a href="global.html#checkDisputeVerdictOf">checkDisputeVerdictOf</a></li><li><a href="global.html#checkDraft">checkDraft</a></li><li><a href="global.html#checkInvariants">checkInvariants</a></li><li><a href="global.html#checkOrphanChecks">checkOrphanChecks</a></li><li><a href="global.html#checkOrphanVerdictOf">checkOrphanVerdictOf</a></li><li><a href="global.html#checkPatch">checkPatch</a></li><li><a href="global.html#checkSupportChecks">checkSupportChecks</a></li><li><a href="global.html#checkSupportRevise">checkSupportRevise</a></li><li><a href="global.html#checkSupportVerdictOf">checkSupportVerdictOf</a></li><li><a href="global.html#checkSynonymChecks">checkSynonymChecks</a></li><li><a href="global.html#checkSynonymProposals">checkSynonymProposals</a></li><li><a href="global.html#checkSynonymVerdictOf">checkSynonymVerdictOf</a></li><li><a href="global.html#checkVerdicts">checkVerdicts</a></li><li><a href="global.html#citedNotesOf">citedNotesOf</a></li><li><a href="global.html#claimAssertion">claimAssertion</a></li><li><a href="global.html#claimChecksOf">claimChecksOf</a></li><li><a href="global.html#cliOf">cliOf</a></li><li><a href="global.html#closeHolds">closeHolds</a></li><li><a href="global.html#closeRefs">closeRefs</a></li><li><a href="global.html#codeMapOf">codeMapOf</a></li><li><a href="global.html#commitBatch">commitBatch</a></li><li><a href="global.html#compensateHolds">compensateHolds</a></li><li><a href="global.html#conflictDisposedOf">conflictDisposedOf</a></li><li><a href="global.html#conflictGoneOf">conflictGoneOf</a></li><li><a href="global.html#consumeRegenIntents">consumeRegenIntents</a></li><li><a href="global.html#consumedNeedsRebaseline">consumedNeedsRebaseline</a></li><li><a href="global.html#containment">containment</a></li><li><a href="global.html#coreAuxDirs">coreAuxDirs</a></li><li><a href="global.html#coreFixOf">coreFixOf</a></li><li><a href="global.html#coreForKey">coreForKey</a></li><li><a href="global.html#coreLedgerKeyOf">coreLedgerKeyOf</a></li><li><a href="global.html#coreOfArg">coreOfArg</a></li><li><a href="global.html#coreStateDirOf">coreStateDirOf</a></li><li><a href="global.html#coreStateOf">coreStateOf</a></li><li><a href="global.html#coreStd">coreStd</a></li><li><a href="global.html#coreStoreOf">coreStoreOf</a></li><li><a href="global.html#coreWriterOf">coreWriterOf</a></li><li><a href="global.html#coverageOf">coverageOf</a></li><li><a href="global.html#createContentCache">createContentCache</a></li><li><a href="global.html#createCoreStore">createCoreStore</a></li><li><a href="global.html#createExtractDomain">createExtractDomain</a></li><li><a href="global.html#createExtractLedger">createExtractLedger</a></li><li><a href="global.html#createExtractObject">createExtractObject</a></li><li><a href="global.html#createExtractRuntime">createExtractRuntime</a></li><li><a href="global.html#createKnowledgeExtract">createKnowledgeExtract</a></li><li><a href="global.html#createNoTopCache">createNoTopCache</a></li><li><a href="global.html#createOpStandards">createOpStandards</a></li><li><a href="global.html#createSteps">createSteps</a></li><li><a href="global.html#deadlineOf">deadlineOf</a></li><li><a href="global.html#defaultRules">defaultRules</a></li><li><a href="global.html#deriveCoreState">deriveCoreState</a></li><li><a href="global.html#deriveStatus">deriveStatus</a></li><li><a href="global.html#dispositionsText">dispositionsText</a></li><li><a href="global.html#disputeCaseOf">disputeCaseOf</a></li><li><a href="global.html#disputeCheckBenchRole">disputeCheckBenchRole</a></li><li><a href="global.html#disputeDueOf">disputeDueOf</a></li><li><a href="global.html#disputeHashOf">disputeHashOf</a></li><li><a href="global.html#disputeHeldIdsOf">disputeHeldIdsOf</a></li><li><a href="global.html#disputeHoldSetsOf">disputeHoldSetsOf</a></li><li><a href="global.html#disputeItemsOf">disputeItemsOf</a></li><li><a href="global.html#disputeProgressOf">disputeProgressOf</a></li><li><a href="global.html#disputeVerdictOf">disputeVerdictOf</a></li><li><a href="global.html#dissolveOpOf">dissolveOpOf</a></li><li><a href="global.html#dissolveSidesOf">dissolveSidesOf</a></li><li><a href="global.html#dissolveUsableOf">dissolveUsableOf</a></li><li><a href="global.html#domainNeeds">domainNeeds</a></li><li><a href="global.html#domainOf">domainOf</a></li><li><a href="global.html#domainOfLocale">domainOfLocale</a></li><li><a href="global.html#doubtCheckedOf">doubtCheckedOf</a></li><li><a href="global.html#draftPromptOf">draftPromptOf</a></li><li><a href="global.html#drafterPath">drafterPath</a></li><li><a href="global.html#droppedMajority">droppedMajority</a></li><li><a href="global.html#edgeSeen">edgeSeen</a></li><li><a href="global.html#edgeSeenSyncOf">edgeSeenSyncOf</a></li><li><a href="global.html#edgeSigOf">edgeSigOf</a></li><li><a href="global.html#edgeSnapshotOf">edgeSnapshotOf</a></li><li><a href="global.html#editDistance">editDistance</a></li><li><a href="global.html#emptyState">emptyState</a></li><li><a href="global.html#entryOf">entryOf</a></li><li><a href="global.html#es5CtxOf">es5CtxOf</a></li><li><a href="global.html#es5Of">es5Of</a></li><li><a href="global.html#es5RowsOf">es5RowsOf</a></li><li><a href="global.html#esByMatchOf">esByMatchOf</a></li><li><a href="global.html#esCaseInputProblems">esCaseInputProblems</a></li><li><a href="global.html#esDisputeClassOf">esDisputeClassOf</a></li><li><a href="global.html#esExpectClassOf">esExpectClassOf</a></li><li><a href="global.html#esOrphanClassOf">esOrphanClassOf</a></li><li><a href="global.html#esPageAt">esPageAt</a></li><li><a href="global.html#esPageOf">esPageOf</a></li><li><a href="global.html#esPageSizeOf">esPageSizeOf</a></li><li><a href="global.html#esPagesOfCases">esPagesOfCases</a></li><li><a href="global.html#esPaginate">esPaginate</a></li><li><a href="global.html#esSuiteProblems">esSuiteProblems</a></li><li><a href="global.html#esSupportClassOf">esSupportClassOf</a></li><li><a href="global.html#esSynonymClassOf">esSynonymClassOf</a></li><li><a href="global.html#esVotesOf">esVotesOf</a></li><li><a href="global.html#essenceLostOf">essenceLostOf</a></li><li><a href="global.html#essenceNeedOf">essenceNeedOf</a></li><li><a href="global.html#essenceStaleOf">essenceStaleOf</a></li><li><a href="global.html#evidenceSnapshot">evidenceSnapshot</a></li><li><a href="global.html#excludedSourcesOf">excludedSourcesOf</a></li><li><a href="global.html#extractAiCall">extractAiCall</a></li><li><a href="global.html#extractBenchRoleOf">extractBenchRoleOf</a></li><li><a href="global.html#extractCapacityOf">extractCapacityOf</a></li><li><a href="global.html#extractDomainShapeProblems">extractDomainShapeProblems</a></li><li><a href="global.html#extractFanout">extractFanout</a></li><li><a href="global.html#extractFeatureProblems">extractFeatureProblems</a></li><li><a href="global.html#extractGuideDefaultOf">extractGuideDefaultOf</a></li><li><a href="global.html#extractHoldDeadlineOf">extractHoldDeadlineOf</a></li><li><a href="global.html#extractLedgerCorruptTextOf">extractLedgerCorruptTextOf</a></li><li><a href="global.html#extractMaterialOf">extractMaterialOf</a></li><li><a href="global.html#extractPanelsOf">extractPanelsOf</a></li><li><a href="global.html#extractPickOf">extractPickOf</a></li><li><a href="global.html#extractPromptId">extractPromptId</a></li><li><a href="global.html#extractReserveMs">extractReserveMs</a></li><li><a href="global.html#extractResolvedProblem">extractResolvedProblem</a></li><li><a href="global.html#extractScanOf">extractScanOf</a></li><li><a href="global.html#extractSeatHintsOf">extractSeatHintsOf</a></li><li><a href="global.html#extractSeatsOf">extractSeatsOf</a></li><li><a href="global.html#extractSeatsProblem">extractSeatsProblem</a></li><li><a href="global.html#extractSeatsTypeProblem">extractSeatsTypeProblem</a></li><li><a href="global.html#extractStatInit">extractStatInit</a></li><li><a href="global.html#extractStuckOf">extractStuckOf</a></li><li><a href="global.html#extractSummaryOf">extractSummaryOf</a></li><li><a href="global.html#extractVocabWarningsOf">extractVocabWarningsOf</a></li><li><a href="global.html#extractWarningsOf">extractWarningsOf</a></li><li><a href="global.html#failStreaksOf">failStreaksOf</a></li><li><a href="global.html#fanoutAdapterOf">fanoutAdapterOf</a></li><li><a href="global.html#fanoutVia">fanoutVia</a></li><li><a href="global.html#fieldsOf">fieldsOf</a></li><li><a href="global.html#findItem">findItem</a></li><li><a href="global.html#finishImpact">finishImpact</a></li><li><a href="global.html#fixValue">fixValue</a></li><li><a href="global.html#foldScript">foldScript</a></li><li><a href="global.html#gateOps">gateOps</a></li><li><a href="global.html#gateVerdicts">gateVerdicts</a></li><li><a href="global.html#groundingOf">groundingOf</a></li><li><a href="global.html#groupByConcept">groupByConcept</a></li><li><a href="global.html#guardOps">guardOps</a></li><li><a href="global.html#hasAny">hasAny</a></li><li><a href="global.html#highRemovalIssue">highRemovalIssue</a></li><li><a href="global.html#highWater">highWater</a></li><li><a href="global.html#holdItems">holdItems</a></li><li><a href="global.html#impactLedgerRowsOf">impactLedgerRowsOf</a></li><li><a href="global.html#impactOfCore">impactOfCore</a></li><li><a href="global.html#impactRetry">impactRetry</a></li><li><a href="global.html#inferOp">inferOp</a></li><li><a href="global.html#info">info</a></li><li><a href="global.html#inputVocabProblems">inputVocabProblems</a></li><li><a href="global.html#integrateCandsOf">integrateCandsOf</a></li><li><a href="global.html#isCoreRow">isCoreRow</a></li><li><a href="global.html#isExtracted">isExtracted</a></li><li><a href="global.html#isMainCore">isMainCore</a></li><li><a href="global.html#isPrimaryCore">isPrimaryCore</a></li><li><a href="global.html#isReady">isReady</a></li><li><a href="global.html#issueOnOp">issueOnOp</a></li><li><a href="global.html#itemOidOf">itemOidOf</a></li><li><a href="global.html#itemTexts">itemTexts</a></li><li><a href="global.html#itemsInScopeOf">itemsInScopeOf</a></li><li><a href="global.html#judgeBaseOf">judgeBaseOf</a></li><li><a href="global.html#judgeOf">judgeOf</a></li><li><a href="global.html#keyNorm">keyNorm</a></li><li><a href="global.html#knownHashesOf">knownHashesOf</a></li><li><a href="global.html#labelSources">labelSources</a></li><li><a href="global.html#langOptOf">langOptOf</a></li><li><a href="global.html#leakProblem">leakProblem</a></li><li><a href="global.html#lengthCapOf">lengthCapOf</a></li><li><a href="global.html#lengthIssues">lengthIssues</a></li><li><a href="global.html#listCores">listCores</a></li><li><a href="global.html#liveClaimsOf">liveClaimsOf</a></li><li><a href="global.html#liveCoresOf">liveCoresOf</a></li><li><a href="global.html#liveSourcesOf">liveSourcesOf</a></li><li><a href="global.html#localeOf">localeOf</a></li><li><a href="global.html#logVerdicts">logVerdicts</a></li><li><a href="global.html#maintainCores">maintainCores</a></li><li><a href="global.html#makeEvidence">makeEvidence</a></li><li><a href="global.html#markExtracted">markExtracted</a></li><li><a href="global.html#maybeEmptyTextOf">maybeEmptyTextOf</a></li><li><a href="global.html#mdHashOf">mdHashOf</a></li><li><a href="global.html#member">member</a></li><li><a href="global.html#mergedPair">mergedPair</a></li><li><a href="global.html#mutualContainment">mutualContainment</a></li><li><a href="global.html#mwLoadState">mwLoadState</a></li><li><a href="global.html#mwPass">mwPass</a></li><li><a href="global.html#mwPersistState">mwPersistState</a></li><li><a href="global.html#mwRenderState">mwRenderState</a></li><li><a href="global.html#mwSelectNotes">mwSelectNotes</a></li><li><a href="global.html#nameCandidatesOf">nameCandidatesOf</a></li><li><a href="global.html#needsRebaseline">needsRebaseline</a></li><li><a href="global.html#newCoreIdOf">newCoreIdOf</a></li><li><a href="global.html#nextRenderHashes">nextRenderHashes</a></li><li><a href="global.html#nextRevOf">nextRevOf</a></li><li><a href="global.html#nonEmptyStrs">nonEmptyStrs</a></li><li><a href="global.html#normText">normText</a></li><li><a href="global.html#normalizeBareRefs">normalizeBareRefs</a></li><li><a href="global.html#normalizeConflictDecl">normalizeConflictDecl</a></li><li><a href="global.html#normalizeDelta">normalizeDelta</a></li><li><a href="global.html#normalizeIssues">normalizeIssues</a></li><li><a href="global.html#normalizeState">normalizeState</a></li><li><a href="global.html#notSupportedReasonsOf">notSupportedReasonsOf</a></li><li><a href="global.html#noteMentionsOf">noteMentionsOf</a></li><li><a href="global.html#noteNoTopOf">noteNoTopOf</a></li><li><a href="global.html#noteOf">noteOf</a></li><li><a href="global.html#noteOfCode">noteOfCode</a></li><li><a href="global.html#notePartialStop">notePartialStop</a></li><li><a href="global.html#noteTitleFnOf">noteTitleFnOf</a></li><li><a href="global.html#notesOfCodes">notesOfCodes</a></li><li><a href="global.html#oidProblems">oidProblems</a></li><li><a href="global.html#opClass">opClass</a></li><li><a href="global.html#opIdOf">opIdOf</a></li><li><a href="global.html#opLengthProblem">opLengthProblem</a></li><li><a href="global.html#opSidesOf">opSidesOf</a></li><li><a href="global.html#opStandardsCtxOf">opStandardsCtxOf</a></li><li><a href="global.html#openStores">openStores</a></li><li><a href="global.html#orphanCandidatesOf">orphanCandidatesOf</a></li><li><a href="global.html#orphanCheckBenchRole">orphanCheckBenchRole</a></li><li><a href="global.html#orphanHashOf">orphanHashOf</a></li><li><a href="global.html#orphanNeedsOf">orphanNeedsOf</a></li><li><a href="global.html#orphanNotes">orphanNotes</a></li><li><a href="global.html#orphanVerdictOf">orphanVerdictOf</a></li><li><a href="global.html#outcomeIndexProblems">outcomeIndexProblems</a></li><li><a href="global.html#outcomeIs">outcomeIs</a></li><li><a href="global.html#packOrphanPages">packOrphanPages</a></li><li><a href="global.html#packSupportPages">packSupportPages</a></li><li><a href="global.html#pairKeyOf">pairKeyOf</a></li><li><a href="global.html#pairOfKey">pairOfKey</a></li><li><a href="global.html#pairText">pairText</a></li><li><a href="global.html#panelCallOf">panelCallOf</a></li><li><a href="global.html#panelRetryOf">panelRetryOf</a></li><li><a href="global.html#panelWhyLabelOf">panelWhyLabelOf</a></li><li><a href="global.html#paramConditions">paramConditions</a></li><li><a href="global.html#parseAudit">parseAudit</a></li><li><a href="global.html#parseDisputeChecks">parseDisputeChecks</a></li><li><a href="global.html#parseDraft">parseDraft</a></li><li><a href="global.html#parseExtractBenchArgs">parseExtractBenchArgs</a></li><li><a href="global.html#parseItemOid">parseItemOid</a></li><li><a href="global.html#parseOrphanChecks">parseOrphanChecks</a></li><li><a href="global.html#parsePatch">parsePatch</a></li><li><a href="global.html#parseSide">parseSide</a></li><li><a href="global.html#parseSupportChecks">parseSupportChecks</a></li><li><a href="global.html#parseSupportRevise">parseSupportRevise</a></li><li><a href="global.html#parseSynonymChecks">parseSynonymChecks</a></li><li><a href="global.html#parseSynonymProposals">parseSynonymProposals</a></li><li><a href="global.html#parseVerdicts">parseVerdicts</a></li><li><a href="global.html#pendingKeyOf">pendingKeyOf</a></li><li><a href="global.html#pendingReviewOps">pendingReviewOps</a></li><li><a href="global.html#pendingReviewPromptOf">pendingReviewPromptOf</a></li><li><a href="global.html#persistMechanical">persistMechanical</a></li><li><a href="global.html#pickCategories">pickCategories</a></li><li><a href="global.html#pickConcepts">pickConcepts</a></li><li><a href="global.html#pickExtractVocab">pickExtractVocab</a></li><li><a href="global.html#pickRecheck">pickRecheck</a></li><li><a href="global.html#pickStock">pickStock</a></li><li><a href="global.html#planCoreStockFix">planCoreStockFix</a></li><li><a href="global.html#planExtractBench">planExtractBench</a></li><li><a href="global.html#prefixCandidate">prefixCandidate</a></li><li><a href="global.html#previewRecheck">previewRecheck</a></li><li><a href="global.html#principleDocsProblem">principleDocsProblem</a></li><li><a href="global.html#problemCountOf">problemCountOf</a></li><li><a href="global.html#programUnion">programUnion</a></li><li><a href="global.html#programWriteProblems">programWriteProblems</a></li><li><a href="global.html#proposeCaseProblems">proposeCaseProblems</a></li><li><a href="global.html#proposeOpsText">proposeOpsText</a></li><li><a href="global.html#proposeVerdictOf">proposeVerdictOf</a></li><li><a href="global.html#proposedCandidatesOf">proposedCandidatesOf</a></li><li><a href="global.html#queuePendingReview">queuePendingReview</a></li><li><a href="global.html#rawVerdictText">rawVerdictText</a></li><li><a href="global.html#rawsOf">rawsOf</a></li><li><a href="global.html#readCoreStockLedger">readCoreStockLedger</a></li><li><a href="global.html#readLedgerJson">readLedgerJson</a></li><li><a href="global.html#readList">readList</a></li><li><a href="global.html#readRegenIntents">readRegenIntents</a></li><li><a href="global.html#rebaseline">rebaseline</a></li><li><a href="global.html#rebaselineDone">rebaselineDone</a></li><li><a href="global.html#rebaselineIdsOf">rebaselineIdsOf</a></li><li><a href="global.html#recheckDue">recheckDue</a></li><li><a href="global.html#recheckItemsOf">recheckItemsOf</a></li><li><a href="global.html#recordOf">recordOf</a></li><li><a href="global.html#redoDirtyProjections">redoDirtyProjections</a></li><li><a href="global.html#refFields">refFields</a></li><li><a href="global.html#refsOf">refsOf</a></li><li><a href="global.html#regen">regen</a></li><li><a href="global.html#regenCore">regenCore</a></li><li><a href="global.html#registerHolds">registerHolds</a></li><li><a href="global.html#rejectsOf">rejectsOf</a></li><li><a href="global.html#relationContextRows">relationContextRows</a></li><li><a href="global.html#relationEventsOf">relationEventsOf</a></li><li><a href="global.html#relationTypeNowOf">relationTypeNowOf</a></li><li><a href="global.html#releaseHeld">releaseHeld</a></li><li><a href="global.html#remapRefs">remapRefs</a></li><li><a href="global.html#removalAllowed">removalAllowed</a></li><li><a href="global.html#remove">remove</a></li><li><a href="global.html#removeIds">removeIds</a></li><li><a href="global.html#renderOf">renderOf</a></li><li><a href="global.html#renderRules">renderRules</a></li><li><a href="global.html#repairCore">repairCore</a></li><li><a href="global.html#replyObjectOf">replyObjectOf</a></li><li><a href="global.html#replyRejectOf">replyRejectOf</a></li><li><a href="global.html#requestRebaseline">requestRebaseline</a></li><li><a href="global.html#resolveExtractData">resolveExtractData</a></li><li><a href="global.html#resolveExtractDirs">resolveExtractDirs</a></li><li><a href="global.html#resolveExtractSettings">resolveExtractSettings</a></li><li><a href="global.html#resolveExtractVocab">resolveExtractVocab</a></li><li><a href="global.html#revisableOf">revisableOf</a></li><li><a href="global.html#reviseCaseOf">reviseCaseOf</a></li><li><a href="global.html#reviseCaseProblems">reviseCaseProblems</a></li><li><a href="global.html#revisePageAt">revisePageAt</a></li><li><a href="global.html#reviseReasonsOf">reviseReasonsOf</a></li><li><a href="global.html#reviseVerdictOf">reviseVerdictOf</a></li><li><a href="global.html#reviseVotesProblems">reviseVotesProblems</a></li><li><a href="global.html#reviveClaims">reviveClaims</a></li><li><a href="global.html#reviveItems">reviveItems</a></li><li><a href="global.html#rewriteTextFields">rewriteTextFields</a></li><li><a href="global.html#roleById">roleById</a></li><li><a href="global.html#roleOfDef">roleOfDef</a></li><li><a href="global.html#rollbackCoreStockFix">rollbackCoreStockFix</a></li><li><a href="global.html#ruleOrNullOf">ruleOrNullOf</a></li><li><a href="global.html#ruleProblemOf">ruleProblemOf</a></li><li><a href="global.html#rulesOf">rulesOf</a></li><li><a href="global.html#rulesProblemOf">rulesProblemOf</a></li><li><a href="global.html#rulesTextOf">rulesTextOf</a></li><li><a href="global.html#runDisputeCheck">runDisputeCheck</a></li><li><a href="global.html#runDisputePass">runDisputePass</a></li><li><a href="global.html#runExtractBench">runExtractBench</a></li><li><a href="global.html#runExtractBenchCli">runExtractBenchCli</a></li><li><a href="global.html#runOrphanCheck">runOrphanCheck</a></li><li><a href="global.html#runOrphanPass">runOrphanPass</a></li><li><a href="global.html#runPanelPages">runPanelPages</a></li><li><a href="global.html#runPass">runPass</a></li><li><a href="global.html#runPending">runPending</a></li><li><a href="global.html#runSupportCheck">runSupportCheck</a></li><li><a href="global.html#runSupportGate">runSupportGate</a></li><li><a href="global.html#runSupportRevise">runSupportRevise</a></li><li><a href="global.html#runSupportStockPass">runSupportStockPass</a></li><li><a href="global.html#runSynonymCheck">runSynonymCheck</a></li><li><a href="global.html#runSynonymStep">runSynonymStep</a></li><li><a href="global.html#sameNegation">sameNegation</a></li><li><a href="global.html#sameOrphan">sameOrphan</a></li><li><a href="global.html#sameSubstance">sameSubstance</a></li><li><a href="global.html#saveLedgerJson">saveLedgerJson</a></li><li><a href="global.html#saveNoTopCache">saveNoTopCache</a></li><li><a href="global.html#scriptBadOf">scriptBadOf</a></li><li><a href="global.html#seatDisputeVotesOf">seatDisputeVotesOf</a></li><li><a href="global.html#seatOrphanVotesOf">seatOrphanVotesOf</a></li><li><a href="global.html#seatSupportVotesOf">seatSupportVotesOf</a></li><li><a href="global.html#seatSynonymVotesOf">seatSynonymVotesOf</a></li><li><a href="global.html#selectNotes">selectNotes</a></li><li><a href="global.html#setExcluded">setExcluded</a></li><li><a href="global.html#settleConflictDispositions">settleConflictDispositions</a></li><li><a href="global.html#settleHolds">settleHolds</a></li><li><a href="global.html#settleTwins">settleTwins</a></li><li><a href="global.html#sharedSideClaimsOf">sharedSideClaimsOf</a></li><li><a href="global.html#sigOf">sigOf</a></li><li><a href="global.html#skipReasonOf">skipReasonOf</a></li><li><a href="global.html#splitLang">splitLang</a></li><li><a href="global.html#stageExtract">stageExtract</a></li><li><a href="global.html#stateDigest">stateDigest</a></li><li><a href="global.html#stateFingerprintOf">stateFingerprintOf</a></li><li><a href="global.html#stateView">stateView</a></li><li><a href="global.html#stdOf">stdOf</a></li><li><a href="global.html#stepFailNote">stepFailNote</a></li><li><a href="global.html#stockHashOf">stockHashOf</a></li><li><a href="global.html#stockNeedsOf">stockNeedsOf</a></li><li><a href="global.html#stoppedOf">stoppedOf</a></li><li><a href="global.html#stripProgramFields">stripProgramFields</a></li><li><a href="global.html#supportByEffects">supportByEffects</a></li><li><a href="global.html#supportCaseProblems">supportCaseProblems</a></li><li><a href="global.html#supportCheckBenchRole">supportCheckBenchRole</a></li><li><a href="global.html#supportCheckCallOf">supportCheckCallOf</a></li><li><a href="global.html#supportClassOf">supportClassOf</a></li><li><a href="global.html#supportClassOfOp">supportClassOfOp</a></li><li><a href="global.html#supportFixesOf">supportFixesOf</a></li><li><a href="global.html#supportHoldClosure">supportHoldClosure</a></li><li><a href="global.html#supportItemsOf">supportItemsOf</a></li><li><a href="global.html#supportReviseBenchRole">supportReviseBenchRole</a></li><li><a href="global.html#supportVerdictOf">supportVerdictOf</a></li><li><a href="global.html#supportingSourcesOf">supportingSourcesOf</a></li><li><a href="global.html#sweepStaleHolds">sweepStaleHolds</a></li><li><a href="global.html#synonym">synonym</a></li><li><a href="global.html#synonymCandidatesOf">synonymCandidatesOf</a></li><li><a href="global.html#synonymCheckBenchRole">synonymCheckBenchRole</a></li><li><a href="global.html#synonymDueOf">synonymDueOf</a></li><li><a href="global.html#synonymHashOf">synonymHashOf</a></li><li><a href="global.html#synonymProposeBenchRole">synonymProposeBenchRole</a></li><li><a href="global.html#synonymVerdictOf">synonymVerdictOf</a></li><li><a href="global.html#targetOf">targetOf</a></li><li><a href="global.html#textFieldsOf">textFieldsOf</a></li><li><a href="global.html#touchedText">touchedText</a></li><li><a href="global.html#trialApply">trialApply</a></li><li><a href="global.html#triedOf">triedOf</a></li><li><a href="global.html#trimToLimit">trimToLimit</a></li><li><a href="global.html#twinRedirectBodyOf">twinRedirectBodyOf</a></li><li><a href="global.html#twinsOf">twinsOf</a></li><li><a href="global.html#uniquePath">uniquePath</a></li><li><a href="global.html#unsupportedOf">unsupportedOf</a></li><li><a href="global.html#validateVia">validateVia</a></li><li><a href="global.html#verdictFieldsOf">verdictFieldsOf</a></li><li><a href="global.html#verdictOutcomesOf">verdictOutcomesOf</a></li><li><a href="global.html#verdictProblems">verdictProblems</a></li><li><a href="global.html#verifyCoreStockChain">verifyCoreStockChain</a></li><li><a href="global.html#viaTextOf">viaTextOf</a></li><li><a href="global.html#voteMissingOf">voteMissingOf</a></li><li><a href="global.html#voteOps">voteOps</a></li><li><a href="global.html#voteTextOf">voteTextOf</a></li><li><a href="global.html#votesByIndexOf">votesByIndexOf</a></li><li><a href="global.html#weakEvidenceProblem">weakEvidenceProblem</a></li><li><a href="global.html#wfAcceptBenchRole">wfAcceptBenchRole</a></li><li><a href="global.html#wfAuditBenchRole">wfAuditBenchRole</a></li><li><a href="global.html#wfClassOf">wfClassOf</a></li><li><a href="global.html#wfConsolidateBenchRole">wfConsolidateBenchRole</a></li><li><a href="global.html#wfCtxOf">wfCtxOf</a></li><li><a href="global.html#wfDraftBenchRole">wfDraftBenchRole</a></li><li><a href="global.html#wfEssenceBenchRole">wfEssenceBenchRole</a></li><li><a href="global.html#wfExpectProblems">wfExpectProblems</a></li><li><a href="global.html#wfInputProblems">wfInputProblems</a></li><li><a href="global.html#wfIntegrateBenchRole">wfIntegrateBenchRole</a></li><li><a href="global.html#wfPendingBenchRole">wfPendingBenchRole</a></li><li><a href="global.html#wfReviseBenchRole">wfReviseBenchRole</a></li><li><a href="global.html#wfRoleDef">wfRoleDef</a></li><li><a href="global.html#withdrawSources">withdrawSources</a></li><li><a href="global.html#withdrawnOf">withdrawnOf</a></li><li><a href="global.html#writeProjections">writeProjections</a></li><li><a href="global.html#writeRegenIntents">writeRegenIntents</a></li><li><a href="global.html#yearOf">yearOf</a></li></ul>
+    
+</nav>
+
+<div id="main">
+    
+    <h1 class="page-title">standards/registry.mjs</h1>
+    
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>// registry.mjs — 提煉檢定標準之全集(定義表;純資料,不判定)
+//
+// 【一條一列】{ id, title, object(對象與入口), kind, v, proves(能證明), notProves(不能證明), enforcedAt(執行處), scan, scanNote }:
+//   kind:'program'＝程式判定(判定可重算);'ai'＝由判定小組(兩席,不一致時第三席)判定、以題組逐案評。
+//   enforcedAt:執行之所在,「套件內檔案:函數」(路徑相對套件根;只列匯出之函數——段內之未匯出步驟〔維護、落帳〕以其所屬之段列之);
+//   同一標準多處執行者皆列——判定之純函數、納入閘(起草之 3+3、待審裁決、爭議覆核之拆解、出處支持存量覆核之修訂)、程式寫入、
+//   各專步、存量處置、還原撤回、符合度掃描各入口依實際之碼列出。
+//   scan:auditExtractStandards(standards/audit)是否以本條 id 逐件判定並計數;scanNote 寫掃描之範圍,或不掃之理由。
+// 【版本單一來源】逐件判定之標準(standards/coreStandards 之 CORE_STANDARDS)之標題與版本取自該表(判定改變即升版,掃描與存量處置
+//   據以判斷是否須重掃);ES8、ES9、ES11、ES14 之識別與版本取自其判定模組(檢核紀錄據以判重檢);ES7 併入 ES9(出處支持之修訂路徑;
+//   修訂後之重判記於 ES9 之檢核紀錄),無獨立版本,v 為 null;ES10 為 1。
+// 【AI 列】EXTRACT_AI_STANDARD_IDS:判定記於檢核紀錄與待判登錄之標準——ES8(失撐之隔離為程式判定、找支持為判定小組)、ES9、ES11、ES14。
+// 【能證明／不能證明】程式標準只證明形式、來源與結構;AI 標準證明的是兩個不同供應者之席位對該案得出同一類別(題組以應然釘住判準),
+//   不證明客觀真偽。「不能證明」即該標準之已知盲區,由所列之他標準或使用者判讀補位。
+// 【不經納入閘之寫入入口(刻意)】EXTRACT_UNGATED_WRITE_ENTRIES:回退(存量處置之回退寫回處置前之狀態——撤銷該次處置之效果,不是新進)與
+//   機械寫入(以狀態重建投影、壞檔以上一版落盤、分身之併入、打掉重練之封存、隔離之解除、邊庫快照之換簽章;不改條目內容或不寫新內容)。
+//   寫入之站點(store.save、.restore、.archive、writeMd)須在各標準之執行處或本表之內,不在者即缺陷。
+
+import { CORE_STANDARDS, ANNOTATION_UNSTATED } from './coreStandards.mjs'
+import { ES8 } from './orphanCheck.mjs'
+import { ES9 } from './supportCheck.mjs'
+import { ES11 } from './synonymCheck.mjs'
+import { ES14 } from './disputeCheck.mjs'
+import { ES15, EXTRACT_HOLD_DEADLINE_DAYS } from '../stores/extractHolds.mjs'
+
+/**
+ * 逐件判定之標準之 id、標題與版本(CORE_STANDARDS 為唯一來源;缺者即拋——表與判定脫節時於載入當下發現)
+ *
+ * @param {String} id 輸入標準 id
+ * @returns {Object} 回傳 { id, title, kind, v }
+ * @throws {Error} CORE_STANDARDS 無此 id 時拋出
+ */
+function coreStd(id) {
+    const s = CORE_STANDARDS.find((x) => x.id === id)
+    if (!s) throw new Error(`registry:CORE_STANDARDS 缺 ${id}`)
+    return { id: s.id, title: s.title, kind: s.kind, v: s.v }
+}
+
+/** 執行處(各標準共用;各條另加其專屬者) */
+const E = Object.freeze({
+    judge: 'standards/coreStandards.mjs:checkCore',
+    opGate: 'standards/opStandards.mjs:createOpStandards',
+    guard: 'standards/opGuards.mjs:guardOps',
+    runPass: 'workflow/runPass.mjs:runPass',
+    pending: 'workflow/pending.mjs:runPending',
+    disputePass: 'workflow/disputePass.mjs:runDisputePass',
+    stockPass: 'workflow/supportStockPass.mjs:runSupportStockPass',
+    orphanPass: 'workflow/orphanPass.mjs:runOrphanPass',
+    apply: 'stores/coreDelta.mjs:applyDelta',
+    invariants: 'stores/coreState.mjs:checkInvariants',
+    programWrite: 'stores/coreProjection.mjs:programWriteProblems',
+    writer: 'stores/coreProjection.mjs:coreWriterOf',
+    stage: 'stages/extractStage.mjs:stageExtract',
+    pass: 'stages/extractChain.mjs:mwPass',
+    persist: 'stages/extractChain.mjs:mwPersistState',
+    domain: 'domain/extractDomain.mjs:createExtractDomain',
+    material: 'stores/noteFacts.mjs:extractMaterialOf',
+    revive: 'ops/reviveClaims.mjs:reviveClaims',
+    coreFix: 'standards/coreStockFix.mjs:coreFixOf',
+    stockPlan: 'standards/stockFix.mjs:planCoreStockFix',
+    stockApply: 'standards/stockFix.mjs:applyCoreStockFix',
+    scan: 'standards/audit.mjs:auditExtractStandards',
+})
+
+/** 起草之 3+3 與待審裁決(新進之差量;同一檢定器) */
+const DELTA_ENTRIES = [E.opGate, E.runPass, E.pending, E.pass]
+
+/** 提煉檢定標準全集(依 id 之序) */
+export const EXTRACT_STANDARDS = Object.freeze([
+    {
+        ...coreStd('ES1'),
+        object: '核心狀態(每一次寫入)與落地之條目(文字欄、本質);入口 起草之 3+3 定稿、待審裁決、爭議覆核之拆解、出處支持存量覆核之修訂與撤回、失撐主張之補出處與撤回、維護之程式寫入(首見基準、撤出處與恢復、投影更新、隔離解除、高水位補正)、存量處置、還原撤回',
+        proves: '每次寫入前驗不變式:既有項不刪(取代、撤回者保留並附理由)、出處只增、沿革只追加、未觸及之項不改(衍生欄位除外)、終態不可逆(可還原之撤回之還原為唯一例外)、引用可解析、撤回理由在清單、取代鏈無環;違反者不寫入。落地之條目另驗編修經過之用語不外洩、文字欄不逾上限之 2 倍、本質不逾上限(與套用之拒收同一判準;1～2 倍放行而計數)',
+        notProves: '內容之正確性(ES2、ES9)',
+        enforcedAt: [E.invariants, E.apply, 'stores/coreState.mjs:lengthCapOf', 'stores/coreDelta.mjs:opLengthProblem', 'workflow/runPass.mjs:lengthIssues', ...DELTA_ENTRIES, E.disputePass, E.stockPass, E.orphanPass, E.programWrite, E.writer, 'stores/coreProjection.mjs:persistMechanical', 'stages/extractChain.mjs:mwLoadState', E.stage, E.persist, E.revive, E.stockApply, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心(分身與類別核心不掃);不變式整個核心一筆(以落地狀態自驗),外洩與長度逐條目一筆(非終態;爭議除撤回外)與本質一筆;狀態檔讀不了者全部標準記未能判定',
+    },
+    {
+        ...coreStd('ES2'),
+        object: '條目(主張、參數、爭議各方、待解問題)之文字(理由除外);入口 起草之 3+3、待審裁決、爭議覆核之拆解、出處支持存量覆核之修訂',
+        proves: '數字事實見於本條所引之存活出處(筆記之內容章＋原文標題＋發布時間;不含投影章);參數另含所依主張之出處,爭議各方另含所引主張之出處;新進另以所觸及既有條目之全文與同差量所引新項為材料(整合後轉修訂意見、定稿仍不合即不採);材料不可得而有未紮根之數字 → 未能判定(新進不採、掃描不報為零)',
+        notProves: '數字所指與推論是否成立(ES9)',
+        enforcedAt: ['standards/coreStandards.mjs:groundingOf', ...DELTA_ENTRIES, E.disputePass, E.stockPass, E.material, E.stage, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之非終態條目;材料＝出處筆記之內容章＋原文標題＋發布時間(md 讀不到者記未能判定,不報為零);呼叫端可給 materialOf 共用其走訪;material:false 不讀材料,含數字者記未能判定並註明',
+    },
+    {
+        ...coreStd('ES3'),
+        object: '條目與本質之文字欄;入口 全部差量(守門)、存量處置',
+        proves: '簡體專用字與同形字誤用數＝0([[連結]] 與網址不計不轉);差量於守門時只轉違規處並記旗標、不擋;存量以確定性修正只改違規處(條目之沿革記存量處置並升一版;本質之改寫入本質沿革)',
+        notProves: '錯字(錯字仍是正體字)',
+        enforcedAt: [E.guard, 'standards/opGuards.mjs:rewriteTextFields', E.runPass, E.pending, E.disputePass, E.stockPass, E.coreFix, E.stockPlan, E.stockApply, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之非終態條目(爭議除撤回外)與本質;[[連結]] 與網址不計',
+    },
+    {
+        ...coreStd('ES4'),
+        object: '主張之標注(銳評、利弊、期間、條件);入口 新主張(add、拆分各部、拆解轉主張之方)與改到標注或種類之修訂',
+        proves: `有效主張之銳評必填;principle／rule 之利與弊各須有內容(出處沒有時寫明「${ANNOTATION_UNSTATED}」,不捏造亦不留白);temporal 須有期間;pitfall 須有條件——新進以試套整份差量後之結果判(整合後轉修訂意見、定稿仍不合即不採)`,
+        notProves: '標注內容之品質(ES9 之語氣、使用者判讀)',
+        enforcedAt: ['standards/coreStandards.mjs:annotationProblems', ...DELTA_ENTRIES, E.disputePass, E.stockPass, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之有效主張(失撐與隔離者除外)',
+    },
+    {
+        ...coreStd('ES5'),
+        object: '呈現給起草之衝突邊(兩端皆為已消化之存活筆記者);入口 每次 pass 之落地結構與起草之宣告、存量處置',
+        proves: '逐邊有結構化之去向(兩端分屬爭議兩方、取代、本版加條件且兩端皆為出處、一端離題)或已交衝突核對(關聯之 RS4);未處置者不入已見(下次再呈現),逾次或宣告非對立 → 交衝突核對;存量之已見而無去向者移出已見(下輪重新呈現)',
+        notProves: '去向之判斷是否最佳(衝突核對、ES14)',
+        enforcedAt: ['standards/conflictDisposition.mjs:conflictDisposedOf', 'standards/conflictDisposition.mjs:normalizeConflictDecl', 'standards/conflictDisposition.mjs:es5RowsOf', 'workflow/relationContext.mjs:relationContextRows', E.runPass, E.pass, 'standards/coreStandards.mjs:es5CtxOf', E.coreFix, E.stockPlan, E.stockApply, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之已見衝突中兩端皆可引者;衝突邊之兩端取邊庫(衝突型之現名與改名之舊名,取關聯 domain)、已交衝突核對者取待判登錄;範圍不含本標準者不讀邊',
+    },
+    {
+        ...coreStd('ES6'),
+        object: '核心之本質;入口 本質專步(無本質或本質待重寫之主核心)、每次 pass',
+        proves: '有效主張 > 0 即須有本質,且本質所引主張未被取代或撤回、其出處未撤(與本質專步同一判定);待重寫之原因呈現於 md 與 cores 記錄',
+        notProves: '本質之品質',
+        enforcedAt: ['stores/coreState.mjs:essenceNeedOf', 'stores/coreState.mjs:essenceLostOf', E.runPass, E.pass, E.stage, E.domain, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心一筆;無有效主張者記不適用',
+    },
+    {
+        id: 'ES7',
+        title: '語氣超出證據者依出處收斂措辭(出處支持之修訂路徑)',
+        object: '出處支持覆核判為語氣超出證據而可修訂之主張;入口 起草之 3+3 定稿後之出處支持覆核、待審裁決、出處支持存量覆核',
+        kind: 'ai',
+        v: null,
+        proves: '可修訂者(超出證據而無反駁)交修訂席依出處收斂措辭 → 經同一納入閘 → 判定小組重判受支持才採用;否則該操作不採(存量則撤回,可還原)',
+        notProves: '收斂後之措辭是否最佳(使用者判讀)',
+        enforcedAt: ['standards/supportRevise.mjs:revisableOf', 'standards/supportRevise.mjs:runSupportRevise', 'standards/supportRevise.mjs:applySupportFixes', E.runPass, E.pending, E.stockPass, E.domain],
+        scan: false,
+        scanNote: '未掃:併入 ES9(修訂後之重判記於 ES9 之檢核紀錄,見掃描之 ai.ES9);修訂之採用與否見各段之報告計數',
+    },
+    {
+        ...coreStd(ES8.std),
+        object: '出處全撤(出處筆記皆已刪除)之主張與參數;入口 維護之撤出處(隔離於有效集合之外)、失撐主張找支持之專步(預設關)、出處筆記還原時之自動還原、還原撤回',
+        proves: '出處全撤者即離開有效集合(不入本質、不計證據)、列未能判定;開啟專步時於本核心之已消化筆記中找支持——兩席皆判某篇支持即補為出處,每一頁皆無支持才撤回(可還原之撤回;出處筆記還原時由維護一併還原),判不了者登錄待判(使用者)',
+        notProves: '未消化之筆記中之支持',
+        enforcedAt: ['stores/coreState.mjs:unsupportedOf', 'stores/coreState.mjs:withdrawSources', 'standards/orphanCheck.mjs:orphanNeedsOf', 'standards/orphanCheck.mjs:runOrphanCheck', E.orphanPass, E.pass, E.persist, E.stage, E.domain, E.revive, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之失撐主張與參數(隔離者另列 ES9)記未能判定(不是合格);專步之判定在檢核紀錄與待判(見掃描之 ai.ES8:受檢總量與到期數)',
+    },
+    {
+        ...coreStd(ES9.std),
+        object: '主張(新增與改寫於提交前;存量全量輪替);入口 起草之 3+3 定稿後、待審裁決、出處支持存量覆核專步(預設關)、還原撤回(使用者裁示)',
+        proves: '主張受所引出處支持、語氣不超出證據:兩個不同供應者之席位得出同一類別(不一致時第三席;題組逐案評);判準依證據性質(推論類須寫明前提);受支持而兩席皆未列為支持之出處入排除集(不計證據、不列出處);不受支持者不採(存量撤回,可由使用者以 reviveClaims 還原);判不了者隔離並登錄待判(使用者)',
+        notProves: '出處本身之對錯(爭議與銳評)',
+        enforcedAt: ['standards/supportCheck.mjs:supportItemsOf', 'standards/supportCheck.mjs:runSupportCheck', 'standards/supportCheck.mjs:supportByEffects', 'standards/supportStock.mjs:stockNeedsOf', 'standards/supportStock.mjs:stockHashOf', E.runPass, E.pending, E.stockPass, 'stores/coreState.mjs:holdItems', 'stores/coreState.mjs:releaseHeld', 'stores/coreState.mjs:setExcluded', E.pass, E.persist, E.stage, E.domain, E.revive, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之隔離(判不了)主張記未能判定;其餘之判定在檢核紀錄(見掃描之 ai.ES9:已檢、四態、版本過時、待判之未結與已豁免、受檢總量與到期數)',
+    },
+    {
+        id: 'ES10',
+        title: '關聯變更之影響逐事件有處置',
+        object: '關聯之增刪改(邊庫快照之差分事件);入口 維護(開啟時,概念層),預設停用',
+        kind: 'program',
+        v: 1,
+        proves: '觸及核心已消化筆記之事件逐核心有處置與理由:非衝突之新關聯之另一端入夥伴候選、其所依之邊撤銷或改為衝突即移出;經夥伴入批者之關聯撤銷、衝突理由更新而爭議兩方分含兩端 → 重審;其餘記「不需更新」與理由(處置帳);維護失敗之核心其事件留待下輪',
+        notProves: '處置後核心內容之正確(ES9 等)',
+        enforcedAt: ['standards/relationImpact.mjs:edgeSnapshotOf', 'standards/relationImpact.mjs:relationEventsOf', 'standards/relationImpact.mjs:impactOfCore', 'standards/relationImpact.mjs:applyImpact', 'standards/relationImpact.mjs:impactLedgerRowsOf', 'standards/recheck.mjs:recheckItemsOf', E.stage],
+        scan: false,
+        scanNote: '未掃:事件驅動(邊庫快照之差分),處置於維護時寫入處置帳;各輪之報告計數夥伴候選、重審與移出',
+    },
+    {
+        id: ES11.std,
+        title: '同義概念不分立核心(兩席核對)',
+        object: '兩個主核心之概念名(候選對:名稱相近或提議);入口 同義核心核對專步,預設關',
+        kind: 'ai',
+        v: ES11.v,
+        proves: '候選對經兩個不同供應者之席位判定同一概念與否(不一致時第三席;題組逐案評);判為同一概念者登錄待判(使用者確認後加入詞彙表之概念別名,下一輪之分身合併即併為一核心),判不了者登錄待判',
+        notProves: '未成為候選之同義(名稱差異大且未被提議者)',
+        enforcedAt: ['standards/synonymCheck.mjs:nameCandidatesOf', 'standards/synonymCheck.mjs:proposedCandidatesOf', 'standards/synonymCheck.mjs:synonymHashOf', 'standards/synonymCheck.mjs:runSynonymCheck', 'stages/synonymStep.mjs:runSynonymStep', E.stage, E.domain],
+        scan: false,
+        scanNote: '未掃:AI 判定以題組逐案評;掃描列檢核紀錄之已檢、四態、版本過時與待判之未結、已豁免(見掃描之 ai.ES11)',
+    },
+    {
+        ...coreStd('ES12'),
+        object: 'principle 之主張;入口 新主張或改為 principle 之修訂(試套整份差量後判)',
+        proves: '存活出處之相異文件 ≥2(以文件計;同一文件之多篇筆記只算一份)',
+        notProves: '兩文件是否為獨立之研究(文件之去重只去同一內容)',
+        enforcedAt: ['standards/coreStandards.mjs:principleDocsProblem', ...DELTA_ENTRIES, E.disputePass, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之有效 principle;文件取筆記記錄之 docId(缺者以筆記 id 計)',
+    },
+    {
+        ...coreStd('ES13'),
+        object: '參數之條件;入口 新參數(試套整份差量後之證據等級)',
+        proves: '證據等級為最低級或未評估之參數,conditions 須含限制語(自承限制片語或詞彙表之弱證據句)',
+        notProves: '限制語之內容是否恰當(使用者判讀)',
+        enforcedAt: [...DELTA_ENTRIES, 'stores/evidence.mjs:makeEvidence', E.domain, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之有效參數;證據等級與限制片語取提煉 domain(未給證據判定者不檢)',
+    },
+    {
+        id: ES14.std,
+        title: '爭議為真對立(兩席覆核)',
+        object: '未解決且帶終審存疑之爭議(存疑後核心再升版達門檻者);入口 爭議覆核專步,預設關',
+        kind: 'ai',
+        v: ES14.v,
+        proves: '爭議為真對立:兩個不同供應者之席位得出同一類別(不一致時第三席;題組逐案評);真對立 → 存疑結案(md 加註)、非對立 → 經同一納入閘拆解(各方轉主張)、判不了 → 登錄待判(使用者)',
+        notProves: '何方正確',
+        enforcedAt: ['standards/disputeCheck.mjs:disputeDueOf', 'standards/disputeCheck.mjs:disputeItemsOf', 'standards/disputeCheck.mjs:runDisputeCheck', 'standards/disputeCheck.mjs:dissolveOpOf', 'standards/disputeCheck.mjs:doubtCheckedOf', E.disputePass, E.pass, E.persist, E.stage, E.domain],
+        scan: false,
+        scanNote: '未掃:AI 判定以題組逐案評;掃描列由核心狀態推得之已檢、合格、版本過時、受檢總量、到期數與待判之未結、已豁免(見掃描之 ai.ES14;覆核只記於狀態之 doubtChecks)',
+    },
+    {
+        ...coreStd(ES15.std),
+        object: '逾限出隊之筆記(多次未交代去向而出隊);入口 每次 pass 落盤後、重審段之重送',
+        proves: `逾限筆記一律登錄待判(期限 ${EXTRACT_HOLD_DEADLINE_DAYS} 天;記當時之提示詞識別);提示詞或起草席位變更、或使用者要求重試 → 重審段重送,涵蓋即結案、再逾限即更新登錄`,
+        notProves: '重送後能否涵蓋',
+        enforcedAt: ['stores/coreDelta.mjs:commitBatch', E.persist, 'stages/extractStage.mjs:extractPromptId', 'stores/extractHolds.mjs:extractHoldDeadlineOf', 'standards/recheck.mjs:recheckItemsOf', E.stage, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之逾限筆記;待判登錄任一狀態皆算(未給待判集合 → 未能判定)',
+    },
+    {
+        ...coreStd('ES16'),
+        object: '本質;入口 本質之寫入(起草與本質專步)',
+        proves: '本質之數字事實見於所引主張之存活出處(不含主張文字);材料同 ES2',
+        notProves: '數字所指與推論是否成立(ES9)',
+        enforcedAt: ['standards/coreStandards.mjs:groundingOf', ...DELTA_ENTRIES, E.material, E.stage, E.judge, E.scan],
+        scan: true,
+        scanNote: '主核心之本質;材料同 ES2',
+    },
+    {
+        id: 'ES17',
+        title: '主張文字不提及筆記',
+        kind: 'program',
+        v: 1,
+        object: '條目之文字(理由除外);入口 全部差量',
+        proves: '文字不殘留本批代號或筆記連結(出處由出處欄記錄);新進轉修訂意見、定稿仍殘留即不採;內容欄不自動轉連結',
+        notProves: '主張之可讀性',
+        enforcedAt: ['standards/coreStandards.mjs:noteMentionsOf', ...DELTA_ENTRIES, E.apply],
+        scan: false,
+        scanNote: '未掃:納入閘為唯一執行處(新進轉修訂意見、定稿仍殘留即不採);存量之文字無本批之語境,形如代號者(如型號 N95)判不了,不以之列違反',
+    },
+].map((s) => Object.freeze({
+    // 欄序固定(報表與比對之輸出可重現)
+    id: s.id, title: s.title, object: s.object, kind: s.kind, v: s.v, proves: s.proves, notProves: s.notProves,
+    enforcedAt: Object.freeze([...s.enforcedAt]), scan: s.scan, scanNote: s.scanNote,
+})))
+
+/** 不經納入閘之寫入入口(檔頭【不經納入閘之寫入入口】;每列 { entry:'檔:函數', kind:'undo'＝回退｜'mechanical'＝機械寫入, why }) */
+export const EXTRACT_UNGATED_WRITE_ENTRIES = Object.freeze([
+    { entry: 'standards/stockFix.mjs:rollbackCoreStockFix', kind: 'undo', why: '存量處置之回退:寫回處置前之整份狀態(不驗不變式;回到處置前者才寫)' },
+    { entry: 'ops/regenCore.mjs:regenCore', kind: 'mechanical', why: '打掉重練:封存狀態檔與核心 md(不寫新內容;其後以現有筆記從頭提煉,新內容照過閘)' },
+    { entry: 'stores/coreState.mjs:releaseHeld', kind: 'mechanical', why: '隔離之解除:使用者豁免之待判 → 解除隔離(記帳欄位,不升版、不改條目)' },
+    { entry: 'standards/stockFix.mjs:edgeSeenSyncOf', kind: 'mechanical', why: '邊庫快照之換簽章:關聯之存量處置改寫邊時同步快照之簽章(不產生影響事件)' },
+    { entry: 'stores/coreProjection.mjs:writeProjections', kind: 'mechanical', why: '以狀態重建投影:md、cores 記錄、筆記之提煉時刻與渲染雜湊之回寫(不改條目)' },
+    { entry: 'stores/coreProjection.mjs:repairCore', kind: 'mechanical', why: '壞檔之修復:以上一版落盤並重建投影(高水位只動版次與 id 計數)' },
+    { entry: 'stores/coreProjection.mjs:settleTwins', kind: 'mechanical', why: '分身之併入:封存分身之 md 與狀態檔、改寫為轉址頁(不改主核心)' },
+].map((x) => Object.freeze(x)))
+
+/** 符合度掃描逐件判定之標準 id(scan 為 true 者;依全集之序——與 CORE_STANDARDS 同序) */
+export const EXTRACT_AUDITED_STANDARD_IDS = Object.freeze(EXTRACT_STANDARDS.filter((s) => s.scan).map((s) => s.id))
+
+/** 符合度掃描列檢核紀錄與待判之標準 id(依全集之序) */
+export const EXTRACT_AI_STANDARD_IDS = Object.freeze(EXTRACT_STANDARDS.filter((s) => [ES8.std, ES9.std, ES11.std, ES14.std].includes(s.id)).map((s) => s.id))
+
+export default { EXTRACT_STANDARDS, EXTRACT_UNGATED_WRITE_ENTRIES, EXTRACT_AUDITED_STANDARD_IDS, EXTRACT_AI_STANDARD_IDS }
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+    
+    
+</div>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Mon Nov 02 2026 17:05:54 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+</footer>
+
+<script>prettyPrint();</script>
+<script src="scripts/polyfill.js"></script>
+<script src="scripts/linenumber.js"></script>
+
+
+
+</body>
+</html>
