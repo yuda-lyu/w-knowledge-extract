@@ -55,7 +55,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..').re
 /** 宿主之痕跡:磁碟機絕對路徑(盤符＋反斜線;字串字面中之跳脫形亦含)與使用者目錄 */
 const HOST_PATH = /\b[A-Za-z]:\\|\/Users\/|C:\/Users/
 /** 宿主之名(專案名與其通知管道;本套件為通用套件,發布內容不得提及) */
-const HOST_NAME = /tai-kns|telegram/i
+//宿主專屬功能之字樣;使用端專案代號之檢查由發布流程之守門負責(名單不入公開庫)
+const HOST_NAME = /telegram/i
 
 // ═══════════════════════ 掃描工具 ═══════════════════════
 
@@ -101,7 +102,7 @@ const PORTS = Object.fromEntries([
 const entryOf = async (p) => import(pathToFileURL(p.entry).href)
 
 /** 專案內不屬本套件之目錄名:指定詞以之起頭即引用專案既有程式或資料 */
-const PROJECT_DIRS = ['srcPack', 'src', 'test', 'data', 'srcRunner', 'srcCapture', 'srcSummarize', 'srcRelate']
+const PROJECT_DIRS = ['srcPack', 'src', 'test', 'data', 'srcShell', 'srcCapture', 'srcSummarize', 'srcRelate']
 
 /**
  * 分類一個指定詞
@@ -481,7 +482,7 @@ describe('unit-extract-package', function() {
                 assert.deepEqual(classify(p.bridge, p.local ? path.relative(path.join(ROOT, 'test/tools'), p.entry).replace(/\\/g, '/') : p.spec), { kind: 'package', pkg: p.pkg })
             }
             assert.match(classify('src/core/x.mjs', '../nope/none.mjs').problem, /目標不存在/)
-            for (const s of ['srcPack/core/kernel.mjs', 'srcRunner/WTaskRunner.mjs', 'srcRelate/core/stores/checks.mjs', 'srcSummarize/core/md/md.mjs', 'data/vocab.json']) assert.match(classify('src/core/x.mjs', s).problem, /引用專案既有程式或資料/, s)
+            for (const s of ['srcPack/core/kernel.mjs', 'srcShell/WTaskRunner.mjs', 'srcRelate/core/stores/checks.mjs', 'srcSummarize/core/md/md.mjs', 'data/vocab.json']) assert.match(classify('src/core/x.mjs', s).problem, /引用專案既有程式或資料/, s)
             assert.match(classify('src/core/x.mjs', 'C:/proj/a.mjs').problem, /絕對路徑或 URL/)
             assert.deepEqual(classify('src/core/x.mjs', 'wsemi/src/isobj.mjs'), { kind: 'package', pkg: 'wsemi' })
             assert.deepEqual(classify('src/core/x.mjs', 'node:fs'), { kind: 'builtin' })
@@ -739,8 +740,8 @@ describe('unit-extract-package', function() {
             // 判準自檢:被抓到與不誤判(盤符之相對寫法、網址、正斜線之範例路徑不算;宿主名不分大小寫、字首相近之他詞不算)
             for (const s of ['C:\\work\\x', "'d:\\\\kb'", '/Users/me/x', 'C:/Users/me']) assert.ok(HOST_PATH.test(s), s)
             for (const s of ['c:/kb/db', "workDir: 'd:/my-kb'", 'https://a.example/b', 'a:b', '相對\\路徑']) assert.ok(!HOST_PATH.test(s), s)
-            for (const s of ['tai-kns-trade', 'TELEGRAM_TEXT_MAX', 'telegram 通知']) assert.ok(HOST_NAME.test(s), s)
-            for (const s of ['telegraph', 'tai-news', '知識庫']) assert.ok(!HOST_NAME.test(s), s)
+            for (const s of ['TELEGRAM_TEXT_MAX', 'telegram 通知']) assert.ok(HOST_NAME.test(s), s)
+            for (const s of ['telegraph', '知識庫']) assert.ok(!HOST_NAME.test(s), s)
             const files = [...sourceFiles('.mjs').filter((f) => !f.startsWith('test/') || f.startsWith('test/tools/')), ...sourceFiles('.csv').filter((f) => !f.startsWith('test/')), 'README.md']
             assert.ok(files.length >= 40 && files.some((f) => f.endsWith('.csv')), `掃描量過少或漏 csv：${files.length}`)
             assert.ok(files.includes('test/tools/extractKit.mjs') && files.includes('test/tools/quantVocab.mjs'), '掃描須含隨包發布之 test/tools(npm 包＝git 版控內容,test/tools 隨包)')
