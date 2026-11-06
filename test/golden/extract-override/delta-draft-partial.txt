@@ -22,11 +22,11 @@
 - revise 修正既有主張或參數之文字：{"op":"revise","id":"C3","fields":{"text":"…"},"reason":"…","sources":["N2"]}
 - supersede 新證據使舊條目過時或被推翻：{"op":"supersede","id":"C3","by":"@a 或 C9（選填）","reason":"…","validPeriod":"舊觀點成立期間","sources":["N2"]}
 - retract 撤回既有條目：{"op":"retract","id":"C5","reason":"離題|無出處支持|同篇誤配|重複","into":"C2（理由為「重複」時必填）"}
-- dispute_add 結論相反者立爭議（每方須有本批出處或所引既有主張；任兩方之出處不可皆只有同一篇——同一研究自身之正反不成爭議；引述他人研究之一方標 "basis":"轉述" 者除外）：{"op":"dispute_add","ref":"d","question":"…","sides":[{"position":"…","conditions":["…"],"claims":["C1"]},{"position":"…","claims":["@a"],"sources":["N3"],"basis":"證據性質（選填；引述他人研究者寫「轉述」）"}]}
+- dispute_add 結論相反者立爭議（每方須有本批出處或所引主張，且至少一方要寫本批出處 sources——各方只引主張（含同一差量之新主張 @名）而整條無 sources 者會被拒收；任兩方之出處不可皆只有同一篇——同一研究自身之正反不成爭議；引述他人研究之一方標 "basis":"轉述" 者除外）：{"op":"dispute_add","ref":"d","question":"…","sides":[{"position":"…","conditions":["…"],"claims":["C1"]},{"position":"…","claims":["@a"],"sources":["N3"],"basis":"證據性質（選填；引述他人研究者寫「轉述」）"}]}
 - dispute_update 爭議之補充或解決：{"op":"dispute_update","id":"D2","note":"…","status":"open|resolved（選填）","sides_add":[…],"sources":["N4"]}
 - contest 把既有主張列入某爭議之一方（side 即狀態摘要中該方之 side k；新立之爭議依 sides 之順序自 0 起）：{"op":"contest","id":"C3","dispute":"D2 或 @d","side":0,"reason":"…","sources":["N1"]}
 - dispute_dissolve 拆解非對立之爭議（依規則表之爭議規則與「非對立之界線」判定；內容與出處全留，只拿掉對立標籤；reason 須寫明兩方各回答什麼問題、或為何可同時成立——標有「終審存疑」者請獨立判斷，不可只引述存疑；只有立場文字之方由程式轉為主張，kinds[k] 為 side k 轉出主張之種類、annotations[k] 為其標注（依種類填必填者，同新增主張；條件與該方原有之條件合併），引主張之方兩者皆填 null）：{"op":"dispute_dissolve","id":"D2","reason":"…","kinds":[null,"rule"],"annotations":[null,{"critique":"…","pros":["…"],"cons":["出處未載"]}]}
-- param_add 關鍵參數：{"op":"param_add","name":"…","value":"值或區間","conditions":"…","period":"…","snapshot":false,"claim":"C3 或 @a（選填）","sources":["N2"]}
+- param_add 關鍵參數（conditions 寫適用條件；證據僅單一來源或未經獨立驗證者，conditions 須含「僅樣本內」「單一研究」「同一研究」「僅摘要」「未經獨立驗證」「未經驗證」「僅單一研究或未經獨立驗證」之一（程式以字面判讀，同義改寫不算））：{"op":"param_add","name":"…","value":"值或區間","conditions":"…","period":"…","snapshot":false,"claim":"C3 或 @a（選填）","sources":["N2"]}
 - question_add／question_resolve 待解問題：{"op":"question_add","text":"…","sources":["N1"]}、{"op":"question_resolve","id":"Q1","resolution":"…","sources":["N2"]}
 - essence 本質（claims 只列所依之主張，不列爭議）：{"op":"essence","text":"…","claims":["C1","@a"],"reason":"…"}
 - related_add 相關概念：{"op":"related_add","concepts":["…"]}

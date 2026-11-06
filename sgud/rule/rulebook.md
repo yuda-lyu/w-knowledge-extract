@@ -1,6 +1,6 @@
 # 規則帳本（w-knowledge-extract）
 
-> **藍圖**：以規則為單位記程式碼須長成什麼樣。本檔為索引、本套件之鐵則與套件審計落地之規則（EXT-23～36）；條目分檔如下表。與現況比對看 `../state/state.md`。
+> **藍圖**：以規則為單位記程式碼須長成什麼樣。本檔為索引、本套件之鐵則與套件審計落地之規則（EXT-23～37）；條目分檔如下表。與現況比對看 `../state/state.md`。
 > **路徑基準**：原始碼在 `src/`，本檔與分檔所列檔案路徑（`core/…`、`stages/…`、`createKnowledgeExtract.mjs` 等）除已標 `src/`、`test/`、`toolg/` 者外皆相對 `src/`；測試在 `test/`（輔助件在 `test/tools/`，隨 npm 包發布供下游取用）。
 > **用語**：「使用端」＝使用本套件之專案；「抓取套件」＝npm `w-knowledge-capture`；「摘要套件」＝npm `w-knowledge-summarize`；「關聯套件」＝npm `w-knowledge-relate`；上游三套件之規則在各該套件之 `sgud/rule/`，本套件只保留引用，不複製條文。規則 ID 沿用 GEN／EXT／STD／AI 之編號，缺號登記於〈已移出〉；`AI-`、`REL-`、`SUM-`、`CAP-` 等前綴之規則屬上游套件，條文在各該套件之 `sgud/rule/`。
 
@@ -13,7 +13,8 @@
 | `rulebook_standards.md` | 檢定標準之框架與共通條目 STD-00～02、04、07、10、22、25～29（STD-27～29 只記本套件側之取用） |
 | `rulebook_standards_extract.md` | 本套件實作之檢定標準 STD-08（提煉納入閘）、STD-12（出處支持覆核 ES9）、STD-15（爭議覆核 ES14）、STD-18（關聯變更之影響 ES10）、STD-21（同義核心 ES11）、STD-23（失撐主張 ES8） |
 | `rulebook_bench.md` | EXT-35 工作流類八角色評分題組之概念名（逐案概念名全集、反向案與排除案、盤點指令）；EXT-36 審計謂詞與正式移除判準共用一份、審計與起草題組之材料守則（逐案改動、限制、指紋） |
-| 本檔 | 鐵則、EXT-23～36、盤點指令、測試清單 |
+| `rulebook_prompt.md` | EXT-37 提示詞須以字面寫出程式以字面判讀之要求（站點全集：已套二處、未套十四項待 A/B、刻意不套；盤點指令） |
+| 本檔 | 鐵則、EXT-23～37、盤點指令、測試清單 |
 
 ## 已移出
 
@@ -46,7 +47,7 @@
 7. **雜湊含素材**：`stockHashOf`／`orphanHashOf`／`disputeHashOf`／`synonymHashOf` 皆含出處內容鍵或兩側素材；ES14 覆核只記於狀態 `doubtChecks`（`hash` 含鍵、`shape` 只結構），掃描之 ES14 列由狀態推得（`disputeProgressOf`），ES11 列之受檢總量與到期由 `synonymCandidatesOf`／`synonymDueOf`（與專步同一函數）。
 8. **存量處置**（STD-22／25／26）：範圍＝掃描之逐件判定標準 `STOCK_STDS`；可修者只 ES3／ES5；其餘之違反逐（標準,條目）列修不了 → 套用時登錄 `core:<核心>:<標準>` 使用者待判；先記後寫、回退＝撤銷（after.rev 三態）；修訂落地之檢核雜湊以套用後之條目重算。
 9. **排序與統計**：排序一律字碼序 `cmp`（不用 `localeCompare`）；統計鍵不在初值表 → WARN「提煉統計：未知之統計鍵」（須見）；report 之鍵與日誌字樣只在 `logContract.mjs`。
-10. **提示詞為契約**：17 鍵提示詞之基準檔 `test/golden/`；改提示詞＝改題目識別，須以正式 prompt＋正式席位對凍結輸入實測後才算驗證。實測之載具＝該提示詞對應之評分角色題組（`node src/bench/cli.mjs --role <角色> --models <正式席位> --runs 2`；判定走正式路徑），判準＝逐案兩回全過；替代文字亦可行（優化）時才做舊／新 A/B；舊字樣與程式不一致之修正（如不可逆清單依 `TERMINAL_OPS` 產生）只做驗證、不設 B 臂。驗證不過之回退判準＝換席（該席位不得擔任該角色），不回舊字樣。golden 變更之步必附對應角色之正式席位實跑結果。
+10. **提示詞為契約**：17 鍵提示詞之基準檔 `test/golden/`；改提示詞＝改題目識別，須以正式 prompt＋正式席位對凍結輸入實測後才算驗證。實測之載具＝該提示詞對應之評分角色題組（`node src/bench/cli.mjs --role <角色> --models <正式席位> --runs 2`；判定走正式路徑），判準＝逐案兩回全過；替代文字亦可行（優化）時才做舊／新 A/B；舊字樣與程式不一致之修正（如不可逆清單依 `TERMINAL_OPS` 產生）只做驗證、不設 B 臂。驗證不過之回退判準＝換席（該席位不得擔任該角色），不回舊字樣。golden 變更之步必附對應角色之正式席位實跑結果。**程式以字面判讀之要求，提示詞須以同樣之字面寫出**（EXT-37）。
 11. **發布面**（GEN-18）：`package.json` 之 `main` 指 `dist/w-knowledge-extract.umd.js`，**不設 `exports`／`files`**、**不提供 `.npmignore`**（npm 包＝git 版控內容：`src/`、`dist/`、`docs/`、`sgud/`、`test/`〔含 `test/tools/`〕、`toolg/` 隨包，`CLAUDE*.md` 由 `.gitignore` 排除）。守門：`unit-extract-package` ②〈發布面〉〈打包清單〉。
 12. **原始碼規範**：`src/` 每個匯出函數皆有說明、`@param`、`@returns`、`@example`（`// =>` 為實跑輸出；需真實儲存或 AI 者標 `need test in nodejs.`）；`node node_modules/jsdoc/jsdoc.js -c .jsdoc` 須成功；import 取 wsemi `wsemi/src/<函數>.mjs`、lodash-es 單函數路徑（本套件 `src/` 無直接 import）、node 內建模組在 `src/` 無前綴；`toolg/gDistRollup.mjs` 之 external／globals 自 `src/WKnowledgeExtract.mjs` 之 import 圖盤點（原則見該檔檔頭）。
 
@@ -82,6 +83,8 @@
   - 測試：`unit-bench-wf-concept`（每案給概念名、提示詞首段、守門含欄名、判定類不受影響）。
 - **EXT-36 評分謂詞與正式移除判準共用一份；審計、起草題組之材料與應然一致**：審計（`wf-audit`）謂詞 `flags` 判「植入之缺陷是否被指出」，不另抄規則，與 `removalAllowed` 共用 `workflow/reviewGuards.removalIssueOf`（意見面：捏造、離題須高嚴重度，重複不論嚴重度；破壞性放行、爭議類移除理由、移除方自述之理由仍由 `removalAllowed` 判）；`removalAllowed` 之既有行為不變；`clean` 與之對稱（不乾淨＝被列任何高嚴重度意見，或被列足以使正式流程移除該操作之意見，兩條件取聯集）；審計意見 `ref` 為空不指向任何操作（`issueOnOp`；正式流程與評分共用，修正缺 `ref` 之意見會放行移除之缺陷）。審計題組三守則（標注不寫出處所無之內容、材料只含被操作收入之知識、有主張者附本質）、起草題組 `kinds` 與材料一致、起草謂詞 `dispute`／`grounded` 不成立之說明寫明原因。逐案改動、限制與待決、提示詞指紋見 `rulebook_bench.md`。使用端需求出處：Gitea #89。
   - 測試：`unit-bench-wf-audit-cases`（本質、利弊帳、準備期、植入缺陷非爭議類、起草 kinds、note 同步）、`unit-extract-bench`（謂詞與單一來源交叉驗、`clean` 對稱、空 `ref`、不成立之說明）、`unit-extract-workflow`（`removalIssueOf`、`removalAllowed` 既有行為凍結、缺 `ref` 之意見含正式 `runPass`）。
+- **EXT-37 提示詞須以字面寫出程式以字面判讀之要求**：納入閘、守門或檢定標準以字面判讀（字串包含、固定清單、固定片語、整條層級之必備條件）而拒收、不採或交修訂之要求，起草提示詞須以同樣之字面寫出——模型照提示詞之字面做，提示詞只寫語意則語意正確之回覆仍被拒收，且越照範例做越失分；列表取自詞彙者由詞彙組出（不寫死、與程式判讀同一來源）；不改判定。已套二處：①dispute_add 整條須至少一個本批出處 sources（提示詞：至少一方要寫本批出處 sources，各方只引主張〔含同一差量之新主張 @名〕而整條無 sources 者會被拒收）；②param_add 弱證據參數之 conditions 須含限制語（ES13；提示詞列出 `selfLimitPhrases` ∪ `guide.extract.weakEvidence` 並註明程式以字面判讀、同義改寫不算）。其餘由程式字面判讀而提示詞未以字面寫出者之盤點（十四項，已核者標明）與判準見 `rulebook_prompt.md`——**只記帳，未改**（改提示詞須先以正式席位 A/B）。新增或修改程式端字面判讀時同輪回頭看該表。使用端需求出處：Gitea #90。
+  - 測試：`unit-extract-domain`〈EXT-37〉四案（dispute_add 行含字面要求、與納入閘實際行為一致〔各方只引主張→拒收「無本批出處」，一方寫本批出處→落地〕、param_add 行之列表隨詞彙〔預設／測試詞彙／整鍵替換／`[]`／去重〕、所列限制語逐項經 `weakEvidenceProblem` 放行而同義改寫不放行）；`unit-extract-golden`（中立基準 `delta-draft`、`delta-draft-partial` 重產，覆寫重現同名兩檔手改，登錄於其檔頭【覆寫重現之手改紀錄】）。
 - **測試件與守門**：暫存根一律 `extractTestKit` 之 `tmpRoot`／`removeRoots`（`before` 內建、`after` 回驗；模組層以 TMP 建構之 env 延後實例化，`mkEnvIn` 拒非絕對路徑）；原始檔走訪取抓取 `sourceFilesOf`（根為 `src/`）、JSONL 讀取取 `readJsonlRows`、概念折疊還原一律 `resetConceptFold()`、失敗帳讀取 `ledgerOf`、替身 `scriptAi` 之 `netDown`／`skipped`、`noAi`／`blankAi`；橋接三檔檔頭【移植】指定詞「<上游>/src/<入口>」「<上游>/test/tools/<檔>」皆可映射；README §17 表＝實際 `test/*.test.mjs`；固定埠 8881（死埠）、8882（假埠）、8883～8889 保留；真 AI 評分之工作目錄與報表一律 `WK_BENCH_OUT`（專案外絕對路徑）；golden 中立組以 `test/tools/regen-golden.mjs` 重產（預設預演、`GOLDEN_WRITE=1` 才寫；覆寫組 16 檔不可重產）。
   - 測試：`unit-extract-package` ⑧（暫存根、單例不跨檔汙染、橋接映射、README §17 ↔ 檔、固定埠與暫存敘述；各含判準自檢）、`unit-extract-golden`「重產工具」三案。
 

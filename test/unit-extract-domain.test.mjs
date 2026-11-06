@@ -9,6 +9,9 @@ import { tmpRoot, removeRoots } from './tools/extractTestKit.mjs'
 import { createExtractDomain, EXTRACT_DOMAIN_MEMBERS, extractDomainShapeProblems, extractFeatureProblems } from '../src/domain/extractDomain.mjs'
 import { renderRules } from '../src/stores/stateDigest.mjs'
 import { emptyState, DEFAULT_CLAIM_KINDS } from '../src/stores/coreState.mjs'
+import { applyDelta } from '../src/stores/coreDelta.mjs'
+import { weakEvidenceProblem } from '../src/standards/coreStandards.mjs'
+import { resolveExtractVocab } from '../src/core/vocab/extractVocab.mjs'
 import { resolveExtractSettings, EXTRACT_FEATURES } from '../src/core/extractSettings.mjs'
 import { noteNoTopOf } from '../src/stores/contentCache.mjs'
 import { writeMd, readMd, dropSection } from '../src/core/summarizePackage.mjs'
@@ -114,6 +117,63 @@ describe('unit-extract-domain', function() {
         s2.claims = s.claims
         s2.disputes = [{ id: 'D2', question: '問', status: 'open', sides: [{ position: '甲', claims: ['C1'] }, { position: '乙', claims: ['C2'] }], doubt: { reason: '非對立', note: '兩方回答不同問題', version: 4, at: 'T', op: 'dispute_add', count: 2 } }]
         assert.match(d.renderState(s2, { notesById: new Map() }).body, / {2}- 終審存疑（v4，累計 2 次；非對立）：兩方回答不同問題/)
+    })
+
+    // ── EXT-37:起草提示詞須以字面寫出「程式以字面判讀」之要求(納入閘之 dispute_add、檢定標準 ES13 之 param_add;使用端需求出處:Gitea #90) ──
+    // 取起草提示詞中某操作之說明行(規則段置空,只留操作段)
+    const proposeOpLine = (d, op) => d.buildProposePrompt({ concept: '概念', scope: 'concept', digest: '', batch: [], rulesText: '' }).split('\n').find((l) => l.startsWith(`- ${op} `)) || ''
+
+    it('EXT-37:起草提示詞之 dispute_add 行以字面寫出納入閘之要求——整條至少一方要寫本批出處 sources;各方只引主張(含同一差量之新主張 @名)而整條無 sources 者被拒收', () => {
+        const line = proposeOpLine(createExtractDomain({}), 'dispute_add')
+        // 規則:納入閘 stores/coreDelta.mjs dispute_add 之 newSrc(op.sources ∪ 各方 sources)為空即拒收「無本批出處」;提示詞須把此字面要求告訴模型
+        assert.match(line, /每方須有本批出處或所引主張，且至少一方要寫本批出處 sources/)
+        assert.match(line, /各方只引主張（含同一差量之新主張 @名）而整條無 sources 者會被拒收/)
+        assert.match(line, /任兩方之出處不可皆只有同一篇/, '既有同篇正反之說明仍在')
+        assert.match(line, /\{"op":"dispute_add","ref":"d","question":"…","sides":\[\{"position":"…","conditions":\["…"\],"claims":\["C1"\]\},\{"position":"…","claims":\["@a"\],"sources":\["N3"\]/, '範例之形狀不變')
+    })
+
+    it('EXT-37:dispute_add 之字面要求與納入閘實際行為一致——各方只引主張(含新主張 @名)而無任何 sources → 拒收「無本批出處」;至少一方寫本批出處 sources → 落地', () => {
+        const batch = [{ code: 'N1', id: 'n1' }, { code: 'N2', id: 'n2' }]
+        const add = [{ op: 'add', ref: 'a', kind: 'rule', text: '甲法則', sources: ['N1'] }, { op: 'add', ref: 'b', kind: 'pitfall', text: '乙陷阱', conditions: ['乙條件'], sources: ['N1'] }]
+        const sidesOf = (src) => [{ position: '成立', claims: ['@a'], ...(src[0] ? { sources: src[0] } : {}) }, { position: '不成立', claims: ['@b'], ...(src[1] ? { sources: src[1] } : {}) }]
+        const run = (sides) => applyDelta(emptyState(), { ops: [...add, { op: 'dispute_add', ref: 'd', question: '甲是否成立', sides }] }, { batch, at: 'T' })
+        const none = run(sidesOf([null, null]))
+        assert.deepEqual(none.rejected.map((x) => x.reason), ['無本批出處'], '提示詞警告之形狀:各方只引新主張、整條無 sources')
+        assert.equal(none.state.disputes.length, 0)
+        const one = run(sidesOf([null, ['N2']]))
+        assert.deepEqual(one.rejected, [], '提示詞要求之形狀:至少一方寫本批出處')
+        assert.equal(one.state.disputes.length, 1)
+    })
+
+    it('EXT-37:起草提示詞之 param_add 行列出弱證據參數 conditions 須含之限制語(取自 vocab.selfLimitPhrases 與 guide.extract.weakEvidence,去重)並註明程式以字面判讀、同義改寫不算', () => {
+        const d = createExtractDomain({})
+        const v = resolveExtractVocab({})
+        const line = proposeOpLine(d, 'param_add')
+        assert.match(line, /^- param_add 關鍵參數（conditions 寫適用條件；證據僅單一來源或未經獨立驗證者，conditions 須含「單一研究」「同一研究」「僅摘要」「未經獨立驗證」「未經驗證」「僅單一研究或未經獨立驗證」之一（程式以字面判讀，同義改寫不算））：\{"op":"param_add"/, '預設詞彙:五個自承限制片語＋弱證據之說法')
+        assert.ok(line.includes(`「${[...v.selfLimitPhrases, v.guide.extract.weakEvidence].join('」「')}」之一`), '列表即詞彙之值(不寫死)')
+        assert.match(line, /"conditions":"…","period":"…","snapshot":false,"claim":"C3 或 @a（選填）","sources":\["N2"\]\}$/, '範例之形狀不變')
+        // 隨詞彙而變:測試詞彙之 selfLimitPhrases 多一項「僅樣本內」(置於最前)
+        assert.match(proposeOpLine(createExtractDomain({ vocab: QUANT_VOCAB }), 'param_add'), /須含「僅樣本內」「單一研究」「同一研究」「僅摘要」「未經獨立驗證」「未經驗證」「僅單一研究或未經獨立驗證」之一/)
+        assert.ok(!line.includes('僅樣本內'), '預設詞彙不含測試詞彙之片語')
+        // 整鍵替換 selfLimitPhrases 與 guide.extract.weakEvidence:列表只含安裝方之值
+        const mine = proposeOpLine(createExtractDomain({ vocab: { selfLimitPhrases: ['僅單次觀測'], guide: { extract: { weakEvidence: '僅來自單次觀測' } } } }), 'param_add')
+        assert.match(mine, /須含「僅單次觀測」「僅來自單次觀測」之一（程式以字面判讀，同義改寫不算）/)
+        assert.ok(!mine.includes('單一研究'), '安裝方覆寫後不殘留預設片語')
+        // selfLimitPhrases: [](不封頂):只剩弱證據之說法;與弱證據之說法同詞者只列一次
+        assert.match(proposeOpLine(createExtractDomain({ vocab: { selfLimitPhrases: [] } }), 'param_add'), /須含「僅單一研究或未經獨立驗證」之一（程式以字面判讀/)
+        assert.match(proposeOpLine(createExtractDomain({ vocab: { selfLimitPhrases: ['單次觀測', '僅來自單次觀測'], guide: { extract: { weakEvidence: '僅來自單次觀測' } } } }), 'param_add'), /須含「單次觀測」「僅來自單次觀測」之一（/)
+    })
+
+    it('EXT-37:param_add 行所列之限制語＝ES13 實際接受之字面(逐項放行);同義改寫(未列者)不放行', () => {
+        for (const vocab of [undefined, QUANT_VOCAB, { selfLimitPhrases: ['僅單次觀測'], guide: { extract: { weakEvidence: '僅來自單次觀測' } } }, { selfLimitPhrases: [] }]) {
+            const d = createExtractDomain(vocab ? { vocab } : {})
+            const listed = [...proposeOpLine(d, 'param_add').matchAll(/「([^」]+)」/g)].map((m) => m[1])
+            const ctx = { evidence: d.evidence, weakEvidence: d.weakEvidence }
+            const judge = (conditions) => weakEvidenceProblem({ evidence: { level: d.evidence.levels[d.evidence.levels.length - 1] }, conditions }, ctx)
+            assert.ok(listed.length >= 1, '至少列出弱證據之說法')
+            for (const p of listed) assert.deepEqual(judge([`適用條件；${p}`]), { applies: true, ok: true, level: d.evidence.levels[d.evidence.levels.length - 1] }, `列出之「${p}」→ ES13 放行`)
+            assert.equal(judge(['單一館之觀察']).ok, false, '同義改寫(未列)→ 不放行')
+        }
     })
 
     it('終審提示詞:fix 可改之欄位依本批操作自 FIXABLE_FIELDS 列出並附格式;新增主張／參數不以「性質標錯」剔除(標籤以 fix 改正);告知剔除被引用之新項會連帶', () => {
