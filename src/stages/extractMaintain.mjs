@@ -6,6 +6,8 @@
 //     關聯套件之 openDeletions,經 core/relatePackage):已消化、記錄不在、有墓碑 → 撤;已撤、記錄在、無墓碑 → 恢復;記錄不在而無墓碑 → 只計數
 //     (懸空,告警)——讀不到不等於刪除(關聯段同一原則)③已消化未引用者之內容變更 → 靜默重設基準 ④投影更新(證據現值、標題、版型)
 //   ⑤重審項統計(只概念層主核心;判定在 standards/recheck)。逐核心隔離(一個壞狀態檔不影響其他核心與本輪提煉)。
+// 【已見衝突之回頭檢查(ES5)】衝突已不成立者(帳驅動)與處置結構已消失者(爭議被拆解、取代或撤回拿掉了處置;判定在 standards/conflictDisposition 之
+//   es5ReopenOf,與符合度掃描、存量處置同一份)皆自 seenConflicts 移出(記帳欄位,不升版),由重審項之新衝突重新呈現;已交 RS4 核對者不動。
 // 【快取與檔名】內容鍵與推定判定之快取在 stores/contentCache;帳檔之檔名在 stores/extractFiles。
 // 【不做】AI 呼叫、選題(提煉段)、投影與落盤之實作(stores/coreProjection)。
 
@@ -24,6 +26,7 @@ import { EXTRACT_API_HINT } from '../stores/extractHolds.mjs'
 import { coreLedgerKeyOf } from '../stores/extractLedger.mjs'
 import { rebaselineDone, rebaselineIdsOf } from '../stores/rebaseline.mjs'
 import { readRegenIntents, writeRegenIntents } from '../stores/regenIntent.mjs'
+import { es5ReopenOf } from '../standards/conflictDisposition.mjs'
 import { disputeDueOf, disputeHeldIdsOf } from '../standards/disputeCheck.mjs'
 import { claimChecksOf } from '../standards/holdSettle.mjs'
 import { orphanNeedsOf } from '../standards/orphanCheck.mjs'
@@ -154,10 +157,11 @@ function finishImpact(env, log, stat) {
 /**
  * 每輪開工之無 AI 維護(停用輪之後、時間守門之前;順序 dirty 補做 → 本步 → 選題):逐主核心一次載入、至多一次寫入——
  *   ①首見基準(本版之前建立者:已消化筆記之內容鍵、觸及已消化筆記之現存衝突邊)②撤出處／恢復(刪除墓碑驅動)
- *   ③已消化未引用者之內容變更 → 靜默重設基準 ④投影更新(證據現值、標題、版型)⑤重審項統計(只概念層主核心)。
+ *   ③已消化未引用者之內容變更 → 靜默重設基準 ③′衝突已不成立者與已見衝突之處置結構已消失者(ES5 回頭檢查)移出 seenConflicts
+ *   ④投影更新(證據現值、標題、版型)⑤重審項統計(只概念層主核心)。
  *   逐核心隔離(一個壞狀態檔不影響其他核心與本輪提煉)。
  *
- * @param {Object} env 輸入本段環境(含 contentCache、recheck:Map)
+ * @param {Object} env 輸入本段環境(含 contentCache、recheck:Map、relEdges、rs4Held:Set|null〔已交 RS4 核對之邊 id;非 Set 者 ES5 回頭檢查不處置〕)
  * @param {Object} domain 輸入提煉 domain
  * @param {Object} log 輸入日誌
  * @param {Object} stat 輸入本段統計(就地累計)
@@ -181,6 +185,9 @@ export async function maintainCores(env, domain, log, stat, k) {
     let rebased = 0
     const keyOf = (nid) => cache.keyOf(env.notesById.get(nid))
     const bodyOf = (nid) => cache.bodyOf(env.notesById.get(nid))
+    // 衝突邊之兩端(③′之二 ES5 回頭檢查之判定材料;與符合度掃描 es5CtxOf 同為衝突型之現行邊——relEdges 讀入時型別已以現名呈現)
+    const conflictEnds = new Map(env.relEdges.map((e) => [e.id, [e.from, e.to]]))
+    const titleOf = (nid) => env.notesById.get(nid)?.title || nid
     // 出處版本紀錄:內容鍵＋版本＋正文雜湊(與章節設定無關;換版時分辨格式變動與真實修訂)
     const seenOf = (nid, kk) => {
         const h = bodyOf(nid)
@@ -296,6 +303,20 @@ export async function maintainCores(env, domain, log, stat, k) {
                     s.seenConflicts = (s.seenConflicts || []).filter((x) => !drop.has(x))
                     touched = true
                     stat.conflictGonePruned += orphans.length
+                }
+            }
+            // ③′之二已見衝突之處置結構已消失(檢定標準 ES5 回頭檢查;不限概念層,範圍同符合度掃描與存量處置):入已見當下之處置(爭議、取代、加條件之修正)
+            //   日後被拆解、取代或撤回拿掉,邊卻留在 seenConflicts——既不再呈現也不交 RS4,符合度掃描判違反而管線無從自癒。兩端皆為已消化存活筆記、無處置結構
+            //   (不限版)且未交 RS4 核對者(es5ReopenOf,與掃描、存量處置同一判定)自 seenConflicts 移出(記帳欄位,不升版)→ 概念層之重審項 conflict
+            //   下輪重新呈現,收尾走原有機制(起草處置、宣告非對立交 RS4、逾次交 RS4;有界)。已交 RS4 核對之邊集未讀入(env.rs4Held 非 Set)→ 不處置
+            if ((s.seenConflicts || []).length) {
+                const reopen = es5ReopenOf(s, { conflictEndsOf: (eid) => conflictEnds.get(eid) || null, rs4Held: env.rs4Held })
+                if (reopen.length) {
+                    const drop = new Set(reopen.map((x) => x.eid))
+                    s.seenConflicts = s.seenConflicts.filter((x) => !drop.has(x))
+                    touched = true
+                    stat.conflictReopened += reopen.length
+                    log.info(`提煉[${rec.concept}]：${reopen.length} 條已見衝突之處置結構已消失（爭議拆解／取代／撤回），移出已見、下輪重新呈現（ES5）：${reopen.slice(0, 3).map((x) => x.ends.map(titleOf).join(' ⇄ ')).join('；')}${reopen.length > 3 ? '…' : ''}`)
                 }
             }
             // ③″關聯變更之影響(檢定標準 ES10;開啟時,概念層):本輪事件(＋前次維護失敗而留待之事件)逐核心處置——夥伴候選之增刪、

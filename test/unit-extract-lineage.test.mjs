@@ -9,7 +9,7 @@ import path from 'node:path'
 import { memStore, readJsonlRows } from './tools/captureForTest.mjs'
 import { tmpRoot, removeRoots } from './tools/extractTestKit.mjs'
 import { programWriteProblems } from '../src/stores/coreProjection.mjs'
-import { conflictDisposedOf, normalizeConflictDecl } from '../src/standards/conflictDisposition.mjs'
+import { conflictDisposedOf, es5ReopenOf, es5RowsOf, normalizeConflictDecl } from '../src/standards/conflictDisposition.mjs'
 import { relationContextRows } from '../src/workflow/relationContext.mjs'
 import { createContentCache } from '../src/stores/contentCache.mjs'
 import { recheckItemsOf, pickRecheck, recheckDue, conflictGoneOf } from '../src/standards/recheck.mjs'
@@ -17,7 +17,7 @@ import { EDGE_SEEN_FILE, IMPACT_LEDGER_FILE, edgeSnapshotOf, relationEventsOf, i
 import { IMPACT_RETRY_FILE } from '../src/stages/extractStage.mjs'
 // 關聯之件(撤邊、關聯帳、衝突事件帳、關聯 domain、刪除帳之檔名)一律經單一匯入點取自關聯套件(GEN-14):提煉讀關聯之產物,夾具以關聯之 API 造
 import { retireEdge, openRelateLedgers, appendConflictEvent, DELETION_FILES } from './tools/relateForTest.mjs'
-import { createRelateDomain } from '../src/core/relatePackage.mjs'
+import { createRelateDomain, queueConflictCheck } from '../src/core/relatePackage.mjs'
 import { previewRecheck } from '../src/ops/recheckOps.mjs'
 import { requestRebaseline } from '../src/stores/rebaseline.mjs'
 import { createExtractDomain, CONTENT_KEY_VERSION } from '../src/domain/extractDomain.mjs'
@@ -666,6 +666,54 @@ describe('unit-extract-lineage', function() {
         ])
     })
 
+    it('ES5 回頭檢查(純判定 es5ReopenOf):無處置結構且未交 RS4 者列出;有結構者、已交 RS4 者、一端非存活已消化筆記者不列;待判集合非 Set(未讀入)→ 不處置;與 es5RowsOf 同一判定', () => {
+        const base = seedState() // 已消化 a b c;爭議 side 0 引 a(經 C1)、side 1 出處 c(轉述)
+        const ENDS = { 'e-d': ['a', 'c'], 'e-n': ['a', 'b'], 'e-z': ['a', 'zz'], 'e-w': ['b', 'c'] }
+        const conflictEndsOf = (eid) => ENDS[eid] || null
+        const s = { ...base, seenConflicts: ['e-d', 'e-n', 'e-z', 'e-gone'] }
+        const reopen = (st, rs4Held) => es5ReopenOf(st, { conflictEndsOf, rs4Held }).map((x) => x.eid)
+        assert.deepEqual(reopen(s, new Set()), ['e-n'], 'e-d 有爭議結構、e-z 一端非已消化筆記、e-gone 邊已不在 → 不列')
+        assert.deepEqual(es5ReopenOf(s, { conflictEndsOf, rs4Held: new Set() }), [{ eid: 'e-n', ends: ['a', 'b'] }])
+        assert.deepEqual(reopen(s, new Set(['e-n'])), [], '已交 RS4 核對(任一狀態)者不列')
+        for (const bad of [null, undefined, [], ['e-n'], {}, 'e-n']) assert.deepEqual(reopen(s, bad), [], `待判集合非 Set(${JSON.stringify(bad)})→ 不處置`)
+        assert.deepEqual(es5ReopenOf(s, { rs4Held: new Set() }), [], '未給邊端 → 不判')
+        // 一端之筆記已撤出 → 不再是存活已消化筆記,不列
+        const w = { ...withdrawSources(s, { withdraw: [{ id: 'b', title: 'B' }], at: AT }).state, seenConflicts: ['e-n'] }
+        assert.deepEqual(reopen(w, new Set()), [])
+        // 與符合度掃描之判定同一份:es5ReopenOf ＝ es5RowsOf 中 how 為空者
+        const rows = es5RowsOf(s, { conflictEndsOf, rs4HeldOf: () => false })
+        assert.deepEqual(rows.filter((x) => !x.how).map((x) => x.eid), reopen(s, new Set()))
+    })
+
+    it('ES5 回頭檢查(純判定):處置結構因撤回／取代而消失 → 列出;以取代處置(被取代之主張以一端為出處、取代者以另一端為出處)者結構不會消失 → 不列', () => {
+        const ENDS = { 'e-ab': ['a', 'b'], 'e-cb': ['c', 'b'] }
+        const ctx = (rs4Held = new Set()) => ({ conflictEndsOf: (eid) => ENDS[eid] || null, rs4Held })
+        const s0 = { ...seedState(), seenConflicts: ['e-ab'] }
+        const y = idOf(s0, '甲乙皆支持之主張')
+        const apply = (st, ops) => {
+            const r = applyDelta(st, { ops }, { batch: SEED, mode: 'delta', at: AT })
+            assert.deepEqual(r.rejected, [], JSON.stringify(r.rejected))
+            return { ...r.state, seenConflicts: st.seenConflicts }
+        }
+        // 加條件之修正(兩端皆為出處、有條件)→ 有處置結構
+        const rev = apply(s0, [{ op: 'revise', id: y, fields: { conditions: ['市況平穩時'] }, reason: '加條件', sources: ['N2'] }])
+        assert.equal(conflictDisposedOf(rev, ['a', 'b'], { anyVersion: true }), 'revise')
+        assert.deepEqual(es5ReopenOf(rev, ctx()), [], '有處置結構 → 不列')
+        // 撤回該主張 → 結構消失
+        const gone1 = apply(rev, [{ op: 'retract', id: y, reason: '無出處支持' }])
+        assert.equal(conflictDisposedOf(gone1, ['a', 'b'], { anyVersion: true }), '')
+        assert.deepEqual(es5ReopenOf(gone1, ctx()).map((x) => x.eid), ['e-ab'], '撤回路徑')
+        assert.deepEqual(es5ReopenOf(gone1, ctx(new Set(['e-ab']))), [], '已交 RS4 者不列')
+        // 取代該主張(取代者只以第三篇為出處)→ 結構消失
+        const gone2 = apply(rev, [{ op: 'add', ref: 'n', kind: 'rule', text: '新研究推翻', basis: '實證', sources: ['N3'], ...ANN }, { op: 'supersede', id: y, by: '@n', reason: '新證據', validPeriod: '較早之研究', sources: ['N3'] }])
+        assert.equal(conflictDisposedOf(gone2, ['a', 'b'], { anyVersion: true }), '')
+        assert.deepEqual(es5ReopenOf(gone2, ctx()).map((x) => x.eid), ['e-ab'], '取代路徑')
+        // 以取代處置之衝突(被取代之主張以 c 為出處、取代者以 b 為出處)→ 取代為終態、結構不會消失 → 不列
+        const sup = apply({ ...s0, seenConflicts: ['e-cb'] }, [{ op: 'add', ref: 'n', kind: 'rule', text: '新研究推翻', basis: '實證', sources: ['N2'], ...ANN }, { op: 'supersede', id: idOf(s0, '只靠丙之主張'), by: '@n', reason: '新證據', validPeriod: '較早之研究', sources: ['N2'] }])
+        assert.equal(conflictDisposedOf(sup, ['c', 'b'], { anyVersion: true }), 'supersede')
+        assert.deepEqual(es5ReopenOf(sup, ctx()), [], '取代處置者不列')
+    })
+
     it('ES5 衝突去向(提煉段):未處置 → 不入 seen、下次再呈現;第 2 次仍未處置 → 交 RS4 待判並入 seen;宣告非對立(附理由)→ 入 seen 並交 RS4 待判', async () => {
         const mk = async () => {
             const env = mkEnv(['j1', 'j2', 'j3'].map((id) => ({ id, concepts: ['動量七'] })), { extract: { recheck: { waitDays: 0 } } })
@@ -752,6 +800,181 @@ describe('unit-extract-lineage', function() {
         assert.equal(ai.calls.length, 0, '無 AI')
         assert.equal(report.detail.conflictGonePruned, 1)
         assert.deepEqual(readState(env, rec.id).seenConflicts, ['e-q'], 'e-q 無事件:讀不到不等於撤銷,保留')
+    })
+
+    // ─── 已見衝突之處置結構消失(檢定標準 ES5 回頭檢查;維護) ───
+
+    const EDGE_AT = '2026-10-01T00:00:00+08:00'
+    const conflictEdge = (id, from, to) => ({ id, from, to, type: '衝突或反例', reason: '結論相反', createdAt: EDGE_AT, updatedAt: EDGE_AT })
+    const codeIn = (p, title) => batchOf(p).find((x) => x.title === title).code
+    /** 起草替身:依提示詞組出一份差量(opsOf(提示詞) => 操作陣列;無略過) */
+    const draftOps = (opsOf) => (p) => ({ ops: opsOf(p), skipped: [] })
+    /** 僅重審 pass 之起草替身:記提示詞、不改任何條目(全部略過) */
+    const recheckNoChange = (prompts) => (p) => {
+        prompts.push(p)
+        return { ops: [], skipped: batchOf(p).map((x) => ({ note: x.code, reason: '重審無須變更' })) }
+    }
+
+    it('已見衝突之處置結構消失(依衝突所立之爭議被拆解)→ 維護自 seenConflicts 移出(無 AI)並記 conflictReopened／INFO;仍有結構者、已交 RS4 核對者不動;移出者重審項重呈 R 列,未處置記次、不回 seen,逾次交 RS4 後不再移出(有界)', async () => {
+        const env = mkEnv(['m1', 'm2', 'm3'].map((id) => ({ id, concepts: ['回頭檢查甲'] })), {
+            extract: { recheck: { waitDays: 0 } },
+            relations: [conflictEdge('e-m', 'm1', 'm2'), conflictEdge('e-r', 'm2', 'm3'), conflictEdge('e-s', 'm1', 'm3')],
+        })
+        // 首批:依三條衝突各立一則爭議(兩端分屬不同之方)→ 三邊皆有處置結構、入 seenConflicts
+        const draft1 = draftOps((p) => [
+            { op: 'add', ref: 'a', kind: 'rule', text: '甲之主張', basis: '實證', sources: [codeIn(p, 'm1')], ...ANN },
+            { op: 'add', ref: 'b', kind: 'rule', text: '乙之主張', basis: '實證', sources: [codeIn(p, 'm2')], ...ANN },
+            { op: 'add', ref: 'c', kind: 'rule', text: '丙之主張', basis: '實證', sources: [codeIn(p, 'm3')], ...ANN },
+            { op: 'dispute_add', question: '甲乙何者成立', sides: [{ position: '甲', claims: ['@a'], sources: [codeIn(p, 'm1')] }, { position: '乙', claims: ['@b'], sources: [codeIn(p, 'm2')] }] },
+            { op: 'dispute_add', question: '乙丙何者成立', sides: [{ position: '乙', claims: ['@b'], sources: [codeIn(p, 'm2')] }, { position: '丙', claims: ['@c'], sources: [codeIn(p, 'm3')] }] },
+            { op: 'dispute_add', question: '甲丙何者成立', sides: [{ position: '甲', claims: ['@a'], sources: [codeIn(p, 'm1')] }, { position: '丙', claims: ['@c'], sources: [codeIn(p, 'm3')] }] },
+            { op: 'essence', text: '本質文字', claims: ['@a'], reason: '首版' },
+        ])
+        await runStage(env, scriptAi({ draft: draft1 }))
+        const rec = await coreOf(env)
+        const st1 = readState(env, rec.id)
+        assert.deepEqual(st1.seenConflicts.sort(), ['e-m', 'e-r', 'e-s'])
+        const dispOf = (s) => [['m1', 'm2'], ['m2', 'm3'], ['m1', 'm3']].map((ends) => conflictDisposedOf(s, ends, { anyVersion: true }))
+        assert.deepEqual(dispOf(st1), ['dispute', 'dispute', 'dispute'], '前提:三邊之處置皆為爭議')
+        // 新筆記入批,起草把前兩則爭議拆解(模型判非對立;第三則維持)→ 前兩邊之處置結構消失,邊仍留在 seenConflicts(拆解當下不動記帳欄位,由維護統一處置)
+        await env.stores.notes.insertNew([noteRow(env.dirs, { id: 'm4', concepts: ['回頭檢查甲'] })])
+        const dId = (q) => st1.disputes.find((d) => d.question === q).id
+        const draft2 = draftOps((p) => [
+            { op: 'add', ref: 'd', kind: 'rule', text: '丁之主張', basis: '實證', sources: [batchOf(p)[0].code], ...ANN },
+            { op: 'dispute_dissolve', id: dId('甲乙何者成立'), reason: '甲乙回答不同問題，可同時成立', kinds: [null, null], annotations: [null, null] },
+            { op: 'dispute_dissolve', id: dId('乙丙何者成立'), reason: '乙丙回答不同問題，可同時成立', kinds: [null, null], annotations: [null, null] },
+        ])
+        await runStage(env, scriptAi({ draft: draft2 }))
+        const st2 = readState(env, rec.id)
+        assert.deepEqual(dispOf(st2), ['', '', 'dispute'], '前兩邊處置結構已消失、第三邊仍有')
+        assert.deepEqual(st2.seenConflicts.sort(), ['e-m', 'e-r', 'e-s'], '拆解當下不動 seenConflicts')
+        // e-r 已交 RS4 核對(任一狀態皆算已處置):維護只移出 e-m
+        assert.equal(await queueConflictCheck(env.stores.holds, { edgeId: 'e-r', from: 'm2', to: 'm3', reason: '測試：已交關聯段核對', at: AT }), 'queued')
+        const prompts = []
+        const ai3 = scriptAi({ draft: recheckNoChange(prompts) })
+        const r3 = await runStage(env, ai3)
+        assert.equal(r3.report.detail.conflictReopened, 1, JSON.stringify(r3.report.detail))
+        assert.ok(r3.log.lines.some((l) => /^INFO 提煉\[回頭檢查甲\]：1 條已見衝突之處置結構已消失（爭議拆解／取代／撤回），移出已見、下輪重新呈現（ES5）：m[12] ⇄ m[12]$/.test(l)), r3.log.lines.join('\n'))
+        assert.equal(r3.report.detail.recheckPasses, 1, `移出者成重審項 conflict、當輪到期(waitDays 0)→ 一次僅重審 pass：${JSON.stringify(r3.report.detail)}`)
+        assert.ok(prompts.length >= 1 && prompts.every((p) => /^- R1 .*〔衝突或反例；衝突〕：結論相反/m.test(p)), `重呈為兩端皆可引之 R 列：\n${prompts[0]}`)
+        assert.equal(r3.report.detail.conflictsPending, 1, '未處置 → 記次、不入 seen')
+        const st3 = readState(env, rec.id)
+        assert.equal(r3.report.detail.maintainFailed, 0, '程式寫入之不變式(ES1)放行維護之記帳寫入')
+        assert.equal(st3.version, st2.version, '記帳欄位之移出:不升版')
+        assert.deepEqual(st3.changelog, st2.changelog, '記帳欄位之移出:不加沿革')
+        assert.deepEqual(st3.seenConflicts.sort(), ['e-r', 'e-s'], 'e-m 移出且未回 seen;e-r(已交 RS4)、e-s(結構仍在)不動')
+        // 第二次仍未處置 → 交 RS4 待判並入 seen(有界);其後維護不再移出、不再重呈
+        const r4 = await runStage(env, scriptAi({ draft: recheckNoChange([]) }))
+        assert.equal(r4.report.detail.conflictsToRs4, 1)
+        assert.equal(r4.report.detail.conflictReopened, 0, '本輪維護時 e-m 尚未入 seen')
+        assert.deepEqual(readState(env, rec.id).seenConflicts.sort(), ['e-m', 'e-r', 'e-s'])
+        assert.equal((await env.stores.holds.get('edge:e-m:RS4'))?.status, 'open')
+        const ai5 = scriptAi({ draft: draftAll })
+        const r5 = await runStage(env, ai5)
+        assert.equal(r5.report.detail.conflictReopened, 0, '已交 RS4 核對者不再移出')
+        assert.equal(ai5.calls.length, 0, '無 AI:不再重審')
+        assert.deepEqual(readState(env, rec.id).seenConflicts.sort(), ['e-m', 'e-r', 'e-s'])
+    })
+
+    // 處置結構消失之另兩條路徑:撤回(retract)、取代(supersede)——「加條件之修正」所依之主張成為終態,conflictDisposedOf 之 ③ 不再成立
+    for (const [shape, endingOps] of [
+        ['撤回', (xId) => [{ op: 'add', ref: 'n', kind: 'rule', text: '丁之主張', basis: '實證', sources: ['@p4'], ...ANN }, { op: 'retract', id: xId, reason: '無出處支持' }]],
+        ['取代', (xId) => [{ op: 'add', ref: 'n', kind: 'rule', text: '新研究推翻之主張', basis: '實證', sources: ['@p4'], ...ANN }, { op: 'supersede', id: xId, by: '@n', reason: '新證據', validPeriod: '較早之研究', sources: ['@p4'] }]],
+    ]) {
+        it(`已見衝突之處置為加條件之修正,其主張日後被${shape} → 處置結構消失,維護自 seenConflicts 移出並重呈(${shape}路徑)`, async () => {
+            const env = mkEnv(['p1', 'p2', 'p3'].map((id) => ({ id, concepts: [`回頭檢查${shape}`] })), { extract: { recheck: { waitDays: 0 } }, relations: [conflictEdge('e-p', 'p1', 'p2')] })
+            // 首批:以一條有條件、同時引兩端之主張處置該衝突(加條件之修正);兩端另各有一條只引自己之主張(使兩端於日後仍被核心引用)
+            const draft1 = draftOps((p) => [
+                { op: 'add', ref: 'x', kind: 'rule', text: '甲乙在平穩市況下皆成立', basis: '實證', conditions: ['市況平穩時'], sources: [codeIn(p, 'p1'), codeIn(p, 'p2')], ...ANN },
+                { op: 'add', ref: 'y', kind: 'rule', text: '只靠甲之主張', basis: '實證', sources: [codeIn(p, 'p1')], ...ANN },
+                { op: 'add', ref: 'z', kind: 'rule', text: '只靠乙之主張', basis: '實證', sources: [codeIn(p, 'p2')], ...ANN },
+                { op: 'add', ref: 'w', kind: 'rule', text: '只靠丙之主張', basis: '實證', sources: [codeIn(p, 'p3')], ...ANN },
+                { op: 'essence', text: '本質文字', claims: ['@w'], reason: '首版' },
+            ])
+            await runStage(env, scriptAi({ draft: draft1 }))
+            const rec = await coreOf(env)
+            const st1 = readState(env, rec.id)
+            assert.deepEqual(st1.seenConflicts, ['e-p'])
+            assert.equal(conflictDisposedOf(st1, ['p1', 'p2'], { anyVersion: true }), 'revise', '前提:以加條件之修正處置')
+            const xId = st1.claims.find((c) => c.text === '甲乙在平穩市況下皆成立').id
+            // 新筆記入批,起草使該主張成為終態
+            await env.stores.notes.insertNew([noteRow(env.dirs, { id: 'p4', concepts: [`回頭檢查${shape}`] })])
+            await runStage(env, scriptAi({ draft: (p) => ({ ops: endingOps(xId).map((o) => JSON.parse(JSON.stringify(o).replace(/@p4/g, codeIn(p, 'p4')))), skipped: [] }) }))
+            const st2 = readState(env, rec.id)
+            assert.ok(['retracted', 'superseded'].includes(st2.claims.find((c) => c.id === xId).status), `前提:主張已成終態：${st2.claims.find((c) => c.id === xId).status}`)
+            assert.equal(conflictDisposedOf(st2, ['p1', 'p2'], { anyVersion: true }), '', '處置結構已消失')
+            assert.deepEqual(st2.seenConflicts, ['e-p'], '邊仍留在 seenConflicts')
+            const prompts = []
+            const ai3 = scriptAi({ draft: recheckNoChange(prompts) })
+            const { report, log } = await runStage(env, ai3)
+            assert.equal(report.detail.conflictReopened, 1, JSON.stringify(report.detail))
+            assert.ok(log.lines.some((l) => /^INFO 提煉\[回頭檢查(撤回|取代)\]：1 條已見衝突之處置結構已消失/.test(l)), log.lines.join('\n'))
+            assert.equal(report.detail.recheckPasses, 1)
+            assert.ok(prompts.length >= 1 && prompts.every((p) => /^- R1 /m.test(p)), `重呈 R 列：\n${prompts[0]}`)
+            assert.deepEqual(readState(env, rec.id).seenConflicts, [], '未處置不回 seen')
+        })
+    }
+
+    it('已見衝突之處置結構消失而其邊已有 RS4 待判登錄(任一狀態:未結、已結案、已豁免)→ 維護不移出、不重呈(視同已交核對;與符合度掃描同讀待判登錄)', async () => {
+        for (const status of ['open', 'resolved', 'waived']) {
+            const env = mkEnv(['q1', 'q2', 'q3'].map((id) => ({ id, concepts: ['回頭檢查丙'] })), { extract: { recheck: { waitDays: 0 } }, relations: [conflictEdge('e-q', 'q1', 'q2')] })
+            const draft1 = draftOps((p) => [
+                { op: 'add', ref: 'a', kind: 'rule', text: '甲之主張', basis: '實證', sources: [codeIn(p, 'q1')], ...ANN },
+                { op: 'add', ref: 'b', kind: 'rule', text: '乙之主張', basis: '實證', sources: [codeIn(p, 'q2')], ...ANN },
+                { op: 'add', ref: 'c', kind: 'rule', text: '丙之主張', basis: '實證', sources: [codeIn(p, 'q3')], ...ANN },
+                { op: 'dispute_add', question: '甲乙何者成立', sides: [{ position: '甲', claims: ['@a'], sources: [codeIn(p, 'q1')] }, { position: '乙', claims: ['@b'], sources: [codeIn(p, 'q2')] }] },
+                { op: 'essence', text: '本質文字', claims: ['@c'], reason: '首版' },
+            ])
+            await runStage(env, scriptAi({ draft: draft1 }))
+            const rec = await coreOf(env)
+            const st1 = readState(env, rec.id)
+            assert.deepEqual(st1.seenConflicts, ['e-q'])
+            await env.stores.notes.insertNew([noteRow(env.dirs, { id: 'q4', concepts: ['回頭檢查丙'] })])
+            const draft2 = draftOps((p) => [
+                { op: 'add', ref: 'd', kind: 'rule', text: '丁之主張', basis: '實證', sources: [batchOf(p)[0].code], ...ANN },
+                { op: 'dispute_dissolve', id: st1.disputes[0].id, reason: '甲乙回答不同問題，可同時成立', kinds: [null, null], annotations: [null, null] },
+            ])
+            await runStage(env, scriptAi({ draft: draft2 }))
+            assert.equal(conflictDisposedOf(readState(env, rec.id), ['q1', 'q2'], { anyVersion: true }), '', `${status}:前提:處置結構已消失`)
+            assert.equal(await queueConflictCheck(env.stores.holds, { edgeId: 'e-q', from: 'q1', to: 'q2', reason: '測試：已交關聯段核對', at: AT }), 'queued')
+            await env.stores.holds.replace({ ...(await env.stores.holds.get('edge:e-q:RS4')), status })
+            const ai = scriptAi({ draft: recheckNoChange([]) })
+            const { report } = await runStage(env, ai)
+            assert.equal(report.detail.conflictReopened, 0, `${status}:${JSON.stringify(report.detail)}`)
+            assert.equal(ai.calls.length, 0, `${status}:無重審`)
+            assert.deepEqual(readState(env, rec.id).seenConflicts, ['e-q'], `${status}:不移出`)
+        }
+    })
+
+    it('回頭檢查之範圍(與符合度掃描、存量處置一致):首見基準之核心(無 lineage)基準後同輪即受檢;非概念層之核心照樣移出(其重呈待下批觸及兩端時,無重審項)', async () => {
+        // 首見基準:基準把兩端皆已消化、無處置結構之現存衝突邊記為已見——符合度掃描對此判違反,維護同輪移出並排重審
+        const env = mkEnv(['b1', 'b2', 'b3'].map((id) => ({ id, concepts: ['回頭檢查範圍'] })), { extract: { recheck: { waitDays: 0 } } })
+        await runStage(env, scriptAi({ draft: draftAll }))
+        const rec = await coreOf(env)
+        const st = readState(env, rec.id)
+        delete st.lineage
+        st.seen = {}
+        st.seenConflicts = []
+        fs.writeFileSync(`${env.dirs.coreState}/${rec.id}.state.json`, JSON.stringify(st), 'utf8')
+        await env.stores.relations.insertNew([conflictEdge('e-b', 'b1', 'b2')])
+        const prompts = []
+        const r1 = await runStage(env, scriptAi({ draft: recheckNoChange(prompts) }))
+        assert.equal(r1.report.detail.baselined, 1)
+        assert.equal(r1.report.detail.conflictReopened, 1, JSON.stringify(r1.report.detail))
+        assert.equal(r1.report.detail.recheckPasses, 1, '移出者同輪成重審項')
+        assert.ok(prompts.length >= 1 && prompts.every((p) => /^- R1 /m.test(p)))
+        assert.deepEqual(readState(env, rec.id).seenConflicts, [])
+        // 非概念層(類別層)之核心:判定與移出照舊(範圍同掃描);類別核心無重審項,不排重審 pass
+        const st2 = readState(env, rec.id)
+        st2.seenConflicts = ['e-b']
+        st2.scope = 'category'
+        fs.writeFileSync(`${env.dirs.coreState}/${rec.id}.state.json`, JSON.stringify(st2), 'utf8')
+        await env.stores.cores.replace({ ...rec, scope: 'category' })
+        const ai2 = scriptAi({ draft: recheckNoChange([]) })
+        const r2 = await runStage(env, ai2)
+        assert.equal(r2.report.detail.conflictReopened, 1, JSON.stringify(r2.report.detail))
+        assert.equal(r2.report.detail.recheckPasses, 0, '類別核心無重審項')
+        assert.deepEqual(readState(env, rec.id).seenConflicts, [])
     })
 
     // ─── E. 關聯變更之影響(檢定標準 ES10;relationImpact) ───

@@ -8,6 +8,10 @@
 //   ④離題:一端於本批被列為離題。
 //   以上皆無而有宣告「非對立」(附理由)者 → 非對立(交關聯段兩席核對 RS4);皆無 → 未處置(不入 seenConflicts,下次再呈現;逾次交 RS4)。
 // 【只對兩端皆可引者】一端非本批亦非核心已引之衝突,無從當出處——只供參考,不要求去向。
+// 【入已見之後的回頭檢查】入已見(seenConflicts)當下有去向,不保證日後仍有:處置結構可被日後之操作拿掉(依衝突所立之爭議被拆解、被取代之主張或加條件
+//   之修正所依之主張被撤回…),邊卻留在已見——既不再呈現、也未交 RS4 核對。符合度掃描(es5RowsOf)只報、存量處置(coreStockFix)須人工觸發,
+//   故管線每輪維護以同一判定回頭檢查(es5ReopenOf):無處置結構且未交 RS4 核對者自已見移出,由重審項之新衝突重新呈現,收尾走原有機制(起草處置、
+//   宣告非對立交 RS4、逾次交 RS4)。
 
 import { OFFTOPIC_REASON, TERMINAL_SET, withdrawnOf } from '../stores/coreState.mjs'
 import { textValueOf as str } from '../core/capturePackage.mjs'
@@ -104,4 +108,23 @@ export function es5RowsOf(s, ctx = {}) {
     return rows
 }
 
-export default { CONFLICT_DISPOSITIONS, normalizeConflictDecl, conflictDisposedOf, es5RowsOf }
+/**
+ * 檢定標準 ES5 之回頭檢查(維護段;無 AI):已見之衝突中,兩端皆為已消化存活筆記、無處置結構(conflictDisposedOf,不限版)且未交 RS4 核對者——
+ *   入已見後處置結構被拿掉而邊仍留在已見,須自已見移出(記帳欄位,不升版)、下輪重新呈現。判定與符合度掃描、存量處置同一份(es5RowsOf),
+ *   只取其中「未處置」者。已交 RS4 核對之邊集(rs4Held)不是 Set(待判集合不可用)→ 無從分辨已交核對者,不處置(同符合度掃描之未能判定)
+ *
+ * @param {Object} s 輸入核心狀態
+ * @param {Object} ctx 輸入 { conflictEndsOf:(邊 id)=>[a, b]|null, rs4Held:Set|null(已交 RS4 核對之邊 id,任一狀態) }
+ * @returns {Array} 回傳 [{ eid, ends }](須自已見移出者;只列兩端皆可引者)
+ * @example
+ * const s = { ...coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }, { text: '乙', sources: ['n2'] }], consumed: ['n1', 'n2'] }).state, seenConflicts: ['e1'] }
+ * const conflictEndsOf = (eid) => ({ e1: ['n1', 'n2'] })[eid] || null
+ * console.log(es5ReopenOf(s, { conflictEndsOf, rs4Held: new Set() }), es5ReopenOf(s, { conflictEndsOf, rs4Held: new Set(['e1']) }), es5ReopenOf(s, { conflictEndsOf, rs4Held: null }))
+ * // => [ { eid: 'e1', ends: [ 'n1', 'n2' ] } ] [] []
+ */
+export function es5ReopenOf(s, ctx = {}) {
+    if (!(ctx?.rs4Held instanceof Set)) return []
+    return es5RowsOf(s, { conflictEndsOf: ctx.conflictEndsOf, rs4HeldOf: (eid) => ctx.rs4Held.has(eid) }).filter((x) => !x.how).map(({ eid, ends }) => ({ eid, ends }))
+}
+
+export default { CONFLICT_DISPOSITIONS, normalizeConflictDecl, conflictDisposedOf, es5RowsOf, es5ReopenOf }

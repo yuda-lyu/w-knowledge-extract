@@ -31,7 +31,7 @@
 import path from 'path'
 import isobj from 'wsemi/src/isobj.mjs'
 import { applyTaps, budgetOf, listHolds, noteDocIdOf, pipelineDueOf, retryRequestedOf, sha1, stageFields, stdReport } from '../core/capturePackage.mjs'
-import { readConflictEvents, readEdgeAudit, relateDomainNeedsOf } from '../core/relatePackage.mjs'
+import { RS4, readConflictEvents, readEdgeAudit, relateDomainNeedsOf } from '../core/relatePackage.mjs'
 import { extractFeatureProblems, extractPickOf, extractResolvedProblem, extractSeatsProblem } from '../core/extractSettings.mjs'
 import { extractStatInit } from '../logContract.mjs'
 import { isReady, orphanNotes, pickCategories, pickConcepts } from '../stores/conceptSelection.mjs'
@@ -240,6 +240,7 @@ export function stageExtract(opt = {}) {
                 stockWaived: new Map(), // 核心 id → 使用者豁免(保留)之主張 id 集合(ES9 存量;解除隔離)
                 orphanRetry: new Map(), // 核心 id → 使用者要求重判之失撐主張 id 集合(ES8)
                 impact: null, // 關聯變更之影響(ES10;開啟時見下)
+                rs4Held: null, // 已交衝突核對(RS4;任一狀態)之邊 id 集合(維護前讀入一次;ES5 回頭檢查據以不移出已交核對者。非 Set＝待判集合未讀入 → 維護不處置)
             }
             // 筆記之內容鍵(ES9 存量之雜湊用;mtime＋大小快取,不可得為 '')
             env.noteKeyOf = (nid) => String(env.contentCache.keyOf(env.notesById.get(nid)) ?? '')
@@ -328,6 +329,9 @@ export function stageExtract(opt = {}) {
                 return contentMemo.get(nid)
             }
 
+            // 已交衝突核對(RS4)之邊(任一狀態,待判登錄之 oid):維護之已見衝突回頭檢查(ES5)據以不移出已交核對者——與符合度掃描、存量處置同一判定
+            //   (standards/coreStandards 之 es5CtxOf 同取 RS4.std 之登錄);stores.holds 為本段必開之集合(入口已檢),讀入失敗即本輪拋出,不靜默略過
+            env.rs4Held = new Set((await listHolds(stores.holds, { std: RS4.std })).map((h) => h.oid))
             // 前次中斷者之投影補做(dirty 標記;無 AI)
             await redoDirtyProjections(env, domain, log, stat)
             // 無 AI 之維護(首見基準、撤出處／恢復、投影更新、重審項):在時間守門之前——不需 AI,不因時間不足而停擺

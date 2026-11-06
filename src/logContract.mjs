@@ -108,7 +108,7 @@ export const EXTRACT_REPORT_KEYS = Object.freeze({
             'stdIssues', 'stdRejected', 'auditIssues', 'patchApplied', 'patchBlocked', 'verdictBlocked',
             // 維護與重審
             'baselined', 'withdrawn', 'restored', 'dangling', 'projected', 'maintainFailed', 'recheckChanged', 'recheckConflict', 'recheckConflictGone',
-            'conflictGonePruned', 'notesRechecked', 'recheckPasses', 'essencePasses', 'notesHeld', 'holdsResolved', 'holdsSwept', 'holdsWaivedKept', 'versionChanged', 'unverifiable',
+            'conflictGonePruned', 'conflictReopened', 'notesRechecked', 'recheckPasses', 'essencePasses', 'notesHeld', 'holdsResolved', 'holdsSwept', 'holdsWaivedKept', 'versionChanged', 'unverifiable',
             'conflictsDisposed', 'conflictsNotOpposed', 'conflictsPending', 'conflictsToRs4', 'recheckExhausted', 'recheckBlocked', 'rebaselined',
             // 出處支持覆核(ES9 新進):受檢、不採、判不了、基礎設施未成立、存待審、材料不可得、中止未判、筆記層登錄、待審逾次移出、修訂、出處修剪、排除集
             'supportChecked', 'supportCalls', 'supportRejected', 'supportUndetermined', 'supportInfra', 'supportWithheld', 'supportUnreadable', 'supportStopped', 'notesHeldEs9', 'pendingEs9Held',

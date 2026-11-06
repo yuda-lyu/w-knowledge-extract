@@ -15,12 +15,13 @@
 - 原始碼全在 `src/`（根層 5 檔＋`bench/ core/ domain/ guards/ ops/ stages/ standards/ stores/ workflow/`；`bench/cases/` 十四份內建題組）；`test/`（`*.test.mjs`＋`tools/`＋`golden/`）；`toolg/`（`addVersion`、`modifyReadme`、`cleanFolder`、`gDocsExams`、`gDistRollup`、`genDocsDist`，皆標準寫法）；`g.mjs`（離線範例：3 篇筆記 → 一則核心，不連網、不呼叫真 AI）；`dist/`、`docs/` 為產製物。
 - 編譯：`node toolg/gDistRollup.mjs` 產出 `dist/w-knowledge-extract.umd.js`（`runin: 'nodejs'`；external：node 內建九項、`json5`、`opencc-js`、`tree-kill`、`dayjs`／`dayjs/plugin/utc.js`、`@mozilla/readability`、`jsdom`、`playwright`、`rss-parser`、`lmdb`）；dist 以 `require` 載入之具名匯出（512）與 ESM 入口集合、型別完全相同。警告兩條皆固有（入口具名與預設並存；umd 以 browser 環境編譯時提示 node 內建模組，皆已 external）。
 - 印出之命令列用法一律為實際路徑：`node src/bench/cli.mjs`、題組 `src/bench/cases/<角色 id>-generic.json`。
-- JSDoc：`src/` 匯出函數 341 個，說明、`@param`、`@returns`、`@example` 皆 341/341；匯出常數 171/171；可實跑之範例 249 則經腳本實跑核對 `// =>`，92 則標 `need test in nodejs.`（需真實儲存或 AI）。
+- JSDoc：`src/` 匯出函數 341 個，說明、`@param`、`@returns`、`@example` 皆 341/341；匯出常數 171/171；可實跑之範例 249 則經腳本實跑核對 `// =>`，92 則標 `need test in nodejs.`（需真實儲存或 AI）。其後新增之匯出函數 `es5ReopenOf` 亦具說明、`@param`、`@returns`、`@example`（範例已實跑核對）；`maintainCores` 之 JSDoc 補列 `env.relEdges`、`env.rs4Held`。
 
 ## 最近驗證
 
 | 日期 | 項 | 結果 |
 |---|---|---|
+| 2026-11-06 | 已見衝突之維護回頭檢查（ES5；使用端 Gitea #88）後全套（`npm test`，經 quiet-run 鎖） | 876 通過／0 失敗／14 待決（同上）；新增 7 案於 `unit-extract-lineage`（修前紅：爭議拆解、撤回、取代三個段內案紅於 `conflictReopened` 未定義；其餘四案為新函數之純判定 2、類別層與首見基準之範圍案〔停用維護步時紅〕、RS4 任一狀態之負向對照案〔修前亦綠，由變異證其有效〕）；變異：停用維護步 → 段內 4 案紅、`rs4HeldOf` 恆 false → 4 案紅（純判定 2、段內 2）、拿掉待判集合非 Set 之守門 → 1 案紅、維護前不讀待判登錄 → 段內 4 案紅；還原後全綠。**未在正式庫實跑**（待使用端升版後之第一輪維護） |
 | 2026-11-06 | 工作流類八角色題組自給概念名＋準備期守門（EXT-35）後全套（`npm test`，經 quiet-run 鎖） | 869 通過／0 失敗／14 待決（同上）；新增 `unit-bench-wf-concept` 36 案；變異：拿掉守門 → 16 案紅（八角色 × 守門 2 案），各刪三案之 `concept`（多行、單行、僅 `concept` 之 `state` 三種形狀）→ 6 案紅；還原後全綠。**未以真 AI 實測概念名之實效**（待使用端重跑評比） |
 | 2026-11-02 | 重整為自有套件佈局後全套（`npm test`，經 quiet-run 鎖） | 833 通過／0 失敗／14 待決（全為 `api-extract-bench-ai` 十四角色之真 AI 案，`WK_LIVE_AI=1` 才執行；真實網路亦預設關） |
 | 2026-11-02 | 發布面守門之變異證據（`unit-extract-package` ②、`unit-extract-bench` 用法案） | 五種變異皆被抓：`.npmignore` 列 `sgud`、`.gitignore` 加 `sgud`、`.gitignore` 去 `CLAUDE*.md`、`g.mjs` 之 `// =>` 與 README 不同步、`cli.mjs` 用法字串還原；還原後全綠 |
@@ -35,6 +36,7 @@
 | 狀態為真理、投影、四態分流、高水位、熔斷、先記後寫 | 落地 | EXT-01～05、EXT-25／26；`unit-core-state`、`unit-extract-files`、`unit-extract-stage` |
 | 待審裁決（pending；`tries`／`es9Tries`、逾次改登錄筆記層待判） | 落地 | EXT-10、EXT-27；`unit-extract-workflow`、`unit-extract-stage` |
 | 重審、撤出處／恢復、關聯變更之影響 ES10（`recheck.relationImpact` 預設關） | 落地 | EXT-14～21、STD-18；`unit-extract-lineage` |
+| 已見衝突之維護回頭檢查（ES5；維護 ③′之二；`es5ReopenOf`、`env.rs4Held`、report `conflictReopened`、INFO 一行）：處置結構被拆解、取代、撤回拿掉而無去向、未交 RS4 者每輪自 `seenConflicts` 移出（無 AI、不升版），由重審項重呈，逾次交 RS4（有界） | 落地（2026-11-06；使用端 Gitea #88）；限制：類別層核心無重審項、待下批觸及兩端才重呈；首見基準之核心基準後同輪即受檢；未以正式庫實跑 | STD-08 之 ES5 衝突去向（`rulebook_standards_extract.md`）、EXT-18；`unit-extract-lineage` |
 | 本質專步 ES6 v2 | 落地 | EXT-22；`unit-extract-stage` |
 | ES9 新進覆核（`supportCheck.enabled`，預設關）：骨架 `runSupportGate`、ES7 修訂路徑、原則 3 | 落地 | STD-12；`unit-extract-support`、`unit-extract-workflow` |
 | 四專步：爭議覆核 ES14、出處支持存量 ES9、失撐 ES8、同義 ES11（皆 `perRun > 0` 開啟，預設關） | 落地（分頁、中止、材料、席位、計次、豁免、雜湊含素材） | STD-15／12／23／21；`unit-extract-dispute`、`unit-extract-support`、`unit-extract-orphan`、`unit-extract-synonym` |

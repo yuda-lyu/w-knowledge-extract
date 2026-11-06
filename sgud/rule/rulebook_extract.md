@@ -45,8 +45,9 @@
   - **重設基準**(`stores/rebaseline`):逐 id 名單 `extract-rebaseline.json`，`requestRebaseline(dirs, at, ids, { by })` 指示下一輪以現值重設內容基準（大量格式變動而非內容修訂時；內容變更守門所指），維護段執行後只刪已處置之 id；`cancelRebaseline` 取消；`rebaselineIdsOf` 讀名單（壞檔回 [] 並經 `onError` 回報）；套用後 applied 全為 noop 之差量不升版。
   - 測試:`unit-extract-lineage`（重審項、入批、僅重審 pass、守門、重設基準）。
 - **EXT-18 維護與投影更新(無 AI;`stages/extractMaintain.maintainCores`／`stores/coreProjection.persistMechanical`)**:順序 停用判斷 → dirty 補做 → 維護 → 時間守門 → 選題(時間不足之輪仍做維護;停用輪全不做);逐主核心一次載入、至多一次寫入、逐核心 try/catch(WARN「提煉維護失敗[概念]」MUST_SEE)。投影更新:以現值(標題、分類、存活出處)重算證據並渲染,渲染雜湊不同、證據欄位(含 trace)變動或 md 不在 → 寫入(rev+1、version 不變;新渲染雜湊寫回狀態後才寫 md,手改偵測以舊雜湊＋本次者比對)——一併消除「生產起草者看到舊證據等級」。
-  - 測試:`unit-extract-lineage`（時間不足仍維護、投影更新後一般落盤不誤報手改、兩輪無變化 rev 不變）。
-- **EXT-19 可觀察性**:選題當下 INFO「提煉選題：概念×待提煉（新）…；積壓 N 篇；重審待處理：內容變更 a 篇、新衝突 b 條；撤出處…」;執行摘要(`extractObject.mjs`)附「、重審 N 篇」「、撤出處 N 篇」「、恢復 N 篇」(>0 才附);run.json 之提煉 detail 增 baselined／withdrawn／restored／dangling／projected／maintainFailed／recheckChanged／recheckConflict／notesRechecked／recheckPasses／recheckExhausted／recheckBlocked／rebaselined／mdMissing
+  - 維護內之 seenConflicts 處置兩步(皆記帳欄位、不升版、無 AI):③′衝突已不成立(帳驅動,EXT-21)、③′之二已見衝突之處置結構已消失(ES5 回頭檢查;判定 `standards/conflictDisposition.es5ReopenOf`,待判登錄 `env.rs4Held` 由 `stageExtract` 維護前讀入一次;條文、判準、站點與限制見 `rulebook_standards_extract.md` 之 ES5 衝突去向);report detail `conflictReopened`。
+  - 測試:`unit-extract-lineage`（時間不足仍維護、投影更新後一般落盤不誤報手改、兩輪無變化 rev 不變;ES5 回頭檢查見 `rulebook_standards_extract.md`）。
+- **EXT-19 可觀察性**:選題當下 INFO「提煉選題：概念×待提煉（新）…；積壓 N 篇；重審待處理：內容變更 a 篇、新衝突 b 條；撤出處…」;執行摘要(`extractObject.mjs`)附「、重審 N 篇」「、撤出處 N 篇」「、恢復 N 篇」(>0 才附);run.json 之提煉 detail 增 baselined／withdrawn／restored／dangling／projected／maintainFailed／recheckChanged／recheckConflict／conflictReopened／notesRechecked／recheckPasses／recheckExhausted／recheckBlocked／rebaselined／mdMissing
   - 測試:`unit-extract-object`（執行摘要「、重審 N 篇」「、撤出處 N 篇」「、恢復 N 篇」）、`unit-flow-extract`（F3／F4 端對端摘要）、`unit-extract-log-contract`、`unit-extract-lineage`。
 - **EXT-20 略過理由可附說明**:`stores/coreDelta` 之 `coverageOf` 之略過理由以 `skipReasonOf` 正規化——合法理由本身,或「合法理由＋分隔符(空白、冒號、逗號、分號、括號、破折號、頓號)＋說明」取開頭之理由;無分隔符、非合法開頭、一般批之裸「非對立」仍為 badSkipped(保留原文)。提示詞不改(golden 不變)。
   - 為何:實測起草時模型常在合法理由後附說明(例如依【關聯脈絡】說明非對立),逐字比對會把它們當未涵蓋。
