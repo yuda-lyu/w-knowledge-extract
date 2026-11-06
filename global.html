@@ -2334,7 +2334,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line246">line 246</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line250">line 250</a>
     </li></ul></dd>
     
 
@@ -7037,7 +7037,7 @@ rules → rules(資料成員;建構時套用一次,收內建規則表之複本):
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line190">line 190</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line194">line 194</a>
     </li></ul></dd>
     
 
@@ -11532,7 +11532,7 @@ panel＝以判定小組判定(全部受檢項皆缺票或同一供應者＝專�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line211">line 211</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line215">line 215</a>
     </li></ul></dd>
     
 
@@ -35900,7 +35900,7 @@ await store.save(coreId, state, { expectRev: null })</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line369">line 369</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line373">line 373</a>
     </li></ul></dd>
     
 
@@ -49882,7 +49882,7 @@ onEvent?:(ev)=&gt;void(調度事件;明給才轉交工作流入口,見檔頭) }<
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line284">line 284</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line288">line 288</a>
     </li></ul></dd>
     
 
@@ -63543,7 +63543,7 @@ await markExtracted(stores.notes, notesById, ['n-a', 'n-b'], '2026-09-01T00:00:0
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line308">line 308</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line312">line 312</a>
     </li></ul></dd>
     
 
@@ -77514,7 +77514,7 @@ console.log(u.length, u[0].sources, u[0]._via)
 
     
 
-    <h4 class="name" id="proposeOpsText"><span class="type-signature"></span>proposeOpsText<span class="signature">(kinds)</span><span class="type-signature"> &rarr; {String}</span></h4>
+    <h4 class="name" id="proposeOpsText"><span class="type-signature"></span>proposeOpsText<span class="signature">(kinds, limitPhrases<span class="signature-attributes">opt</span>)</span><span class="type-signature"> &rarr; {String}</span></h4>
 
     
 
@@ -77530,7 +77530,7 @@ console.log(u.length, u[0].sources, u[0]._via)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line157">line 157</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line158">line 158</a>
     </li></ul></dd>
     
 
@@ -77590,7 +77590,11 @@ console.log(u.length, u[0].sources, u[0]._via)
         <th>Type</th>
 
         
+        <th>Attributes</th>
+        
 
+        
+        <th>Default</th>
         
 
         <th class="last">Description</th>
@@ -77616,10 +77620,62 @@ console.log(u.length, u[0].sources, u[0]._via)
             </td>
 
             
+                <td class="attributes">
+                
 
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                </td>
             
 
             <td class="description last"><p>輸入主張種類</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>limitPhrases</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Array</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+                <td class="default">
+                
+                    <code>[]</code>
+                
+                </td>
+            
+
+            <td class="description last"><p>輸入弱證據參數之 conditions 須含之限制語(檢定標準 ES13 以字面判讀:證據判定之自承限制片語＋弱證據之說法;空陣列＝不列)</p></td>
         </tr>
 
     
@@ -89730,7 +89786,7 @@ console.log(rb.restored, rb.errors)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line320">line 320</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line324">line 324</a>
     </li></ul></dd>
     
 
@@ -89915,7 +89971,7 @@ console.log(rb.restored, rb.errors)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line219">line 219</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line223">line 223</a>
     </li></ul></dd>
     
 
@@ -90073,7 +90129,7 @@ console.log(rb.restored, rb.errors)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line334">line 334</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line338">line 338</a>
     </li></ul></dd>
     
 
@@ -90261,7 +90317,7 @@ console.log(rb.restored, rb.errors)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line233">line 233</a>
+        <a href="domain_extractDomain.mjs.html">domain/extractDomain.mjs</a>, <a href="domain_extractDomain.mjs.html#line237">line 237</a>
     </li></ul></dd>
     
 
@@ -111876,7 +111932,7 @@ writeRegenIntents(dirs, { cores: { [coreId]: intent } })</code></pre>
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Fri Nov 06 2026 22:03:45 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sat Nov 07 2026 00:03:51 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>

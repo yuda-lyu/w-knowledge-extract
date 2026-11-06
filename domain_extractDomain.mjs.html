@@ -199,9 +199,13 @@ export function defaultRules(vocab, limits) {
  * 核心差量之格式說明(起草用;契約段)
  *
  * @param {Array} kinds 輸入主張種類
+ * @param {Array} [limitPhrases=[]] 輸入弱證據參數之 conditions 須含之限制語(檢定標準 ES13 以字面判讀:證據判定之自承限制片語＋弱證據之說法;空陣列＝不列)
  * @returns {String} 回傳操作說明文字
  */
-function proposeOpsText(kinds) {
+function proposeOpsText(kinds, limitPhrases = []) {
+    // 【程式以字面判讀之要求須以同樣之字面寫在這裡】模型只照提示詞之字面做:納入閘(dispute_add 整條須有本批出處 sources)與檢定標準 ES13(弱證據參數之 conditions
+    //   須含限制語之字面)若未寫出,語意正確之回覆仍被拒收或不採(使用端之正式輪次已見同型拒收)。改此兩行＝改題目識別:須先以正式席位 A/B 驗證
+    const lim = limitPhrases.length ? `；證據僅單一來源或未經獨立驗證者，conditions 須含「${limitPhrases.join('」「')}」之一（程式以字面判讀，同義改寫不算）` : ''
     return [
         '【操作】（每條為一個 JSON 物件；出處一律寫本批代號，如 "sources":["N1","N3"]；既有條目以〔〕內編號指稱，如 "id":"C12"；同一差量內之新條目以 "ref" 命名、他處以 "@ref名" 引用）',
         `- add 新增主張（標注依規則表之主張種類：critique 必填；principle／rule 之 pros、cons 必填；temporal 之 period、pitfall 之 conditions 必填；出處沒有者寫「${ANNOTATION_UNSTATED}」）：{"op":"add","ref":"a","kind":"${kinds.join('|')}","facet":"面向（選填）","text":"…","conditions":["…"],"pros":["…"],"cons":["${ANNOTATION_UNSTATED}"],"period":"適用期間","critique":"銳評","basis":"證據性質","sources":["N1"]}`,
@@ -209,11 +213,11 @@ function proposeOpsText(kinds) {
         '- revise 修正既有主張或參數之文字：{"op":"revise","id":"C3","fields":{"text":"…"},"reason":"…","sources":["N2"]}',
         '- supersede 新證據使舊條目過時或被推翻：{"op":"supersede","id":"C3","by":"@a 或 C9（選填）","reason":"…","validPeriod":"舊觀點成立期間","sources":["N2"]}',
         `- retract 撤回既有條目：{"op":"retract","id":"C5","reason":"${RETRACT_REASONS.join('|')}","into":"C2（理由為「重複」時必填）"}`,
-        `- dispute_add 結論相反者立爭議（每方須有本批出處或所引既有主張；任兩方之出處不可皆只有同一篇——同一研究自身之正反不成爭議；引述他人研究之一方標 "basis":"${REPORTED_BASIS[0]}" 者除外）：{"op":"dispute_add","ref":"d","question":"…","sides":[{"position":"…","conditions":["…"],"claims":["C1"]},{"position":"…","claims":["@a"],"sources":["N3"],"basis":"證據性質（選填；引述他人研究者寫「${REPORTED_BASIS[0]}」）"}]}`,
+        `- dispute_add 結論相反者立爭議（每方須有本批出處或所引主張，且至少一方要寫本批出處 sources——各方只引主張（含同一差量之新主張 @名）而整條無 sources 者會被拒收；任兩方之出處不可皆只有同一篇——同一研究自身之正反不成爭議；引述他人研究之一方標 "basis":"${REPORTED_BASIS[0]}" 者除外）：{"op":"dispute_add","ref":"d","question":"…","sides":[{"position":"…","conditions":["…"],"claims":["C1"]},{"position":"…","claims":["@a"],"sources":["N3"],"basis":"證據性質（選填；引述他人研究者寫「${REPORTED_BASIS[0]}」）"}]}`,
         '- dispute_update 爭議之補充或解決：{"op":"dispute_update","id":"D2","note":"…","status":"open|resolved（選填）","sides_add":[…],"sources":["N4"]}',
         '- contest 把既有主張列入某爭議之一方（side 即狀態摘要中該方之 side k；新立之爭議依 sides 之順序自 0 起）：{"op":"contest","id":"C3","dispute":"D2 或 @d","side":0,"reason":"…","sources":["N1"]}',
         `- dispute_dissolve 拆解非對立之爭議（依規則表之爭議規則與「非對立之界線」判定；內容與出處全留，只拿掉對立標籤；reason 須寫明兩方各回答什麼問題、或為何可同時成立——標有「終審存疑」者請獨立判斷，不可只引述存疑；只有立場文字之方由程式轉為主張，kinds[k] 為 side k 轉出主張之種類、annotations[k] 為其標注（依種類填必填者，同新增主張；條件與該方原有之條件合併），引主張之方兩者皆填 null）：{"op":"dispute_dissolve","id":"D2","reason":"…","kinds":[null,"${kinds[1] || kinds[0]}"],"annotations":[null,{"critique":"…","pros":["…"],"cons":["${ANNOTATION_UNSTATED}"]}]}`,
-        '- param_add 關鍵參數：{"op":"param_add","name":"…","value":"值或區間","conditions":"…","period":"…","snapshot":false,"claim":"C3 或 @a（選填）","sources":["N2"]}',
+        `- param_add 關鍵參數（conditions 寫適用條件${lim}）：{"op":"param_add","name":"…","value":"值或區間","conditions":"…","period":"…","snapshot":false,"claim":"C3 或 @a（選填）","sources":["N2"]}`,
         '- question_add／question_resolve 待解問題：{"op":"question_add","text":"…","sources":["N1"]}、{"op":"question_resolve","id":"Q1","resolution":"…","sources":["N2"]}',
         '- essence 本質（claims 只列所依之主張，不列爭議）：{"op":"essence","text":"…","claims":["C1","@a"],"reason":"…"}',
         '- related_add 相關概念：{"op":"related_add","concepts":["…"]}',
@@ -438,6 +442,9 @@ export function createExtractDomain(opt = {}) {
     const lowest = levels[levels.length - 1]
     const scopeWord = (scope) => (scope === 'category' ? '類別' : '概念')
     const absolutes = (isarr(vocab.absolutePhrases) ? vocab.absolutePhrases : []).map(String).filter(Boolean)
+    // 弱證據參數之 conditions 須含之限制語＝檢定標準 ES13 字面判讀之全集(weakEvidenceProblem):證據判定之自承限制片語〔vocab.selfLimitPhrases;makeEvidence 同樣去空白、去空、取其一〕
+    //   ＋弱證據之說法〔guide.extract.weakEvidence〕;起草提示詞之 param_add 說明列出(隨詞彙而變,不寫死;去重)
+    const limitPhrases = [...new Set([...(isarr(vocab.selfLimitPhrases) ? vocab.selfLimitPhrases : []), g.weakEvidence].map((x) => String(x ?? '').trim()).filter(Boolean))]
 
     // 推論類之證據性質(vocab.inferenceBasis;出處支持之覆核 ES9／ES8 以此分判準,見 buildSupportCheckPrompt)
     const inferWords = (isarr(vocab.inferenceBasis) ? vocab.inferenceBasis : []).filter(Boolean)
@@ -636,7 +643,7 @@ export function createExtractDomain(opt = {}) {
 【規則】（依優先序；衝突時以前者為準）
 ${ctx?.rulesText || ''}
 
-${proposeOpsText(claimKinds)}
+${proposeOpsText(claimKinds, limitPhrases)}
 
 【本批筆記之去向】每一篇都要交代：被某操作引為出處（支持既有條目者一律 confirm），或列入 skipped 並寫理由（${SKIP_REASONS.join('｜')}）。${hasR ? `
 
@@ -1151,7 +1158,7 @@ export default createExtractDomain
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Fri Nov 06 2026 22:03:45 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sat Nov 07 2026 00:03:51 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
