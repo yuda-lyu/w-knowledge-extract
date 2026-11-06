@@ -1,12 +1,12 @@
 {
   "v": 1,
-  "note": "工作流類(終審 wf-accept)之通用題組:每案給修訂後之操作(帶 _oid;送終審時去程式欄位,序即 i)、意見與補丁紀錄、合成之核心狀態與材料;應然 expect.drop＝該剔除之操作(經正式之剔除閘——建設性操作只准以「重複」或引用高嚴重度之離題／捏造意見剔除;破壞性操作之剔除不受閘)、expect.keep＝該保留者(保留、fix、存疑皆算;含意見不成立或只是中嚴重度而不該剔者、爭議類操作之存疑)、expect.irreversibleListed＝不可逆操作(取代、撤回、合併、拆解、拆分)皆須明列有效裁決,未列即不套用而存待審。同一不可逆操作在待審裁決題組亦有對應案,兩處之應然一致。各案情境各自獨立,材料皆為合成之中立情境。",
+  "note": "工作流類(終審 wf-accept)之通用題組:每案給修訂後之操作(帶 _oid;送終審時去程式欄位,序即 i)、意見與補丁紀錄、合成之核心狀態與材料;應然 expect.drop＝該剔除之操作(經正式之剔除閘——建設性操作只准以「重複」或引用高嚴重度之離題／捏造意見剔除;破壞性操作之剔除不受閘)、expect.keep＝該保留者(保留、fix、存疑皆算;含意見不成立或只是中嚴重度而不該剔者、爭議類操作之存疑)、expect.irreversibleListed＝不可逆操作(取代、撤回、合併、拆解、拆分)皆須明列有效裁決,未列即不套用而存待審。同一不可逆操作在待審裁決題組亦有對應案,兩處之應然一致。各案情境各自獨立,材料皆為合成之中立情境。各案於 input.state 給 concept（概念名；工作流類之正式提示詞以之判「離題」：須涵蓋該案應收錄、應接受、應判為捏造或重複等之材料與狀態內既有條目，不涵蓋應判離題者；未給即預設為「題組」，與合成材料無關，準備期拒收）。",
   "cases": [
     {
       "id": "c01",
       "holdout": false,
       "input": {
-        "state": { "claims": [{ "id": "C1", "kind": "rule", "text": "社區圖書館週末開放時借閱量較平日多", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n0"] }] },
+        "state": { "concept": "圖書館週末開放", "claims": [{ "id": "C1", "kind": "rule", "text": "社區圖書館週末開放時借閱量較平日多", "conditions": ["某社區圖書館"], "critique": "僅單一館之觀察", "pros": ["服務時段較長"], "cons": ["出處未載"], "sources": ["n0"] }] },
         "sources": [
           { "id": "n0", "title": "圖書館平日與週末", "text": "某社區圖書館之統計顯示，週末之借閱量較平日多。" },
           { "id": "n1", "title": "社區圖書館週末開放", "text": "某社區圖書館自去年起週末開放，週末之借閱量約占全週兩成；館方表示，若未增派人力，閉館後之整理時間不足。" }
@@ -27,6 +27,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "圖書館週末開放",
           "claims": [
             { "id": "C1", "kind": "pitfall", "text": "週末開放若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] },
             { "id": "C2", "kind": "pitfall", "text": "未增派人力而週末開放時，閉館整理之時間會不夠", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] }
@@ -45,7 +46,7 @@
       "id": "c03",
       "holdout": false,
       "input": {
-        "state": { "claims": [{ "id": "C1", "kind": "rule", "text": "盆栽每週澆水兩次即足夠", "conditions": ["某園藝社之經驗"], "critique": "僅單一社團之經驗", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n0"] }] },
+        "state": { "concept": "盆栽澆水", "claims": [{ "id": "C1", "kind": "rule", "text": "盆栽每週澆水兩次即足夠", "conditions": ["某園藝社之經驗"], "critique": "僅單一社團之經驗", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n0"] }] },
         "sources": [
           { "id": "n0", "title": "盆栽澆水頻率", "text": "某園藝社之經驗指出，盆栽每週澆水兩次即足夠。" },
           { "id": "n1", "title": "梅雨季之澆水", "text": "某園藝社修正其說法：盆栽每週澆水兩次僅適用於一般天氣；梅雨季土壤不易乾燥，澆水頻率應再減少。" }
@@ -63,6 +64,7 @@
       "id": "c04",
       "holdout": false,
       "input": {
+        "state": { "concept": "吸塵器濾網保養" },
         "sources": [{ "id": "n1", "title": "吸塵器濾網", "text": "某維修行指出，吸塵器濾網阻塞會使吸力下降；濾網宜每月以清水沖洗，完全晾乾後再裝回。" }],
         "batch": ["n1"],
         "ops": [
@@ -80,6 +82,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "陶藝上釉",
           "claims": [
             { "id": "C1", "kind": "rule", "text": "素燒後之坯體上釉較易附著", "conditions": ["某陶藝工坊之說明"], "critique": "僅單一工坊之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
             { "id": "C2", "kind": "pitfall", "text": "釉層過厚會於燒成時流釉", "conditions": ["釉層過厚時"], "critique": "僅另一工坊之說明", "sources": ["n2"] }
@@ -101,6 +104,7 @@
       "id": "c06",
       "holdout": false,
       "input": {
+        "state": { "concept": "路線班距安排" },
         "sources": [{ "id": "n1", "title": "路線班距", "text": "某路線平日尖峰班距較短、離峰班距較長；週末全日採離峰班距。" }],
         "batch": ["n1"],
         "ops": [
@@ -116,6 +120,7 @@
       "id": "c07",
       "holdout": false,
       "input": {
+        "state": { "concept": "貓砂選擇" },
         "sources": [
           { "id": "n1", "title": "礦砂貓砂", "text": "某寵物店表示，礦砂貓砂吸水結塊快，清理糞塊較俐落。" },
           { "id": "n2", "title": "豆腐砂", "text": "另一間寵物店表示，豆腐砂可沖入馬桶，處理較方便。" }
@@ -133,7 +138,7 @@
       "id": "c08",
       "holdout": false,
       "input": {
-        "state": { "claims": [{ "id": "C1", "kind": "rule", "text": "炒飯宜使用隔夜飯，炒麵須先將麵條煮至八分熟", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }] },
+        "state": { "concept": "炒飯與炒麵技巧", "claims": [{ "id": "C1", "kind": "rule", "text": "炒飯宜使用隔夜飯，炒麵須先將麵條煮至八分熟", "conditions": ["某烹飪教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }] },
         "sources": [{ "id": "n1", "title": "炒飯與炒麵", "text": "某烹飪教室指出，炒飯宜使用隔夜飯，水分較少較易炒散；炒麵則須先將麵條煮至八分熟。" }],
         "batch": [],
         "ops": [
@@ -150,6 +155,7 @@
       "id": "c09",
       "holdout": false,
       "input": {
+        "state": { "concept": "游泳池管理規定" },
         "sources": [
           { "id": "n1", "title": "泳池開放時段", "text": "某游泳池平日傍晚開放給一般民眾，週末全日開放。" },
           { "id": "n2", "title": "泳池救生員配置", "text": "同一游泳池規定，開放時段內至少須有兩位救生員在場。" }
@@ -168,6 +174,7 @@
       "id": "c10",
       "holdout": false,
       "input": {
+        "state": { "concept": "登山杖使用注意" },
         "sources": [
           { "id": "n1", "title": "登山杖使用", "text": "某登山社建議，下坡時使用登山杖可減輕膝蓋負擔。" },
           { "id": "n2", "title": "登山杖攜帶", "text": "另一登山社提醒，狹窄處須將登山杖收妥，以免勾到他人。" }
@@ -188,6 +195,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "圖書館週末開放",
           "claims": [
             { "id": "C1", "kind": "pitfall", "text": "週末開放若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] },
             { "id": "C2", "kind": "pitfall", "text": "未增派人力而週末開放時，閉館整理之時間會不夠", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] }
@@ -207,6 +215,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "紙類回收規定",
           "claims": [
             { "id": "C1", "kind": "temporal", "text": "社區紙類回收前須先拆除釘書針", "period": "舊規定", "critique": "僅單一社區之規定", "sources": ["n0"] },
             { "id": "C2", "kind": "temporal", "text": "社區紙類回收前不必拆除釘書針", "period": "現行規定", "critique": "僅單一社區之規定", "sources": ["n1"] }
@@ -229,6 +238,7 @@
       "id": "ch1",
       "holdout": true,
       "input": {
+        "state": { "concept": "幼兒園戶外活動" },
         "sources": [{ "id": "n1", "title": "戶外活動前準備", "text": "某幼兒園規定戶外活動前先塗抹防曬並補充水分；活動後洗手再進教室。" }],
         "batch": ["n1"],
         "ops": [
@@ -246,6 +256,7 @@
       "holdout": true,
       "input": {
         "state": {
+          "concept": "手語練習",
           "claims": [
             { "id": "C1", "kind": "rule", "text": "每週固定練習較易記住手語手勢", "conditions": ["某手語班之觀察"], "critique": "僅單一班級之觀察", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
             { "id": "C2", "kind": "pitfall", "text": "只看影片自學，容易養成錯誤之手勢", "conditions": ["只看影片自學時"], "critique": "僅單一班級之觀察", "sources": ["n1"] }
@@ -268,6 +279,7 @@
       "id": "ch3",
       "holdout": true,
       "input": {
+        "state": { "concept": "露營營地選擇" },
         "sources": [{ "id": "n1", "title": "營地選擇", "text": "某露營協會建議，營地宜選在地勢較高處以利排水；避開乾涸河床，以防突發之水流。" }],
         "batch": ["n1"],
         "ops": [
@@ -284,6 +296,7 @@
       "holdout": true,
       "input": {
         "state": {
+          "concept": "縫紉機穿線",
           "claims": [
             { "id": "C1", "kind": "rule", "text": "縫紉機上線穿錯會造成斷線", "conditions": ["某縫紉教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
             { "id": "C2", "kind": "rule", "text": "縫紉機穿線不正確，容易使線斷裂", "conditions": ["某縫紉教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }

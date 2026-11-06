@@ -29,7 +29,8 @@
 // 【分頁】ES 四角色依 esCases(--batch 可改每頁案數;失撐找支持恆一案一頁);修訂每頁 10 案(出處依頁內首次出現序去重標號,同正式);
 //   提議與工作流類一案一頁。同頁之案須同一份詞彙(核心之規則):自帶詞彙(input.vocab)不同之案分頁(抓取套件之 paginateByVocab)。
 // 【題組】內建通用題組 bench/cases/<角色 id>-generic.json(檔名依角色 id 推得;領域中立、合成材料、無外部連結);support-check／orphan-check／
-//   dispute-check／synonym-check 與檢定標準 ES9／ES8／ES14／ES11 之逐案題組同形(可以 --cases 原樣收)。
+//   dispute-check／synonym-check 與檢定標準 ES9／ES8／ES14／ES11 之逐案題組同形(可以 --cases 原樣收)。工作流類八角色(wf-*)之案須於 input.state 給
+//   concept(概念名;提示詞以之判「離題」,見【案】之【概念名】),缺、為空或為預設「題組」於準備期拒收;其餘角色不要求。
 // 【結構合規】工作流類第二批(wf-draft、wf-revise、wf-consolidate、wf-essence)之謂詞只驗格式、涵蓋與程式可判之性質(引用、去向、套用、不變式、
 //   長度、紮根),不驗「抓到該抓之要點」——評比表之「角色」欄標「結構合規」(WF_STRUCTURAL)。
 // 【命令列】runExtractBenchCli:--role <角色 id|all>(預設 all:依序十四角色)、--lang <BCP 47 語言代碼>(本套件之參數,全部角色共用)加核心之全部參數;
@@ -860,10 +861,14 @@ const SYNONYM_PROPOSE_DEF = {
 
 // ════════════════ 工作流類(wf-*;3+3 之各棒與待審裁決) ════════════════
 //
-// 【案】input:{ state?(合成核心狀態之描述;esCases 之 coreStateOf), sources:[{ id, title, text }](全部材料:本批與狀態所引之筆記), batch?:[出處 id](本批;
-//   依序為 N1…), …各角色之欄 };expect:{ 謂詞:值 }(只列要驗之謂詞;依角色之謂詞序取首個不成立者為類別)。
+// 【案】input:{ state:{ concept(必給;見【概念名】), …合成核心狀態之描述;esCases 之 coreStateOf }, sources:[{ id, title, text }](全部材料:本批與狀態所引之筆記),
+//   batch?:[出處 id](本批;依序為 N1…), …各角色之欄 };expect:{ 謂詞:值 }(只列要驗之謂詞;依角色之謂詞序取首個不成立者為類別)。
+// 【概念名】input.state.concept:八個 wf 角色之正式提示詞皆含規則 1「只收與本概念直接相關之知識；離題之筆記列入 skipped」(審計之「離題」意見亦然),「離題」以
+//   概念名為準。故每案須自給概念名,須涵蓋該案應收錄、應接受、應判為捏造／重複／出處錯誤等之材料與操作及狀態內既有條目,不涵蓋應判離題者(中性日常主題,
+//   建議 4～10 字)。未給時 coreStateOf 預設為 ES_CASE_CONCEPT(「題組」)——與合成材料全無關係,模型依規則 1 全判離題,得分失真;故準備期守門
+//   (wfInputProblems → wfConceptProblems)拒收缺、為空或明給預設值之案。非 wf 角色之提示詞無離題規則,不檢。
 // 【材料】本批之摘要＝「### 代號 標題」＋內文(合成材料;正式為筆記之摘要);出處之內容(檢定標準 ES2／ES16 之材料)＝標題＋內文;核心之概念名取狀態
-//   (預設 ES_CASE_CONCEPT)。規則表＝正式之 rulesTextOf;守門與納入閘同正式(gateOps;ref 別名於守門後改寫)。
+//   (input.state.concept)。規則表＝正式之 rulesTextOf;守門與納入閘同正式(gateOps;ref 別名於守門後改寫)。
 
 /** 工作流類之無回覆欄位 */
 const WF_BLANK = Object.freeze({ replied: '', why: '' })
@@ -895,7 +900,21 @@ function wfCtxOf(inp, domain, o = {}) {
 }
 
 /**
- * 工作流類之案之共通檢核(材料、本批、狀態之描述;角色之欄另驗)
+ * 工作流類之案須自給概念名(input.state.concept)之檢核:八個 wf 角色之正式提示詞皆含規則 1「只收與本概念直接相關之知識；離題之筆記列入 skipped」（審計之
+ *   「離題」意見亦然），「離題」以概念名為準；未給時 coreStateOf 預設為 ES_CASE_CONCEPT（「題組」），而題組之材料為與之無關之合成情境，模型依規則 1
+ *   全判離題——題組與正式提示詞衝突，得分不反映模型能力，且準備期不報（付費跑完才以低分現形）。故案未給、為空（含全空白）或明給預設值皆回報問題
+ *
+ * @param {Object} state 輸入案之 input.state(可為 undefined)
+ * @returns {Array} 回傳問題說明陣列
+ */
+function wfConceptProblems(state) {
+    const concept = textValueOf(state?.concept)
+    if (concept && concept !== ES_CASE_CONCEPT) return []
+    return [`input.state.concept 須給非空且非預設「${ES_CASE_CONCEPT}」之概念名（工作流類之提示詞以概念名判「離題」：涵蓋本案應收錄之材料、不涵蓋應判離題者；未給即預設為「${ES_CASE_CONCEPT}」，與合成材料無關，模型依規則 1 會全判離題）`]
+}
+
+/**
+ * 工作流類之案之共通檢核(材料、本批、狀態之描述、概念名;角色之欄另驗)
  *
  * @param {Object} c 輸入案
  * @param {Object} o 輸入 { keys:Array(角色之 input 欄), batch:Boolean(本批須至少一篇) }
@@ -908,7 +927,10 @@ function wfInputProblems(c, o) {
     const extra = unknownKeysProblem(inp, ['state', 'sources', 'batch', 'vocab', ...o.keys], 'input')
     if (extra) p.push(extra)
     if (inp.state !== undefined && !isobj(inp.state)) p.push('input.state 須為物件（合成核心狀態之描述；esCases 之 coreStateOf）')
-    else p.push(...coreStateOf(inp.state).problems.map((x) => `input.state ${x}`))
+    else {
+        p.push(...coreStateOf(inp.state).problems.map((x) => `input.state ${x}`))
+        p.push(...wfConceptProblems(inp.state))
+    }
     const srcs = isarr(inp.sources) ? inp.sources : null
     if (!srcs) p.push('input.sources 須為陣列 [{ id, title, text }]（全部材料）')
     else {
@@ -1044,7 +1066,7 @@ function wfRoleDef(d) {
             caseColumns: [{ name: '所驗謂詞', key: 'preds', md: true }],
             runColumns: [{ name: '回覆', key: 'replied' }, { name: '不成立之處', key: 'why' }],
         },
-        cli: { casesHelp: `題組檔({ input:{ state?, sources, batch?, ${d.keys.join(', ')} }, expect:{ ${d.order.join('?, ')}? } });未給＝內建通用題組(src/bench/cases/${d.id}-generic.json)` },
+        cli: { casesHelp: `題組檔({ input:{ state:{ concept, … }, sources, batch?, ${d.keys.join(', ')} }, expect:{ ${d.order.join('?, ')}? } });每案須給 input.state.concept（概念名：提示詞以之判「離題」，須涵蓋本案應收錄之材料、不涵蓋應判離題者，建議 4～10 字之中性日常主題；缺、為空或為預設「${ES_CASE_CONCEPT}」於準備期拒收）；未給＝內建通用題組(src/bench/cases/${d.id}-generic.json)` },
     }
 }
 
@@ -1699,9 +1721,9 @@ function langOptOf(opt, runner) {
  * @param {String} roleId 輸入角色 id
  * @param {Object} opt 輸入核心 runBench 之設定物件(models、cases、runs、aiAdapter｜adapterOf(調度層須具工作流入口 getWkf／seatSpec)、vocab｜domain、
  *   domainOf、roleOpt、timeoutMs、concurrency、stopAfterFails、onProgress、clock、timeZone)＋lang(BCP 47 語言代碼;預設同正式);roleOpt 之鍵為 batch
- *   (每頁案數;失撐找支持、同義提議與工作流類不收)
+ *   (每頁案數;失撐找支持、同義提議與工作流類不收)。工作流類八角色(wf-*)之 cases 每案須於 input.state.concept 給概念名(提示詞以之判「離題」;見檔頭【案】之【概念名】)
  * @returns {Promise} 回傳 Promise，resolve 回傳核心 runBench 之結果 { meta, models }
- * @throws {Error} 角色 id 不認得、lang 不合,或核心於任何呼叫之前之檢核(題組、詞彙、分頁、提示詞)不合時拋出
+ * @throws {Error} 角色 id 不認得、lang 不合,或核心於任何呼叫之前之檢核(題組〔含工作流類之案缺 input.state.concept 或為預設「題組」〕、詞彙、分頁、提示詞)不合時拋出
  * @example
  * need test in nodejs.
  *
@@ -1716,9 +1738,9 @@ export async function runExtractBench(roleId, opt = {}) {
  * 評分之準備(不呼叫 AI):驗題組、建 domain、分頁、組各頁提示詞並算指紋(核心之 planBench)
  *
  * @param {String} roleId 輸入角色 id
- * @param {Object} [opt={}] 輸入設定物件(cases、vocab、domain、domainOf、roleOpt、lang)
+ * @param {Object} [opt={}] 輸入設定物件(cases、vocab、domain、domainOf、roleOpt、lang);工作流類八角色(wf-*)之 cases 每案須於 input.state.concept 給概念名
  * @returns {Object} 回傳 { set, pages:[{ ids, prompt, base }], promptFp }
- * @throws {Error} 角色 id 不認得、lang 不合,或題組、詞彙、分頁、提示詞不合時拋出
+ * @throws {Error} 角色 id 不認得、lang 不合,或題組(含工作流類之案缺 input.state.concept、為空或為預設「題組」)、詞彙、分頁、提示詞不合時拋出
  * @example
  * console.log(planExtractBench('orphan-check').pages.length > 0)
  * // => true

@@ -1,4 +1,4 @@
-# 現況（w-knowledge-extract）— 2026-11-02
+# 現況（w-knowledge-extract）— 2026-11-06
 
 > 只記現況，不寫過程（過程在 `../exp/`）。接續工作先讀本檔；完成一項功能或結束一輪工作即更新。
 > **路徑基準**：原始碼在 `src/`，下文與分檔所列檔案路徑除已標 `src/`、`test/`、`toolg/` 者外皆相對 `src/`。
@@ -21,6 +21,7 @@
 
 | 日期 | 項 | 結果 |
 |---|---|---|
+| 2026-11-06 | 工作流類八角色題組自給概念名＋準備期守門（EXT-35）後全套（`npm test`，經 quiet-run 鎖） | 869 通過／0 失敗／14 待決（同上）；新增 `unit-bench-wf-concept` 36 案；變異：拿掉守門 → 16 案紅（八角色 × 守門 2 案），各刪三案之 `concept`（多行、單行、僅 `concept` 之 `state` 三種形狀）→ 6 案紅；還原後全綠。**未以真 AI 實測概念名之實效**（待使用端重跑評比） |
 | 2026-11-02 | 重整為自有套件佈局後全套（`npm test`，經 quiet-run 鎖） | 833 通過／0 失敗／14 待決（全為 `api-extract-bench-ai` 十四角色之真 AI 案，`WK_LIVE_AI=1` 才執行；真實網路亦預設關） |
 | 2026-11-02 | 發布面守門之變異證據（`unit-extract-package` ②、`unit-extract-bench` 用法案） | 五種變異皆被抓：`.npmignore` 列 `sgud`、`.gitignore` 加 `sgud`、`.gitignore` 去 `CLAUDE*.md`、`g.mjs` 之 `// =>` 與 README 不同步、`cli.mjs` 用法字串還原；還原後全綠 |
 | 2026-11-02 | 打包清單（`npm pack --dry-run --json`） | 296 檔：`src/` 84、`test/` 81（`test/tools/` 8）、`docs/` 99、`sgud/` 12、`toolg/` 6、`dist/` 2、根層 12；`CLAUDE*.md`、`tmp/`、`test/_tmp/`、`.npmignore` 皆 0 |
@@ -45,10 +46,11 @@
 | 發布面守門（不設 exports／files、無 `.npmignore`、打包清單、範例 `g.mjs` 離線可執行且 README 含全文） | 落地 | GEN-18；`unit-extract-package` ② |
 | 合併與爭議之一致性（merge 拒收、不變式）、回滾後之已知雜湊、續作之撤回理由 | 落地 | EXT-34；`unit-core-state`、`unit-extract-bench` s06、`unit-extract-failpaths` ②、`unit-extract-stage` |
 | 語言設定 `lang` | 落地 | GEN-20；`unit-extract-locale` |
+| 工作流類八角色（`wf-*`）評分題組每案於 `input.state.concept` 自給概念名（128 案）；準備期守門 `wfConceptProblems`（缺、為空、等於「題組」即拒，訊息含欄名）；判定類六角色不檢、不動 | 落地（2026-11-06；使用端 Gitea #87） | EXT-35（`rulebook_bench.md`）；`unit-bench-wf-concept`。**提示詞指紋已改**（修前→修後）：`wf-audit` 0ec11315fdf4f047→5d1dbd0074c4fd94、`wf-accept` 384fce44e0110aa1→9db0f8361da3025f、`wf-pending` 246de996c960d864→9042f5c3972a21e0、`wf-integrate` ce91e458a4247ed8→0cd78faa9f8a13c0、`wf-draft` 9d33ea64027780ac→86f153a73629b0f8、`wf-revise` 3d1bbe4388e418c7→3c52b8cff671460a、`wf-consolidate` 8b17191fd400378e→00cf462b3af1c891、`wf-essence` 05774ce18a608141→2e2507e862051fb4；舊指紋之歷史評比列不可與新列並比。判定類六角色指紋不變 |
 
 ## 已知缺口與待辦（依序）
 
-1. 免費 AI 能力評分之補跑：評比表 `模型評比.csv` 目前只有出處修訂、出處支持覆核、失撐找支持三角色之列；其餘角色與新免費池之席位待逐角色跑（須額度與使用者同意），結果併表後定席位與題組判準。
+1. 免費 AI 能力評分之補跑：評比表 `模型評比.csv` 目前只有出處修訂、出處支持覆核、失撐找支持三角色之列；其餘角色與新免費池之席位待逐角色跑（須額度與使用者同意），結果併表後定席位與題組判準。工作流類八角色之概念名（EXT-35）**尚未以真 AI 實測實效**（2026-11-06 本套件不呼叫 AI）：待以正式席位重跑八角色，若仍有「把應收材料判離題」或「把應判離題者收入」之失分，逐案調整該案概念名（寬窄取捨見 `rulebook_bench.md`）；餘失分若為 `kinds`／`dispute`／`grounded` 或審計「重複」之嚴重度，屬題組應然或模型能力，與概念名無關。
 2. 留待（記為已知限制，未改）：`standards/holdSettle` 仍取整包 env 且 `sweepStaleHolds → env.stateCache → maintainCores` 隱性耦合、專步排程未表驅動；`renderTwinRedirect` 維持 optional；stateDigest 待審段之不可逆清單缺「拆分」（提示詞變更須 A/B）；ES3 掃描欄位集未含理由類欄、受檢範圍兩處既有差異（`checkCore` 對隔離／失撐之參數整條跳過而 `coreFixOf` 照修；ES1 含已結案而 ES3 不含）；`@ref` 文字欄集（candidates 5／4 欄 vs `REF_FIELDS.texts` 9 欄）；recheck 之 createdAt 字串比較；`scriptBadOf` 四套件各一份與 `buildDeps` 摘要／關聯之同型（跨套件審計）。
 3. 3+3 五棒之差量題型評比（須使用者同意）；四專步與 ES9 新進之開啟（題組以正式席位逐案兩次全過＋同意）。
 4. 舊核心之重建（`regenCore`）、存量處置（`applyCoreStockFix`）皆須使用者同意；先改完驗完才處理舊資料。

@@ -1,12 +1,13 @@
 {
   "v": 1,
-  "note": "工作流類(待審裁決 wf-pending)之通用題組:每案給含待審(pendingReview)之合成核心狀態與材料;送審之操作＝正式之 pendingReviewOps(仍有效者,序即 i)。應然 expect.drop＝該剔除者(待審之剔除不設閘)、expect.keep＝該保留且過正式之定稿篩選者(保留而數字不見於出處、種類為 principle 而出處只有一份文件等未過篩選者,應然改為 drop)、expect.withheld＝不可逆而材料尚無法確定、不該在本次定案者(未列裁決即留待審;如出處載明決議或查證尚未完成之取代與拆解)。同一不可逆操作在終審題組亦有對應案,兩處之應然一致。各案情境各自獨立,材料皆為合成之中立情境。",
+  "note": "工作流類(待審裁決 wf-pending)之通用題組:每案給含待審(pendingReview)之合成核心狀態與材料;送審之操作＝正式之 pendingReviewOps(仍有效者,序即 i)。應然 expect.drop＝該剔除者(待審之剔除不設閘)、expect.keep＝該保留且過正式之定稿篩選者(保留而數字不見於出處、種類為 principle 而出處只有一份文件等未過篩選者,應然改為 drop)、expect.withheld＝不可逆而材料尚無法確定、不該在本次定案者(未列裁決即留待審;如出處載明決議或查證尚未完成之取代與拆解)。同一不可逆操作在終審題組亦有對應案,兩處之應然一致。各案情境各自獨立,材料皆為合成之中立情境。各案於 input.state 給 concept（概念名；工作流類之正式提示詞以之判「離題」：須涵蓋該案應收錄、應接受、應判為捏造或重複等之材料與狀態內既有條目，不涵蓋應判離題者；未給即預設為「題組」，與合成材料無關，準備期拒收）。",
   "cases": [
     {
       "id": "p01",
       "holdout": false,
       "input": {
         "state": {
+          "concept": "圖書館週末開放",
           "claims": [
             { "id": "C1", "kind": "pitfall", "text": "週末開放若未增派人力，閉館後之整理時間不足", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] },
             { "id": "C2", "kind": "pitfall", "text": "未增派人力而週末開放時，閉館整理之時間會不夠", "conditions": ["未增派人力時"], "critique": "僅館方之說明", "sources": ["n1"] }
@@ -27,6 +28,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "圖書館週末開放",
           "claims": [
             { "id": "C1", "kind": "rule", "text": "社區圖書館週末開放後，週末借閱量約占全週兩成", "conditions": ["某社區圖書館之統計"], "critique": "僅單一館之觀察", "pros": ["擴大服務時段"], "cons": ["出處未載"], "sources": ["n1"] },
             { "id": "C2", "kind": "rule", "text": "社區圖書館週末開放能增加借閱", "conditions": ["某社區圖書館之統計"], "critique": "僅單一館之觀察", "pros": ["擴大服務時段"], "cons": ["出處未載"], "sources": ["n1"] }
@@ -46,6 +48,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "盆栽澆水",
           "pendingReview": [
             { "op": { "op": "add", "kind": "rule", "text": "盆栽澆水後宜放在通風處，待表土稍乾", "conditions": ["某園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["避免表土長期潮濕"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" },
             { "op": { "op": "add", "kind": "rule", "text": "盆栽澆水後須放在通風處至少 3 小時", "conditions": ["某園藝社之建議"], "critique": "僅單一社團之建議", "pros": ["避免表土長期潮濕"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" }
@@ -62,6 +65,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "陶藝上釉",
           "claims": [
             { "id": "C1", "kind": "rule", "text": "素燒後之坯體上釉較易附著", "conditions": ["某陶藝工坊之說明"], "critique": "僅單一工坊之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
             { "id": "C2", "kind": "pitfall", "text": "釉層過厚會於燒成時流釉", "conditions": ["釉層過厚時"], "critique": "僅另一工坊之說明", "sources": ["n2"] }
@@ -84,6 +88,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "縫紉機穿線",
           "claims": [
             { "id": "C1", "kind": "rule", "text": "縫紉機上線穿錯會造成斷線", "conditions": ["某縫紉教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] },
             { "id": "C2", "kind": "rule", "text": "縫紉機穿線不正確，容易使線斷裂", "conditions": ["某縫紉教室之說明"], "critique": "僅單一教室之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }
@@ -103,6 +108,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "公車專用道成效",
           "pendingReview": [
             { "op": { "op": "add", "kind": "principle", "text": "公車專用道可縮短尖峰時段之行駛時間", "conditions": [], "critique": "僅單一路線之觀察", "pros": ["縮短行駛時間"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" },
             { "op": { "op": "add", "kind": "rule", "text": "某市一條公車路線設置專用道後，尖峰時段之行駛時間縮短", "conditions": ["某市一條路線"], "critique": "僅單一路線之觀察", "pros": ["縮短行駛時間"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" }
@@ -119,6 +125,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "社區資源回收日",
           "claims": [
             { "id": "C1", "kind": "temporal", "text": "某社區資源回收日為每週二", "period": "現行", "critique": "僅單一社區之公告", "sources": ["n0"] },
             { "id": "C2", "kind": "temporal", "text": "某社區資源回收日擬改為每週四", "period": "調整案通過後", "critique": "僅議程之記載", "sources": ["n1"] }
@@ -141,6 +148,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "樂器練習方法",
           "disputes": [{ "id": "D1", "question": "每日分段練習與一次長時間練習何者較易進步？", "sides": [{ "position": "每日分段練習較易進步", "sources": ["n1"] }, { "position": "週末一次長時間練習較易進步", "sources": ["n2"] }] }],
           "pendingReview": [
             { "op": { "op": "dispute_dissolve", "id": "D1", "reason": "兩方之觀察出自同一班學生，並不對立", "kinds": ["rule", "rule"], "annotations": [{ "critique": "僅單一教室之觀察", "pros": ["出處未載"], "cons": ["出處未載"] }, { "critique": "僅單一教室之觀察", "pros": ["出處未載"], "cons": ["出處未載"] }] }, "reason": "終審未明列裁決" }
@@ -160,6 +168,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "泳池水質檢測",
           "pendingReview": [
             { "op": { "op": "question_add", "text": "池水濁度偏高時應如何判定可恢復開放？", "sources": ["n1"] }, "reason": "終審失敗" },
             { "op": { "op": "add", "kind": "rule", "text": "池水每 6 小時須全部更換一次", "conditions": ["某游泳池之作法"], "critique": "僅單一泳池之作法", "pros": ["維持水質"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" }
@@ -176,6 +185,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "營地排水",
           "claims": [
             { "id": "C1", "kind": "rule", "text": "營地宜選在地勢較高處以利排水", "conditions": ["某露營協會之建議"], "critique": "僅單一協會之建議", "pros": ["利於排水"], "cons": ["出處未載"], "sources": ["n1"] },
             { "id": "C2", "kind": "rule", "text": "露營時營地宜選在地勢較高處，以利排水", "conditions": ["另一露營協會之建議"], "critique": "僅單一協會之建議", "pros": ["利於排水"], "cons": ["出處未載"], "sources": ["n2"] },
@@ -200,6 +210,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "觀星月相選擇",
           "disputes": [{ "id": "D1", "question": "觀星應選新月夜或半月夜？", "sides": [{ "position": "新月夜較適合觀星", "sources": ["n1"] }, { "position": "半月夜較適合觀星", "sources": ["n2"] }] }],
           "pendingReview": [
             { "op": { "op": "dispute_dissolve", "id": "D1", "reason": "兩份觀察出自同一次活動，並不對立", "kinds": ["rule", "rule"], "annotations": [{ "critique": "僅單一社團之觀察", "pros": ["出處未載"], "cons": ["出處未載"] }, { "critique": "僅單一社團之觀察", "pros": ["出處未載"], "cons": ["出處未載"] }] }, "reason": "終審未明列裁決" },
@@ -220,6 +231,7 @@
       "holdout": false,
       "input": {
         "state": {
+          "concept": "手語班開課與學習",
           "claims": [
             { "id": "C1", "kind": "temporal", "text": "某手語班週三晚間開課", "period": "現行", "critique": "僅單一班級之公告", "sources": ["n0"] },
             { "id": "C2", "kind": "temporal", "text": "某手語班預計改為週四晚間開課", "period": "場地確認後", "critique": "僅公告之預告", "sources": ["n1"] }
@@ -244,6 +256,7 @@
       "holdout": true,
       "input": {
         "state": {
+          "concept": "掛號郵件投遞",
           "pendingReview": [
             { "op": { "op": "add", "kind": "rule", "text": "掛號郵件須由收件人或同住成員簽收", "conditions": ["某郵局之說明"], "critique": "僅單一郵局之說明", "pros": ["確保郵件送達本人"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" },
             { "op": { "op": "add", "kind": "rule", "text": "掛號郵件之投遞員保證於當日再次投遞", "conditions": ["某郵局之說明"], "critique": "出處未載", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" }
@@ -260,6 +273,7 @@
       "holdout": true,
       "input": {
         "state": {
+          "concept": "鐵道末班車時刻",
           "claims": [
             { "id": "C1", "kind": "temporal", "text": "某鐵道線末班車依現行時刻表發車", "period": "現行", "critique": "僅單一單位之公告", "sources": ["n0"] },
             { "id": "C2", "kind": "temporal", "text": "某鐵道線末班車擬延後發車", "period": "核准後", "critique": "僅單一單位之預告", "sources": ["n1"] }
@@ -282,6 +296,7 @@
       "holdout": true,
       "input": {
         "state": {
+          "concept": "幼兒園用餐習慣",
           "pendingReview": [
             { "op": { "op": "add", "kind": "rule", "text": "用餐前先洗手", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" },
             { "op": { "op": "add", "kind": "rule", "text": "用餐後協助幼兒漱口", "conditions": ["某幼兒園之規定"], "critique": "僅單一園所之規定", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }, "reason": "終審失敗" }
@@ -298,6 +313,7 @@
       "holdout": true,
       "input": {
         "state": {
+          "concept": "冰箱除霜與溫度",
           "claims": [{ "id": "C1", "kind": "rule", "text": "冰箱結霜過厚時須先斷電除霜", "conditions": ["某維修行之說明"], "critique": "僅單一維修行之說明", "pros": ["出處未載"], "cons": ["出處未載"], "sources": ["n1"] }],
           "disputes": [{ "id": "D1", "question": "冰箱除霜與溫度設定如何取捨？", "sides": [{ "position": "結霜過厚時先斷電除霜", "sources": ["n1"] }, { "position": "維持溫度設定不變", "sources": ["n2"] }] }],
           "pendingReview": [

@@ -18,7 +18,6 @@
 
 import isarr from 'wsemi/src/isarr.mjs'
 import isobj from 'wsemi/src/isobj.mjs'
-import isfun from 'wsemi/src/isfun.mjs'
 import { PANEL_WHY, PANEL_WHY_LABELS } from '../core/summarizePackage.mjs'
 import { textValueOf as str, oneline } from '../core/capturePackage.mjs'
 

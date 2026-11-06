@@ -565,11 +565,11 @@ node src/bench/cli.mjs [--role <角色 id|all>] [--lang <語言代碼>] [--model
 ```
 
 - **計分**:每案呼叫 `runs` 回,**各回之類別皆等於應然才算通過**(不以比率放行)。題組領域中立、合成材料、無網址與文獻,各案附 `why`。多角色之命令列規則為抓取套件之 `defineBenchRoles`(各套件同一份);角色 id 與題組檔名由角色定義導出(`EXTRACT_BENCH_ROLE_IDS`)。
-- **工作流類**:案給合成之核心狀態(`esCases.coreStateOf` 之精簡描述)、材料與本批;`expect` 列模型須做到之謂詞,類別＝首個不成立之謂詞(皆成立為 `ok`)。第二批(起草、修訂、整併、本質)為**結構合規**——只驗格式、涵蓋與程式可判之性質,不驗是否抓到該抓之要點;評比表之角色欄標「〔結構合規〕」。
+- **工作流類**:案給合成之核心狀態(`esCases.coreStateOf` 之精簡描述)、材料與本批;**每案須於 `input.state.concept` 給概念名**(見下「自己的題組與詞彙」);`expect` 列模型須做到之謂詞,類別＝首個不成立之謂詞(皆成立為 `ok`)。第二批(起草、修訂、整併、本質)為**結構合規**——只驗格式、涵蓋與程式可判之性質,不驗是否抓到該抓之要點;評比表之角色欄標「〔結構合規〕」。
 - **一席兩用取兩用之最低分**:`extract.ai.revise` 兼 `wf-revise` 與 `support-revise`、`extract.ai.accept` 兼 `wf-accept` 與 `wf-pending`——換席位時兩列皆須看,取低者。
 - **`--batch`**:只限單一角色、且只 `support-check`／`support-revise`／`dispute-check`／`synonym-check` 收(每頁案數);`--role all` 給之即拋。**`--lang`**:本套件之參數(全部角色共用,`--role all` 亦可),語言設定同正式之 `cfg.lang`(輸出語言句與操作守門之字形政策);程式呼叫為 `opt.lang`。
 - **免費額度**:`--role all` 每模型之呼叫數＝各角色之頁數×`runs`——判定類六角色 40 頁(出處支持 2、修訂 2、失撐 16、爭議 2、同義覆核 2、同義提議 16)＝80 次;工作流類八角色一案一頁,各 16 案共 128 頁＝256 次;合計 336 次(`runs` 2)。
-- **自己的題組與詞彙**:`--cases` 給與內建同形之題組、`--vocab` 給詞彙物件之 JSON(只收本套件之鍵;與他段共用一份詞彙表者加 `--vocab-pick`)。程式呼叫:`runExtractBench(role, opt)`、`planExtractBench(role, opt)`(只備題、不呼叫 AI)、`runExtractBenchCli(argv)`。
+- **自己的題組與詞彙**:`--cases` 給與內建同形之題組、`--vocab` 給詞彙物件之 JSON(只收本套件之鍵;與他段共用一份詞彙表者加 `--vocab-pick`)。**工作流類八角色(`wf-*`)自帶題組時,每案須於 `input.state.concept` 給概念名**(已有 `input.state` 者在其內加 `concept` 鍵):這八角色之正式提示詞皆含規則 1「只收與本概念直接相關之知識;離題之筆記列入 skipped」(審計之「離題」意見亦然),「離題」以概念名為準;未給時預設為「題組」(`ES_CASE_CONCEPT`),與合成材料全無關係,模型會把全部材料判為離題、得分失真。概念名須**涵蓋**該案應收錄、應接受、應判為捏造／重複／出處錯誤等之材料與操作及 `state` 內既有條目,**不涵蓋**應判「離題」者(中性日常主題,建議 4～10 字);缺、為空(含全空白)或明給「題組」之案於準備期(未呼叫 AI 前)即被拒,訊息指明欄名 `input.state.concept`。判定類六角色之提示詞無離題規則,不要求。程式呼叫:`runExtractBench(role, opt)`、`planExtractBench(role, opt)`(只備題、不呼叫 AI)、`runExtractBenchCli(argv)`。
 - **評比表 `模型評比.csv`**:套件根之 `模型評比.csv` 為 `--board` 累積之評比表(現只有出處修訂、出處支持覆核、失撐找支持三角色之列)。`--board` 為一角色一模型一列,以本次覆蓋同角色同模型之舊列(命令列不擋自己之題組——以自己之題組評分時不給 `--board`,或指向自己之評比表;「題組」欄＝題組之 std 與 v,自己之同形題組之列只能以提示詞指紋分辨,`--vocab`、`--lang` 亦改變指紋)。CLI 型模型會讀 AI 工作目錄上層之指示檔,**量通用能力時 `--out` 放在任何專案之外**。
 - **真 AI 測試**:`WK_LIVE_AI=1 node <mocha> test/api-extract-bench-ai.test.mjs`(每角色全題組、每案兩回;預設受測＝`extract.ai.drafters` 之 use 與 fallback;`WK_EXTRACT_MODELS`／`WK_EXTRACT_ROLES`／`WK_ENV_FILE`)。
 
@@ -608,7 +608,7 @@ node <mocha 路徑>/bin/mocha.js --timeout 180000 test/<檔名>      # 單檔
 | 檢定標準 | `unit-extract-{standards,opstandards,registry,audit,stockfix,support,orphan,dispute,synonym,irreversible}` | 各標準之純函數與入口、登記、符合度掃描、存量處置、各判定小組;不可逆操作之涵蓋表(撤銷與重新收件兩契約) |
 | 物件與組裝 | `unit-extract-object`、`unit-extract-assembly`、`unit-extract-entry`、`unit-extract-package` | 物件之子階段序列與固定格式摘要;總組裝與執行期件之逐鍵檢核、domain 與提示詞、啟用功能之檢核、工作流入口、網路判斷、席位與調度層事件、每輪掃描;入口匯出;**套件邊界、依賴、發布面(不設 `exports`／`files`、不提供 `.npmignore`、`npm pack --dry-run` 之打包清單含 `sgud/` 與 `test/tools/`、`LICENSE`)、範例 `g.mjs` 離線可執行且 README 含其全文,與發布內容(含隨包發布之 `test/tools`)不帶宿主之痕跡、撞名、舊名、沿革與面向使用者之字樣(判準取抓取套件之 `test/tools/historyMarks`,四套件同一份)、預設領域中立、層序、區域同名件、測試檔之隔離與暫存根、橋接之發布後指定詞、本表與實際測試檔之對帳** |
 | 契約與流程 | `unit-extract-log-contract`、`unit-flow-extract`、`unit-extract-contract`、`unit-extract-upstream-budget`、`unit-domain-terms` | 日誌字樣、正則與 report 鍵;真 LMDB 上四輪之完整流程;與摘要、關聯套件之資料契約;真上游之預算與斷網之歸類;領域中立之共用詞表 |
-| 評分 | `unit-extract-bench`、`api-extract-bench-ai` | 評分角色、題組與頁組法;真 AI(`WK_LIVE_AI=1` 且給 `WK_BENCH_OUT` 才跑) |
+| 評分 | `unit-extract-bench`、`unit-bench-wf-concept`、`api-extract-bench-ai` | 評分角色、題組與頁組法;工作流類八角色題組之概念名與準備期守門(`unit-bench-wf-concept`);真 AI(`WK_LIVE_AI=1` 且給 `WK_BENCH_OUT` 才跑) |
 
 - **固定埠**(≥8000、不隨機):8881 為無人監聽之埠(內建調度層之「整鏈皆敗」)、8882 為本機假 REST;8883～8889 保留。
 - **暫存**:各測試自建 `test/_tmp/<名>-<pid>`,測完刪除(`test/tools/extractTestKit.mjs` 之 `tmpRoot`／`removeRoots`:以套件根定位、刪除後回驗)。唯一例外為真 AI 之評分測試 `api-extract-bench-ai`:AI 子行程之工作目錄與報表一律落 `WK_BENCH_OUT`(專案外之絕對路徑;CLI 型模型會讀工作目錄上層之指示檔),不寫 `test/_tmp`;工作目錄測完即刪、報表保留供人閱讀。
