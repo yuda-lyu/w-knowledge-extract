@@ -69,7 +69,7 @@ import {
     esExpectClassOf, esDisputeClassOf, esCaseInputProblems, esSuiteProblems, reviseCaseOf, reviseReasonsOf, reviseVotesProblems, coreStateOf,
 } from '../standards/esCases.mjs'
 import { applyVerdicts, pendingReviewOps, FIXABLE_FIELDS } from '../workflow/verdicts.mjs'
-import { ISSUE_TYPES, SEV_HIGH, issueOnOp, normalizeIssues, applyPatch, gateVerdicts } from '../workflow/reviewGuards.mjs'
+import { ISSUE_TYPES, SEV_HIGH, issueOnOp, normalizeIssues, removalIssueOf, applyPatch, gateVerdicts } from '../workflow/reviewGuards.mjs'
 import { prefixCandidate, trialApply, voteOps, validateVia, droppedMajority, applyRefAliases, normalizeBareRefs, closeRefs, stripProgramFields } from '../workflow/candidates.mjs'
 import { stateView, rulesTextOf, touchedText, trimToLimit } from '../workflow/runPass.mjs'
 import { pendingReviewPromptOf } from '../workflow/pending.mjs'
@@ -1075,7 +1075,11 @@ const AUDIT_FLAG_TYPES = Object.freeze([ISSUE_TYPES.fabricated, ISSUE_TYPES.offT
 
 // ── wf-audit 審計(stage audit) ──
 
-/** 審計之角色定義:謂詞 flags(植入之缺陷皆有高嚴重度且類型相符之意見)、clean(乾淨之操作無高嚴重度意見) */
+/**
+ * 審計之角色定義:謂詞 flags(植入之缺陷皆由類型相符之意見指出,且該意見依正式之移除判準足以移除該操作——
+ *   捏造、離題須高嚴重度,重複不論嚴重度;判定件即正式之 reviewGuards.removalIssueOf,與 removalAllowed 同一份,不另抄規則)、
+ *   clean(乾淨之操作既無高嚴重度意見,亦無依正式之移除判準足以使正式流程移除該操作之意見〔重複不論嚴重度〕——兩條件取聯集,與 flags 對稱)
+ */
 const WF_AUDIT_DEF = wfRoleDef({
     id: 'wf-audit',
     name: '審計(wf-audit)',
@@ -1117,16 +1121,23 @@ const WF_AUDIT_DEF = wfRoleDef({
         const high = (op) => issues.filter((x) => issueOnOp(x, op) && SEV_HIGH.has(x.severity))
         return wfClassOf(c.expect, ['flags', 'clean'], {
             flags: (m) => {
-                const miss = Object.entries(m).filter(([oid, t]) => !high(opOf(oid)).some((x) => x.type.includes(t)))
-                return { ok: !miss.length, why: miss.length ? `未以高嚴重度之「類型」指出：${miss.map(([oid, t]) => `${oid}（${t}）`).join('、')}` : '' }
+                const miss = Object.entries(m).filter(([oid, t]) => !removalIssueOf(opOf(oid), issues, [t]))
+                return { ok: !miss.length, why: miss.length ? `未以類型相符之意見指出（依正式之移除判準：捏造／離題須高嚴重度，重複不論嚴重度）：${miss.map(([oid, t]) => `${oid}（${t}）`).join('、')}` : '' }
             },
             clean: (ids) => {
-                const bad = ids.filter((oid) => high(opOf(oid)).length)
-                return { ok: !bad.length, why: bad.length ? `乾淨之操作被列高嚴重度意見：${bad.join('、')}` : '' }
+                // 不乾淨＝被列任何高嚴重度意見,或被列依正式之移除判準足以使正式流程移除該操作之意見(removalIssueOf:重複不論嚴重度;
+                //   離題／捏造須高,已在前者之內)——兩條件取聯集;乾淨之操作被正式流程移除即知識遺失,與 flags 對稱
+                const byHigh = ids.filter((oid) => high(opOf(oid)).length)
+                const byRemoval = ids.filter((oid) => !byHigh.includes(oid) && removalIssueOf(opOf(oid), issues))
+                const why = [
+                    byHigh.length ? `乾淨之操作被列高嚴重度意見：${byHigh.join('、')}` : '',
+                    byRemoval.length ? `乾淨之操作被列足以使正式流程移除之意見（依正式之移除判準：重複不論嚴重度，離題／捏造須高嚴重度）：${byRemoval.join('、')}` : '',
+                ].filter(Boolean).join('；')
+                return { ok: !why, why }
             },
         }, issues.map((x) => `${x.ref}:${x.severity}${x.type}`).join('、'))
     },
-    criteria: ['提示詞＝正式 buildAuditPrompt（ops＝案之守門後操作、flags、missing、被觸及之既有條目＝正式之 touchedText；無重審段——同正式無重審筆記時）；意見經正式之 normalizeIssues；「高」嚴重度＝正式之 SEV_HIGH、意見指向操作＝正式之 issueOnOp；植入之缺陷由案標註（只收捏造／離題／重複）'],
+    criteria: ['提示詞＝正式 buildAuditPrompt（ops＝案之守門後操作、flags、missing、被觸及之既有條目＝正式之 touchedText；無重審段——同正式無重審筆記時）；意見經正式之 normalizeIssues；「高」嚴重度＝正式之 SEV_HIGH、意見指向操作＝正式之 issueOnOp；植入之缺陷由案標註（只收捏造／離題／重複），被指出＝類型相符之意見依正式之移除判準足以移除該操作（reviewGuards.removalIssueOf，與 removalAllowed 同一份：捏造、離題須高嚴重度，重複不論嚴重度——審計提示詞之「高」不含重複，標中之重複屬正確）；乾淨之操作＝無高嚴重度意見，且無足以使正式流程移除該操作之意見（同 removalIssueOf，兩條件取聯集：標中、低嚴重度之重複亦不乾淨——正式流程會移除它，知識遺失）；意見之 ref 為空不指向任何操作（正式之 issueOnOp）'],
 })
 
 // ── 終審與待審裁決之共用判定件(正式之 applyVerdicts 之去向:剔除／保留／存待審) ──
@@ -1404,17 +1415,26 @@ const WF_DRAFT_DEF = wfRoleDef({
         const skipped = new Set(cov.skipped.map((s) => s.note))
         const appliedKinds = new Set(ap.applied.filter((a) => a.op === 'add').map((a) => findItem(ap.state, a.id)?.item?.kind).filter(Boolean))
         const disputed = ap.applied.some((a) => DISPUTE_OPS.has(a.op))
+        // 納入閘之拒收原因(screen 之 rejected 為 { op, problems };字樣同 gateOps:「<標準>：<細節>」,外洩〔leak〕寫作「外洩」,附欄名)——只改說明,不改判定
+        const stdWhy = (r) => (isarr(r.problems) ? r.problems : []).slice(0, 2).map((p) => `${p.std === 'leak' ? '外洩' : p.std}${p.field ? `（${p.field}）` : ''}：${p.detail}`).join('；')
+        // 爭議類操作提出而被拒收之處(試套、守門、納入閘、套用;套用之 rejected 之 op 為操作名):無爭議類操作落地時,分得出「未提出」與「提出而被拒收」
+        const disputeRejects = [
+            ...cand.ops.filter((op) => DISPUTE_OPS.has(op.op) && op._trial).map((op) => `試套：${op._trial}`),
+            ...g.rejected.filter((r) => DISPUTE_OPS.has(r.op?.op)).map((r) => `守門：${r.reason}`),
+            ...sc.rejected.filter((r) => DISPUTE_OPS.has(r.op?.op)).map((r) => `納入閘：${stdWhy(r)}`),
+            ...ap.rejected.filter((r) => DISPUTE_OPS.has(r.op)).map((r) => `套用：${r.reason}`),
+        ]
         return wfClassOf(c.expect, ['cites', 'skips', 'covered', 'dispute', 'grounded', 'noRejected', 'kinds'], {
             cites: (ids) => ({ ok: ids.every((id) => cov.used.includes(id)), why: `未被引為出處：${ids.filter((id) => !cov.used.includes(id)).join('、')}` }),
             skips: (ids) => ({ ok: ids.every((id) => skipped.has(id)), why: `未以合法理由略過：${ids.filter((id) => !skipped.has(id)).join('、')}` }),
             covered: () => ({ ok: !cov.uncovered.length, why: `未涵蓋：${cov.uncovered.join('、')}` }),
-            dispute: (want) => ({ ok: disputed === want, why: want ? '無爭議類操作落地' : '有爭議類操作落地' }),
-            grounded: () => ({ ok: !sc.rejected.length, why: sc.rejected.map((r) => `${r.op?.op}：${(r.why || []).slice(0, 2).join('；')}`).join('／') }),
+            dispute: (want) => ({ ok: disputed === want, why: want ? `無爭議類操作落地${disputeRejects.length ? `（爭議類操作被拒收——${disputeRejects.join('；')}）` : '（未提出爭議類操作）'}` : '有爭議類操作落地' }),
+            grounded: () => ({ ok: !sc.rejected.length, why: sc.rejected.map((r) => `${r.op?.op}：${stdWhy(r)}`).join('／') }),
             noRejected: () => ({ ok: !g.rejected.length && !ap.rejected.length && cand.ops.every((op) => !op._trial), why: [...g.rejected.map((r) => `守門：${r.reason}`), ...ap.rejected.map((r) => `套用：${r.reason}`)].join('；') || '試套被拒收' }),
             kinds: (ks) => ({ ok: ks.every((k) => appliedKinds.has(k)), why: `未出現之種類：${ks.filter((k) => !appliedKinds.has(k)).join('、')}` }),
         }, `${cand.ops.length} 條、略過 ${cand.skipped.length}`)
     },
-    criteria: ['提示詞＝正式 buildProposePrompt（狀態視圖＝正式之 stateView、預算 29000；關聯脈絡＝案之 relations；無重審段）；呼叫＝正式之 extractFanout（受測模型為起草第一席，其餘兩席為凍結腳本）；判定同正式 runPass 之起草後段（只取受測席之候選）：normalizeDelta → prefixCandidate → trialApply → 操作守門 → 納入閘 → applyDelta → coverageOf'],
+    criteria: ['提示詞＝正式 buildProposePrompt（狀態視圖＝正式之 stateView、預算 29000；關聯脈絡＝案之 relations；無重審段）；呼叫＝正式之 extractFanout（受測模型為起草第一席，其餘兩席為凍結腳本）；判定同正式 runPass 之起草後段（只取受測席之候選）：normalizeDelta → prefixCandidate → trialApply → 操作守門 → 納入閘 → applyDelta → coverageOf；不成立之說明：dispute 分「未提出爭議類操作」與「提出而被拒收」（附試套、守門、納入閘、套用之拒收處與原因），grounded 附納入閘之檢定標準與問題（只改說明，不改判定）'],
 })
 
 // ── wf-revise 修訂(stage revise;與 support-revise 同席) ──

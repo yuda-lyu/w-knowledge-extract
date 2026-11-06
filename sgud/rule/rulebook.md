@@ -1,6 +1,6 @@
 # 規則帳本（w-knowledge-extract）
 
-> **藍圖**：以規則為單位記程式碼須長成什麼樣。本檔為索引、本套件之鐵則與套件審計落地之規則（EXT-23～35）；條目分檔如下表。與現況比對看 `../state/state.md`。
+> **藍圖**：以規則為單位記程式碼須長成什麼樣。本檔為索引、本套件之鐵則與套件審計落地之規則（EXT-23～36）；條目分檔如下表。與現況比對看 `../state/state.md`。
 > **路徑基準**：原始碼在 `src/`，本檔與分檔所列檔案路徑（`core/…`、`stages/…`、`createKnowledgeExtract.mjs` 等）除已標 `src/`、`test/`、`toolg/` 者外皆相對 `src/`；測試在 `test/`（輔助件在 `test/tools/`，隨 npm 包發布供下游取用）。
 > **用語**：「使用端」＝使用本套件之專案；「抓取套件」＝npm `w-knowledge-capture`；「摘要套件」＝npm `w-knowledge-summarize`；「關聯套件」＝npm `w-knowledge-relate`；上游三套件之規則在各該套件之 `sgud/rule/`，本套件只保留引用，不複製條文。規則 ID 沿用 GEN／EXT／STD／AI 之編號，缺號登記於〈已移出〉；`AI-`、`REL-`、`SUM-`、`CAP-` 等前綴之規則屬上游套件，條文在各該套件之 `sgud/rule/`。
 
@@ -12,8 +12,8 @@
 | `rulebook_extract.md` | EXT-01～22（3+3 工作流與降級梯、狀態為真理、待審、重審、撤出處／恢復、關聯變更之影響 EXT-21、本質缺席 EXT-22） |
 | `rulebook_standards.md` | 檢定標準之框架與共通條目 STD-00～02、04、07、10、22、25～29（STD-27～29 只記本套件側之取用） |
 | `rulebook_standards_extract.md` | 本套件實作之檢定標準 STD-08（提煉納入閘）、STD-12（出處支持覆核 ES9）、STD-15（爭議覆核 ES14）、STD-18（關聯變更之影響 ES10）、STD-21（同義核心 ES11）、STD-23（失撐主張 ES8） |
-| `rulebook_bench.md` | EXT-35 工作流類八角色評分題組之概念名（逐案概念名全集、反向案與排除案、盤點指令） |
-| 本檔 | 鐵則、EXT-23～35、盤點指令、測試清單 |
+| `rulebook_bench.md` | EXT-35 工作流類八角色評分題組之概念名（逐案概念名全集、反向案與排除案、盤點指令）；EXT-36 審計謂詞與正式移除判準共用一份、審計與起草題組之材料守則（逐案改動、限制、指紋） |
+| 本檔 | 鐵則、EXT-23～36、盤點指令、測試清單 |
 
 ## 已移出
 
@@ -80,6 +80,8 @@
   - 測試：`unit-core-state`「merge 不得使同一爭議之不同方指向同一主張」、`unit-extract-bench` `WF_NEG` s06（多併 → `noLoss`）、`unit-extract-failpaths` ②（回滾後無「提煉手改另存」）、`unit-extract-stage`「reviveClaims 之閘、序與續作」。
 - **EXT-35 工作流類八角色之評分題組每案自給概念名，準備期守門拒收缺者**：八個 `wf-*` 角色之正式提示詞皆含離題規則（規則 1；審計之「離題」意見亦然），「離題」以概念名為準；題組每案須於 `input.state.concept` 給涵蓋應收錄材料、不涵蓋應判離題者之概念名（中性日常主題、4～10 字），否則 `coreStateOf` 預設「題組」使模型把全部材料判為離題、得分失真。守門＝`extractBench.mjs` 之 `wfInputProblems`（八角色共用）內之 `wfConceptProblems`：缺、為空或等於 `ES_CASE_CONCEPT` 即於準備期拒收並指明欄名；判定類六角色不檢、題組與提示詞不動。逐案概念名全集、反向案與排除案、盤點指令見 `rulebook_bench.md`。使用端需求出處：Gitea #87。
   - 測試：`unit-bench-wf-concept`（每案給概念名、提示詞首段、守門含欄名、判定類不受影響）。
+- **EXT-36 評分謂詞與正式移除判準共用一份；審計、起草題組之材料與應然一致**：審計（`wf-audit`）謂詞 `flags` 判「植入之缺陷是否被指出」，不另抄規則，與 `removalAllowed` 共用 `workflow/reviewGuards.removalIssueOf`（意見面：捏造、離題須高嚴重度，重複不論嚴重度；破壞性放行、爭議類移除理由、移除方自述之理由仍由 `removalAllowed` 判）；`removalAllowed` 之既有行為不變；`clean` 與之對稱（不乾淨＝被列任何高嚴重度意見，或被列足以使正式流程移除該操作之意見，兩條件取聯集）；審計意見 `ref` 為空不指向任何操作（`issueOnOp`；正式流程與評分共用，修正缺 `ref` 之意見會放行移除之缺陷）。審計題組三守則（標注不寫出處所無之內容、材料只含被操作收入之知識、有主張者附本質）、起草題組 `kinds` 與材料一致、起草謂詞 `dispute`／`grounded` 不成立之說明寫明原因。逐案改動、限制與待決、提示詞指紋見 `rulebook_bench.md`。使用端需求出處：Gitea #89。
+  - 測試：`unit-bench-wf-audit-cases`（本質、利弊帳、準備期、植入缺陷非爭議類、起草 kinds、note 同步）、`unit-extract-bench`（謂詞與單一來源交叉驗、`clean` 對稱、空 `ref`、不成立之說明）、`unit-extract-workflow`（`removalIssueOf`、`removalAllowed` 既有行為凍結、缺 `ref` 之意見含正式 `runPass`）。
 - **測試件與守門**：暫存根一律 `extractTestKit` 之 `tmpRoot`／`removeRoots`（`before` 內建、`after` 回驗；模組層以 TMP 建構之 env 延後實例化，`mkEnvIn` 拒非絕對路徑）；原始檔走訪取抓取 `sourceFilesOf`（根為 `src/`）、JSONL 讀取取 `readJsonlRows`、概念折疊還原一律 `resetConceptFold()`、失敗帳讀取 `ledgerOf`、替身 `scriptAi` 之 `netDown`／`skipped`、`noAi`／`blankAi`；橋接三檔檔頭【移植】指定詞「<上游>/src/<入口>」「<上游>/test/tools/<檔>」皆可映射；README §17 表＝實際 `test/*.test.mjs`；固定埠 8881（死埠）、8882（假埠）、8883～8889 保留；真 AI 評分之工作目錄與報表一律 `WK_BENCH_OUT`（專案外絕對路徑）；golden 中立組以 `test/tools/regen-golden.mjs` 重產（預設預演、`GOLDEN_WRITE=1` 才寫；覆寫組 16 檔不可重產）。
   - 測試：`unit-extract-package` ⑧（暫存根、單例不跨檔汙染、橋接映射、README §17 ↔ 檔、固定埠與暫存敘述；各含判準自檢）、`unit-extract-golden`「重產工具」三案。
 

@@ -29,7 +29,8 @@ import * as cli from '../src/bench/cli.mjs'
 import { DEFAULT_FREE_MODELS, resolveLocale } from '../src/core/capturePackage.mjs'
 import { EXTRACT_DEFAULT } from '../src/core/extractSettings.mjs'
 import { createExtractDomain, SUPPORT_KINDS } from '../src/domain/extractDomain.mjs'
-import { SKIP_REASONS, essenceNeedOf } from '../src/stores/coreState.mjs'
+import { SKIP_REASONS, essenceNeedOf, emptyState } from '../src/stores/coreState.mjs'
+import { removalAllowed, normalizeIssues, issueOnOp, ISSUE_TYPES, SEV_HIGH } from '../src/workflow/reviewGuards.mjs'
 import { parseSupportChecks, checkSupportChecks, supportClassOf, runSupportCheck, SUPPORT_KINDS as SUPPORT_KINDS_STD } from '../src/standards/supportCheck.mjs'
 import { parseSupportRevise } from '../src/standards/supportRevise.mjs'
 import { parseOrphanChecks, runOrphanCheck } from '../src/standards/orphanCheck.mjs'
@@ -182,14 +183,14 @@ const WF_DEMO = {
     d06: { ops: [{ op: 'confirm', id: 'C1', sources: ['N1'] }, mkTmp('幼犬基礎疫苗之施打間隔由三週改為四週', '今年起', ['N2'])], skipped: [] },
     d07: { ops: [mkRule('煮白米飯時米與水之體積比約為 1 比 1.2，浸泡 30 分鐘後再煮口感較佳', '某烹飪教室之說明', ['N1'])], skipped: [{ note: 'N2', reason: '品質不足' }] },
     d08: { ops: [mkPri('登山時衣物宜以多層穿搭為原則，隨體溫與氣溫增減', ['N1', 'N2'])], skipped: [] },
-    d09: { ops: [mkDis('導覽時間以多長為宜？', '導覽以 60 分鐘為宜，參觀者較能全程專注', '導覽宜縮短至 30 分鐘，超過 30 分鐘參觀者明顯疲倦'), mkPit('導覽超過 30 分鐘，參觀者明顯疲倦', '導覽超過 30 分鐘', ['N2'])], skipped: [] },
+    d09: { ops: [mkDis('導覽時間以多長為宜？', '導覽以 60 分鐘為宜，參觀者較能全程專注', '導覽宜縮短至 30 分鐘，超過 30 分鐘參觀者明顯疲倦')], skipped: [] },
     d10: { ops: [{ op: 'confirm', id: 'C1', sources: ['N1'] }, mkRule('寶特瓶之瓶蓋須另外投放', '另一社區回收站之規定', ['N1'])], skipped: [] },
     d11: { ops: [mkTmp('某游泳池平日開放時間延長至晚間 9 點', '本月起', ['N1'])], skipped: [{ note: 'N2', reason: '離題' }] },
     d12: { ops: [mkRule('每日固定練習 20 分鐘，比偶爾長時間練習更易進步', '某音樂教室之建議', ['N1']), mkRule('練習時記錄困難之小節，下次優先處理', '另一音樂教室之建議', ['N2'])], skipped: [] },
     dh1: { ops: [mkRule('洗手須先濕手、搓出泡沫、搓洗約 20 秒後沖淨', '某幼兒園之教導', ['N1'])], skipped: [{ note: 'N2', reason: '無可用知識' }] },
     dh2: { ops: [mkDis('平交道加裝柵欄是否減少闖越事件？', '加裝柵欄後闖越事件減少', '加裝柵欄後闖越事件並未減少')], skipped: [] },
     dh3: { ops: [{ op: 'confirm', id: 'C1', sources: ['N1'] }], skipped: [] },
-    dh4: { ops: [mkPri('營地宜遠離河谷與孤立之大樹', ['N1', 'N2']), mkPit('孤立大樹下紮營，雷雨時有雷擊之虞', '雷雨時', ['N1'])], skipped: [] },
+    dh4: { ops: [mkPri('選擇營地以遠離河谷與孤立之大樹為原則', ['N1', 'N2']), mkPit('雷雨時在孤立大樹下避雨，易遭雷擊', '雷雨時', ['N1'])], skipped: [] },
     r01: { edits: [{ ref: 'a1_1', fields: { text: '社區圖書館週末開放後，週末借閱量約占全週兩成' } }] },
     r02: { removes: [{ ref: 'a1_2', issue: 0, reason: '重複' }] },
     r03: { edits: [{ ref: 'a1_2', fields: { text: '盆栽澆水後宜放在通風處，待表土稍乾' } }] },
@@ -278,6 +279,7 @@ const WF_NEG = {
         neg('a04', 'clean', { issues: [aud('a1_2', '重複', '誤指')] }, '乾淨之操作被列高嚴重度之重複'),
         neg('a09', 'clean', { issues: [...WF_DEMO.a09.issues, aud('a1_2', '離題', '誤指')] }, '只差一處：多列一條對乾淨操作之高嚴重度意見'),
         neg('ah3', 'clean', { issues: [...WF_DEMO.ah3.issues, aud('a1_1', '捏造', '誤指')] }, '植入已指出，但另對乾淨之 a1_1 列高嚴重度'),
+        neg('a02', 'clean', { issues: [...WF_DEMO.a02.issues, { ref: 'a1_1', severity: '中', type: '重複', detail: '誤指', fix: '刪除' }] }, '植入已指出，但另對乾淨之 a1_1 標中嚴重度之重複（正式流程可據以移除，知識遺失）'),
     ],
     'wf-accept': [
         neg('c04', 'drop', { verdicts: [WF_DEMO.c04.verdicts[0], { i: 1, action: 'keep' }, WF_DEMO.c04.verdicts[2]] }, '只差一處：重複之 i=1 由剔除改保留'),
@@ -341,7 +343,7 @@ const WF_NEG = {
         neg('d01', 'noRejected', { ops: [{ ...WF_DEMO.d01.ops[0], kind: 'law' }], skipped: [{ note: 'N2', reason: '離題' }] }, '主張種類為清單外之 law（試套被拒收）', true),
         neg('d12', 'noRejected', { ops: [...WF_DEMO.d12.ops, { op: 'confirm', id: 'C9', sources: ['N1'] }], skipped: [] }, '確認不存在之 C9（試套被拒收）', true),
         neg('d03', 'kinds', { ops: [WF_DEMO.d03.ops[0]], skipped: [] }, '只差一處：漏寫陷阱（只有 rule）'),
-        neg('dh4', 'kinds', { ops: [mkRule('營地宜遠離河谷與孤立之大樹', '某露營協會之主張', ['N1', 'N2']), WF_DEMO.dh4.ops[1]], skipped: [] }, '應寫 principle 而寫成 rule'),
+        neg('dh4', 'kinds', { ops: [mkRule('選擇營地以遠離河谷與孤立之大樹為原則', '某露營協會之主張', ['N1', 'N2']), WF_DEMO.dh4.ops[1]], skipped: [] }, '應寫 principle 而寫成 rule'),
         neg('d11', 'kinds', { ops: [mkRule('某游泳池平日開放時間延長至晚間 9 點', '本月起', ['N1'])], skipped: [{ note: 'N2', reason: '離題' }] }, '有時點之規定寫成 rule 而非 temporal'),
     ],
     'wf-revise': [
@@ -1043,6 +1045,109 @@ describe('unit-extract-bench', function() {
             assert.equal(wfJudge('wf-audit', c, { ops: [] }).cls, null, '回覆不合 check → 無裁決')
         })
 
+        it('審計(wf-audit):植入之「重複」不論嚴重度、類型相符即算指出(R1:同正式之移除判準——重複不論嚴重度、離題／捏造須高);捏造／離題仍須高;類型不符、指向他條、合寫之 ref 不成立', () => {
+            const c = wfCase('wf-audit', 'a02')
+            const one = (issues, cc = c) => wfJudge('wf-audit', cc, { issues })
+            const dup = (severity, ref = 'a2_1', type = '重複') => ({ ref, severity, type, detail: '與 a1_1 同義', fix: '刪除' })
+            assert.equal(one([dup('高')]).cls, 'ok', '高嚴重度之重複')
+            assert.equal(one([dup('中')]).cls, 'ok', '中嚴重度之重複亦算指出(正式之修訂、終審可依之移除;審計提示詞之「高」不含重複)')
+            assert.equal(one([dup('低')]).cls, 'ok', '低嚴重度之重複亦算指出')
+            assert.equal(one([dup('中', 'a2_1', '捏造')]).cls, 'flags', '類型不符(重複被標成捏造而嚴重度非高)')
+            assert.equal(one([dup('高', 'a2_1', '離題')]).cls, 'flags', '類型不符(高嚴重度亦不補類型)')
+            assert.equal(one([dup('中', 'a1_1')]).cls, 'flags', '指向另一條(只指後出之 a2_1 才算)')
+            assert.equal(one([dup('中', 'a1_1、a2_1')]).cls, 'flags', '合寫之 ref 不指向任一操作(同正式之 issueOnOp)')
+            const r = one([])
+            assert.equal(r.cls, 'flags')
+            assert.match(r.fields.why, /重複不論嚴重度/, '不成立之處寫明判準')
+            const a = wfCase('wf-audit', 'a03')
+            assert.equal(wfJudge('wf-audit', a, { issues: [{ ref: 'a2_1', severity: '中', type: '離題', detail: 'x', fix: 'y' }] }).cls, 'flags', '離題以中嚴重度仍不成立')
+            assert.equal(wfJudge('wf-audit', a, { issues: [{ ref: 'a2_1', severity: '高', type: '離題', detail: 'x', fix: 'y' }] }).cls, 'ok', '離題以高嚴重度成立')
+            const f = wfCase('wf-audit', 'a01')
+            assert.equal(wfJudge('wf-audit', f, { issues: [{ ref: 'a1_2', severity: '中', type: '捏造', detail: 'x', fix: 'y' }] }).cls, 'flags', '捏造以中嚴重度仍不成立')
+            assert.equal(wfJudge('wf-audit', f, { issues: [{ ref: 'a1_2', severity: '低', type: '重複', detail: 'x', fix: 'y' }] }).cls, 'flags', '應然為捏造而意見為重複 → 類型不符')
+        })
+
+        it('審計(wf-audit)與正式移除判準單一來源(R2):建設性操作之 removalAllowed 與謂詞 flags 對同一組意見之判斷逐格一致(類型×嚴重度×指向);破壞性、爭議類之分支屬操作類別與移除方自述之理由,非意見面,謂詞不採', () => {
+            const c = wfCase('wf-audit', 'a02')
+            const op = c.input.ops.find((x) => x._oid === 'a2_1')
+            const s = emptyState()
+            const types = ['重複', '離題', '捏造', '超限', '檢定標準', '措辭', '重複／捏造', '離題、重複', '']
+            const sevs = ['高', 'high', 'High', 'HIGH', '嚴重', '中', '低', '']
+            const refs = ['a2_1', 'a1_1', 'a1_1、a2_1', '']
+            const flagged = (issues) => [ISSUE_TYPES.fabricated, ISSUE_TYPES.offTopic, ISSUE_TYPES.duplicate].some((t) => wfJudge('wf-audit', { ...c, expect: { flags: { a2_1: t } } }, { issues }).cls === 'ok')
+            let cells = 0
+            let agree = 0
+            for (const type of types) for (const severity of sevs) for (const ref of refs) {
+                const issues = [{ ref, severity, type, detail: 'x', fix: 'y' }]
+                const formal = removalAllowed(op, s, normalizeIssues(issues), '').ok
+                assert.equal(flagged(issues), formal, `type=${type} severity=${severity} ref=${ref}`)
+                cells++
+                if (formal) agree++
+            }
+            assert.equal(cells, types.length * sevs.length * refs.length)
+            assert.ok(agree > 0 && agree < cells, '格內有成立亦有不成立(格不得全同)')
+            // 兩條意見合併判:任一條足以移除即成立(同 issues.find)
+            const two = [{ ref: 'a2_1', severity: '中', type: '離題', detail: 'x', fix: 'y' }, { ref: 'a2_1', severity: '低', type: '重複', detail: 'x', fix: 'y' }]
+            assert.equal(removalAllowed(op, s, normalizeIssues(two), '').ok, true)
+            assert.equal(flagged(two), true)
+            // 邊界:無意見時,破壞性操作之移除正式放行(取決於操作類別),但「審計席有沒有指出」不因此成立
+            const k = wfCase('wf-audit', 'a05')
+            const gone = { op: 'retract', id: 'C1', reason: '離題', sources: ['N1'], _oid: 'a3_1' }
+            const withGone = { ...k, input: { ...k.input, ops: [...k.input.ops, gone] } }
+            assert.equal(removalAllowed(gone, coreStateOf(k.input.state).state, [], '').ok, true, '破壞性操作移除不需意見(正式)')
+            assert.equal(wfJudge('wf-audit', { ...withGone, expect: { flags: { a3_1: '離題' } } }, { issues: [] }).cls, 'flags', '謂詞只判審計席之意見,不因操作類別而放行')
+        })
+
+        it('審計(wf-audit):clean 與正式移除判準對稱(R7)——乾淨之操作被標足以使正式流程移除之意見(重複不論嚴重度、離題／捏造須高)即不乾淨,另保留「任何高嚴重度意見即不乾淨」(兩條件取聯集)', () => {
+            const c = wfCase('wf-audit', 'a02')
+            assert.deepEqual(c.expect.clean, ['a1_1'], 'a02:a2_1 為植入之重複、a1_1 為乾淨之操作')
+            const mk = (severity, type, ref = 'a1_1') => ({ ref, severity, type, detail: 'x', fix: 'y' })
+            const on = (extra) => wfJudge('wf-audit', c, { issues: [...WF_DEMO.a02.issues, extra] })
+            // 新條件:足以使正式流程移除(重複不論嚴重度)——正式流程會移除乾淨之操作 = 知識遺失
+            for (const sev of ['中', '低', '']) assert.equal(on(mk(sev, '重複')).cls, 'clean', `乾淨之操作被標${sev || '空'}嚴重度之重複 → 不乾淨`)
+            // 既有條件:任何高嚴重度意見(不限類型)
+            for (const type of ['重複', '離題', '捏造', '措辭', '超限', '檢定標準', '遺漏', '']) {
+                for (const sev of ['高', 'high', '嚴重']) assert.equal(on(mk(sev, type)).cls, 'clean', `乾淨之操作被標${sev}嚴重度之${type || '空類型'} → 不乾淨`)
+            }
+            // 不足以移除、亦非高 → 仍乾淨
+            for (const type of ['離題', '捏造', '措辭', '超限', '檢定標準', '遺漏', '']) {
+                for (const sev of ['中', '低', '']) assert.equal(on(mk(sev, type)).cls, 'ok', `${sev || '空'}嚴重度之${type || '空類型'}不足以移除、亦非高 → 乾淨`)
+            }
+            assert.equal(on(mk('中', '重複', 'a2_1')).cls, 'ok', '意見指向植入之 a2_1 不影響乾淨之 a1_1')
+            assert.equal(on(mk('中', '重複', 'a1_1、a2_1')).cls, 'ok', '合寫之 ref 不指向任一操作(同 issueOnOp)')
+            // 不成立說明分兩因
+            assert.match(on(mk('中', '重複')).fields.why, /乾淨之操作被列足以使正式流程移除之意見.*a1_1/, '足以移除之因')
+            assert.match(on(mk('高', '措辭')).fields.why, /乾淨之操作被列高嚴重度意見.*a1_1/, '高嚴重度之因')
+            // 與正式移除判準對稱:不乾淨 ⇔ 指向該操作且(高嚴重度 或 removalAllowed 放行);全積(含正式放行者必不乾淨)
+            const op = c.input.ops.find((x) => x._oid === 'a1_1')
+            const s = emptyState()
+            const types = ['重複', '離題', '捏造', '超限', '檢定標準', '措辭', '重複／捏造', '離題、重複', '']
+            const sevs = ['高', 'high', 'High', 'HIGH', '嚴重', '中', '低', '']
+            const refs = ['a1_1', 'a2_1', 'a1_1、a2_1']
+            let notClean = 0
+            let byRemoval = 0
+            for (const type of types) for (const severity of sevs) for (const ref of refs) {
+                const x = normalizeIssues([mk(severity, type, ref)])[0]
+                const formal = removalAllowed(op, s, [x], '').ok
+                const want = issueOnOp(x, op) && (SEV_HIGH.has(x.severity) || formal)
+                assert.equal(on(mk(severity, type, ref)).cls === 'clean', want, `type=${type} severity=${severity} ref=${ref}`)
+                if (formal) assert.equal(on(mk(severity, type, ref)).cls, 'clean', '正式放行移除者必不乾淨')
+                if (want) notClean++
+                if (want && !SEV_HIGH.has(x.severity)) byRemoval++
+            }
+            assert.ok(notClean > 0 && notClean < types.length * sevs.length * refs.length, '格內有乾淨亦有不乾淨')
+            assert.ok(byRemoval > 0, '有僅因「足以移除」而不乾淨之格(新條件確有作用)')
+        })
+
+        it('審計(wf-audit):意見 ref 為空不指向任何操作(R8)——flags 不因缺 ref 之意見而成立、clean 不因缺 ref 之高嚴重度意見而全數不乾淨', () => {
+            const c = wfCase('wf-audit', 'a02')
+            const noRef = (severity, type) => ({ severity, type, detail: 'x', fix: 'y' })
+            assert.equal(wfJudge('wf-audit', c, { issues: [noRef('高', '重複')] }).cls, 'flags', '缺 ref 之重複意見不指出植入之 a2_1')
+            assert.equal(wfJudge('wf-audit', c, { issues: [{ ...noRef('高', '重複'), ref: '' }] }).cls, 'flags', 'ref 為空字串亦然')
+            assert.equal(wfJudge('wf-audit', c, { issues: [...WF_DEMO.a02.issues, noRef('高', '遺漏')] }).cls, 'ok', '缺 ref 之高嚴重度意見(如對批次整體之遺漏)不使乾淨之 a1_1 不乾淨')
+            assert.equal(wfJudge('wf-audit', c, { issues: [...WF_DEMO.a02.issues, noRef('中', '重複')] }).cls, 'ok', '缺 ref 之中嚴重度重複亦然')
+        })
+
         it('終審(wf-accept):該剔未剔 → drop;剔除建設性操作而無高嚴重度意見(正式之剔除閘擋為 keep)→ 仍 drop 不成立;該留被剔 → keep;不可逆操作未明列 → irreversibleListed;無有效裁決 → 無裁決', () => {
             const c = wfCase('wf-accept', 'c01')
             const one = (verdicts, cc = c) => wfJudge('wf-accept', cc, { verdicts })
@@ -1096,7 +1201,29 @@ describe('unit-extract-bench', function() {
             assert.equal(one({ ops: [{ ...OP_A, text: '社區圖書館週末開放後，週末借閱量約占全週 37%' }], skipped: [{ note: 'N2', reason: SKIP_REASONS[0] }] }, { ...d, expect: { grounded: true } }).cls, 'grounded', '數字不見於出處(納入閘 ES2)')
             assert.equal(one({ ops: [{ ...OP_A, kind: 'law' }], skipped: [{ note: 'N2', reason: SKIP_REASONS[0] }] }, { ...d, expect: { noRejected: true } }).cls, 'noRejected', '種類不在清單 → 試套拒收')
             assert.equal(one({ ops: [{ ...OP_A, kind: 'law' }], skipped: [{ note: 'N2', reason: SKIP_REASONS[0] }] }).cls, 'cites', '種類不在清單 → 試套拒收、不落地 → 未被引')
-            assert.equal(one({ ops: [{ ...OP_A, kind: 'pitfall', pros: [], cons: [] }], skipped: [{ note: 'N2', reason: SKIP_REASONS[0] }] }).cls, 'kinds', '種類為陷阱而應然要求 rule')
+            assert.equal(one({ ops: [{ ...OP_A, kind: 'pitfall', pros: [], cons: [] }], skipped: [{ note: 'N2', reason: SKIP_REASONS[0] }] }, { ...d, expect: { kinds: ['rule'] } }).cls, 'kinds', '種類為陷阱而應然要求 rule')
+        })
+
+        it('起草(wf-draft):dispute 不成立之說明寫明原因(R5)——無爭議落地時分「未提出」與「提出而被拒收(附拒收處與原因)」;只改說明、不改判定', () => {
+            const d5 = wfCase('wf-draft', 'd05')
+            const why = (j, cc = d5) => wfJudge('wf-draft', cc, j).fields.why
+            const a = { ...mkRule('設置公車專用道後，尖峰時段公車之行駛時間縮短', '某市之調查', ['N1']), ref: 'a' }
+            const b = { ...mkPit('另一城市設置專用道後，行駛時間並未縮短，反因違規占用而延誤', '專用道遭違規占用時', ['N2']), ref: 'b' }
+            const claimsOnly = { op: 'dispute_add', question: '設置公車專用道是否縮短尖峰時段之行駛時間？', sides: [{ position: '縮短', claims: ['@a'] }, { position: '未縮短', claims: ['@b'] }] }
+            const r = wfJudge('wf-draft', d5, { ops: [a, b, claimsOnly], skipped: [] })
+            assert.equal(r.cls, 'dispute', '判定不變:無爭議類操作落地')
+            assert.match(r.fields.why, /無爭議類操作落地（爭議類操作被拒收——試套：無本批出處）/, '各方只引新主張而全無本批出處 → 試套拒收(整條須至少一個本批出處)')
+            assert.match(why({ ops: [a, b], skipped: [] }), /無爭議類操作落地（未提出爭議類操作）/, '未提出')
+            const withSrc = { ...claimsOnly, sides: [{ ...claimsOnly.sides[0], sources: ['N1'] }, { ...claimsOnly.sides[1], sources: ['N2'] }] }
+            assert.equal(wfJudge('wf-draft', d5, { ops: [a, b, withSrc], skipped: [] }).cls, 'ok', '各方附本批出處 → 落地')
+            assert.equal(wfJudge('wf-draft', { ...d5, expect: { cites: ['n1', 'n2'], dispute: false } }, { ops: [a, b, withSrc], skipped: [] }).fields.why, '有爭議類操作落地', '應然為無爭議而落地 → 說明不變')
+        })
+
+        it('起草(wf-draft):grounded 不成立之說明附納入閘之檢定標準與問題(R5;screen 之 rejected 為 { op, problems },原讀不存在之 why 而只剩「add：」)', () => {
+            const d7 = wfCase('wf-draft', 'd07')
+            const g = wfJudge('wf-draft', { ...d7, expect: { grounded: true } }, { ops: [mkRule('煮白米飯時米與水之體積比約為 1 比 1.2，浸泡 45 分鐘後再煮口感較佳', '某烹飪教室之說明', ['N1'])], skipped: [{ note: 'N2', reason: '品質不足' }] })
+            assert.equal(g.cls, 'grounded')
+            assert.match(g.fields.why, /^add：ES2：數字 45 分鐘/, '附檢定標準與問題(原僅「add：」)')
         })
 
         it('修訂(wf-revise;結構合規):未改正 → fixed;改動應保留者 → untouched;補丁使問題增加 → notWorse 或被守門擋 → blockedNone', () => {

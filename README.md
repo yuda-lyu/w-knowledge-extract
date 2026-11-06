@@ -609,7 +609,7 @@ node <mocha 路徑>/bin/mocha.js --timeout 180000 test/<檔名>      # 單檔
 | 檢定標準 | `unit-extract-{standards,opstandards,registry,audit,stockfix,support,orphan,dispute,synonym,irreversible}` | 各標準之純函數與入口、登記、符合度掃描、存量處置、各判定小組;不可逆操作之涵蓋表(撤銷與重新收件兩契約) |
 | 物件與組裝 | `unit-extract-object`、`unit-extract-assembly`、`unit-extract-entry`、`unit-extract-package` | 物件之子階段序列與固定格式摘要;總組裝與執行期件之逐鍵檢核、domain 與提示詞、啟用功能之檢核、工作流入口、網路判斷、席位與調度層事件、每輪掃描;入口匯出;**套件邊界、依賴、發布面(不設 `exports`／`files`、不提供 `.npmignore`、`npm pack --dry-run` 之打包清單含 `sgud/` 與 `test/tools/`、`LICENSE`)、範例 `g.mjs` 離線可執行且 README 含其全文,與發布內容(含隨包發布之 `test/tools`)不帶宿主之痕跡、撞名、舊名、沿革與面向使用者之字樣(判準取抓取套件之 `test/tools/historyMarks`,四套件同一份)、預設領域中立、層序、區域同名件、測試檔之隔離與暫存根、橋接之發布後指定詞、本表與實際測試檔之對帳** |
 | 契約與流程 | `unit-extract-log-contract`、`unit-flow-extract`、`unit-extract-contract`、`unit-extract-upstream-budget`、`unit-domain-terms` | 日誌字樣、正則與 report 鍵;真 LMDB 上四輪之完整流程;與摘要、關聯套件之資料契約;真上游之預算與斷網之歸類;領域中立之共用詞表 |
-| 評分 | `unit-extract-bench`、`unit-bench-wf-concept`、`api-extract-bench-ai` | 評分角色、題組與頁組法;工作流類八角色題組之概念名與準備期守門(`unit-bench-wf-concept`);真 AI(`WK_LIVE_AI=1` 且給 `WK_BENCH_OUT` 才跑) |
+| 評分 | `unit-extract-bench`、`unit-bench-wf-concept`、`unit-bench-wf-audit-cases`、`api-extract-bench-ai` | 評分角色、題組與頁組法;工作流類八角色題組之概念名與準備期守門(`unit-bench-wf-concept`);審計謂詞與正式移除判準共用一份、審計與起草題組之材料守則(`unit-bench-wf-audit-cases`);真 AI(`WK_LIVE_AI=1` 且給 `WK_BENCH_OUT` 才跑) |
 
 - **固定埠**(≥8000、不隨機):8881 為無人監聽之埠(內建調度層之「整鏈皆敗」)、8882 為本機假 REST;8883～8889 保留。
 - **暫存**:各測試自建 `test/_tmp/<名>-<pid>`,測完刪除(`test/tools/extractTestKit.mjs` 之 `tmpRoot`／`removeRoots`:以套件根定位、刪除後回驗)。唯一例外為真 AI 之評分測試 `api-extract-bench-ai`:AI 子行程之工作目錄與報表一律落 `WK_BENCH_OUT`(專案外之絕對路徑;CLI 型模型會讀工作目錄上層之指示檔),不寫 `test/_tmp`;工作目錄測完即刪、報表保留供人閱讀。

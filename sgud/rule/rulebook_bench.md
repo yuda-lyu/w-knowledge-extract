@@ -1,6 +1,6 @@
-# 規則帳本分檔：評分題組之概念名（EXT-35）
+# 規則帳本分檔：評分題組之概念名（EXT-35）與評分謂詞／題組材料（EXT-36）
 
-> 藍圖。本檔記工作流類八角色（`wf-*`）內建題組之概念名規則、站點全集與判準；總規則 EXT-32（評分）在 `rulebook.md`。路徑基準同 `rulebook.md`。需求出處：使用端 Gitea #87（2026-11-06）。
+> 藍圖。本檔記工作流類八角色（`wf-*`）內建題組之概念名規則（EXT-35）、審計謂詞與正式移除判準共用一份及審計、起草題組之材料守則（EXT-36）、站點全集與判準；總規則 EXT-32（評分）在 `rulebook.md`。路徑基準同 `rulebook.md`。需求出處：使用端 Gitea #87（2026-11-06）、#89（2026-11-06）。
 
 - **EXT-35 工作流類八角色之題組每案自給概念名，準備期守門拒收缺者**：
   - **規則**：①`src/bench/cases/wf-{draft,audit,accept,pending,integrate,revise,consolidate,essence}-generic.json` 之每案於 `input.state.concept` 給概念名（已有 `state` 者在其內加鍵）；②概念名須**涵蓋**該案應收錄、應接受、應判為捏造／重複／出處錯誤等之材料與操作及 `state` 內既有條目，**不涵蓋** `why` 載明應判「離題」之材料或操作，中性日常主題、4～10 字；③`extractBench.mjs` 之 `wfInputProblems`（八角色共用）呼叫 `wfConceptProblems`：案未給 `input.state.concept`、為空（含全空白）或等於 `ES_CASE_CONCEPT`（「題組」）即回報問題，訊息指明欄名；④守門不掛各角色之 `inputProblems`、不檢判定類六角色。
@@ -37,3 +37,21 @@
   - **盤點指令**（於套件根）：`node --input-type=module -e "import('./src/bench/extractBench.mjs').then(m=>{for(const r of m.EXTRACT_BENCH_ROLE_IDS){const p=m.planExtractBench(r);console.log(r,p.promptFp,p.pages.filter(x=>x.prompt.includes('「題組」')).length+'/'+p.pages.length)}})"`；判準：八個 `wf-*` 皆 `0/16`；`support-check` 2/2、`orphan-check` 16/16、`dispute-check` 2/2 為刻意保留。
   - **概念名之實效**無法程式判定（語意）；`unit-bench-wf-concept` 只守「每案給了、非預設、4～10 字、提示詞首段為之、守門拒收缺者」。實效以正式席位重跑評比驗證。改題組之案、改概念名或改提示詞，八角色之提示詞指紋隨之改變，舊指紋之歷史列不可與新列並比。
   - **測試**：`test/unit-bench-wf-concept.test.mjs`（R1 每案給概念名、R2 提示詞首段、R3 守門含欄名、R4 判定類不受影響與預設值不變）；`unit-extract-bench`〈工作流類之逐案檢核〉。
+
+- **EXT-36 評分謂詞與正式移除判準共用一份；審計、起草題組之材料與應然一致**（使用端 Gitea #89）：
+  - **規則**：①審計（`wf-audit`）謂詞 `flags`「植入之缺陷是否被指出」＝意見指向該操作（`issueOnOp`）、類型相符，且依正式移除判準足以移除該操作——判定件為 `workflow/reviewGuards.removalIssueOf(op, issues, types?)`（捏造、離題須高嚴重度，**重複不論嚴重度**，其餘類型不足），`removalAllowed` 與 `flags` 共用此一份，評分端不另抄規則；②`removalIssueOf` 只含**意見面**（類型×嚴重度×指向）：破壞性操作之放行（需操作類別與狀態）、爭議類操作之移除理由（需移除方自述之 reason）、`reason === '重複'`（終審自述）屬操作與移除方之性質，仍由 `removalAllowed` 判，不納入；③審計題組三守則——乾淨之操作之標注（利／弊）不寫出處所無之內容（出處未載者寫「出處未載」）、材料不含未被任何操作收入之知識、既有狀態有主張者附本質（`state.essence`；否則 `stateDigest` 載「本批須以 essence 綜合現有主張」，審計列「遺漏」屬正確）；④起草題組 `kinds` 預期須與材料一致——單一案例之觀察不預期 `rule`、爭議之一方之依據不預期為獨立之 `pitfall`、`pitfall` 之材料寫失效情境（若…易…）而非操作指示（避免…以免…）、`principle` 之材料為兩個相異來源同以「…之原則」立論；⑤起草謂詞 `dispute`／`grounded` 不成立之說明寫明原因（只改說明、不改判定）：無爭議類操作落地時分「未提出爭議類操作」與「爭議類操作被拒收——試套／守門／納入閘／套用：原因」，`grounded` 附納入閘之檢定標準與問題（screen 之 `rejected` 為 `{ op, problems }`，不讀不存在之 `why`）；⑥審計謂詞 `clean`（乾淨之操作）與 `flags` 對稱——**不乾淨＝被列任何高嚴重度意見，或被列依正式移除判準足以使正式流程移除該操作之意見**（`removalIssueOf(op, issues)`，重複標中、低嚴重度亦然；離題／捏造須高，已含於前者）；兩條件取聯集，乾淨之操作被正式流程移除即知識遺失；⑦審計意見 `ref` 為空不指向任何操作（`issueOnOp` 之 `!!x.ref &&`）：審計回覆之意見可不帶 `ref`（`checkAudit` 只要求 `issues` 為陣列），`normalizeIssues` 正規化為空字串，舊式會與一切無 `id`／`ref` 之操作（多數新增主張）相符，使缺 `ref` 之高嚴重度離題或任何重複意見成為修訂移除、終審剔除之放行依據——正式流程與評分共用 `issueOnOp`，一併修正。
+  - **為何**：審計提示詞之「高」＝不改會留下錯誤知識或遺失知識，重複兩者皆非，模型照定義標中嚴重度之重複屬正確，而正式之修訂、終審照樣可依之移除（`removalAllowed`：重複不論嚴重度）；舊謂詞要求高嚴重度，越照提示詞定義做越失分，換席決策會低估各席。謂詞若自抄一份正式規則，兩邊日後必漂移，故抽共用判定件並以交叉測試守。題組若使乾淨之操作真的不乾淨（標注寫出處所無之內容、有主張無本質、材料含未收入之知識），審計列高嚴重度意見反而正確，得分反映題組缺陷而非模型能力。
+  - **判準**：已套＝`removalAllowed` 之重複條與離題／捏造條、`wf-audit` 之 `flags` 皆經 `removalIssueOf`（盤點：`Grep removalIssueOf src`）；`removalAllowed` 既有行為不變（`unit-extract-workflow` 以抽出前之逐字舊式對照，三類操作×九種類型×六種嚴重度×五種指向×六種自述理由全積逐格同）。`clean` 之 `removalIssueOf` 條件、`issueOnOp` 之空 `ref` 條件皆有測試與變異（見測試）。未套（刻意）＝其餘六個 `wf-*` 角色與判定類六角色之謂詞不動。
+  - **站點全集**（改動者；其餘案核對後不動，審計 a03／a06～a09 之利以 `GROUNDED` 帳〔`test/unit-bench-wf-audit-cases.test.mjs`〕逐條附出處原文片段）：
+  - `wf-audit` a01：n1 刪去未被任何操作收入之「整理時間」句（a02 用之）；a1_1 利「擴大服務時段」→「出處未載」
+  - `wf-audit` a02：n1 只留「整理時間不足」一句；兩條操作冠「某社區圖書館」（不擴大為一般圖書館）
+  - `wf-audit` a04：n1 刪去未被收入之「清理濾網後異音消失」
+  - `wf-audit` a05：state 附本質（C1）；n1 改為「同一路線之另一份調查」（對 C1 為確認，非新案例）
+  - `wf-audit` a10：state 附本質（C1）；n1 補「較一次餵食不易腹瀉」（全句支持 C1）
+  - `wf-audit` a12：state 附本質（C1）
+  - `wf-audit` a11／ah1／ah2／ah3／ah4：a1_1 之利（出處所無）→「出處未載」
+  - `wf-draft` d01：刪 `kinds`（單一館之觀察）；d09：刪 `kinds`（n2 為乙方立場之依據）；d03：n1 末句改為失效情境「施肥後 2 小時內若受陽光直射，葉片易灼傷」；dh4：n1／n2 改以「…之原則」立論，n1 末句改為「雷雨時在孤立大樹下避雨，易遭雷擊」（選址之外之陷阱）；起草其餘 `kinds`（d04、d06、d07、d08、d10、d11、d12、dh1）核對材料後不動
+  - **盤點指令**（於套件根）：`node --input-type=module -e "import('./src/bench/extractBench.mjs').then(m=>{for(const r of ['wf-audit','wf-draft']){const p=m.planExtractBench(r);console.log(r,p.promptFp,p.pages.length)}})"`；判準：兩角色皆 16 頁、準備期不拋；審計各頁提示詞不含「本批須以 essence 綜合現有主張」。
+  - **限制與待決**：①（已解）`clean` 原只計高嚴重度意見，審計席對乾淨之操作標「中 重複」時正式流程可據以移除而 `clean` 不抓——已改為與 `flags` 對稱（規則⑥）；②爭議類操作植入「重複」：正式另需 reason 為「離題」或有高嚴重度意見（`removalAllowed` 第一道），謂詞只判意見面，內建題組無此情形（`unit-bench-wf-audit-cases` R4 守，自訂題組自行注意）；③（已解）`issueOnOp` 之空 `ref` 疑點：查證可達（站點：`standards/parse.mjs:51` `checkAudit` 不驗各意見、`workflow/reviewGuards.mjs:95-102` `normalizeIssues` 將缺 `ref` 者正規化為 `''`、`workflow/runPass.mjs:404` 審計回覆之意見直入 `issues`、`runPass.mjs:378` 整合後之操作帶 `_oid` 而新增主張多無 `id`／`ref`、`reviewGuards.mjs:75` 舊式 `'' === str(undefined)` 成立）；已修為空 `ref` 不指向任何操作（規則⑦），`issueOnOp` 之其餘站點（`removalIssueOf`→`removalAllowed`→`applyPatch`／`gateVerdicts`、評分 `high()`）同步生效。`applyPatch`（`reviewGuards.mjs:179,255`）以 `issueRef` 比對 `x.ref` 之處已先擋空 `issueRef`，不受影響；④語意類守則（標注是否真為出處所載、材料是否含未收入之知識、`kinds` 與材料是否一致）無法全由程式判定，程式只守可判者（`GROUNDED` 帳之片段確在出處、有主張之案附本質、提示詞不含該句、d01／d09 無 `kinds`、d03／dh4 材料之關鍵字樣），實效以正式席位重跑評比驗證。
+  - **提示詞指紋已改**（修前→修後）：`wf-audit` 5d1dbd0074c4fd94→31fac4eef96fe883、`wf-draft` 86f153a73629b0f8→dd8b47fb92930902；其餘十二角色不變；舊指紋之歷史評比列不可與新列並比。
+  - **測試**：`test/unit-bench-wf-audit-cases.test.mjs`（R1 本質、R2 利弊帳、R3 準備期、R4 植入缺陷非爭議類、R5 起草 kinds、R6 note 同步）；`unit-extract-bench`〈審計：重複不論嚴重度〉〈審計與正式移除判準單一來源〉〈clean 與正式移除判準對稱（R7）〉〈意見 ref 為空不指向任何操作（R8）〉〈起草：dispute／grounded 不成立之說明〉與 `WF_NEG` 之 a02 clean 反例；`unit-extract-workflow`〈removalIssueOf〉〈removalAllowed 之既有行為不變〉〈審計意見缺 ref（R8）〉〈正式 runPass 缺 ref 之意見〉。第二輪（ke336b）不改任何提示詞指紋。

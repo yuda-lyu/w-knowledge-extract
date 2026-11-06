@@ -8,8 +8,11 @@ import { runPass, stateView, lengthIssues, trimToLimit, rulesTextOf } from '../s
 import { relationContextRows } from '../src/workflow/relationContext.mjs'
 import { replyObjectOf, normalizeDelta, parseDraft, parseAudit, parsePatch, parseVerdicts, checkDraft } from '../src/standards/parse.mjs'
 import { closeRefs, normalizeBareRefs } from '../src/workflow/candidates.mjs'
-import { applyPatch, inferOp, normalizeIssues, gateVerdicts, removalAllowed } from '../src/workflow/reviewGuards.mjs'
-import { bracketRefs, guardOps } from '../src/standards/opGuards.mjs'
+import { applyPatch, inferOp, normalizeIssues, gateVerdicts, removalAllowed, issueOnOp, SEV_HIGH, REMOVE_TYPES, ISSUE_TYPES } from '../src/workflow/reviewGuards.mjs'
+import * as ReviewGuards from '../src/workflow/reviewGuards.mjs'
+import { DISPUTE_DROP_REASONS } from '../src/workflow/verdicts.mjs'
+import { DISPUTE_OPS } from '../src/stores/coreState.mjs'
+import { bracketRefs, guardOps, opClass } from '../src/standards/opGuards.mjs'
 import { createExtractDomain } from '../src/domain/extractDomain.mjs'
 import { findItem, holdItems, withdrawSources } from '../src/stores/coreState.mjs'
 import { opLengthProblem, applyDelta, coverageOf, commitBatch, queuePendingReview } from '../src/stores/coreDelta.mjs'
@@ -472,6 +475,124 @@ describe('unit-extract-workflow', function() {
         // 修訂之 removes 同一判準:爭議類以「同篇」移除不准(同篇為終審之存疑,不是移除理由)
         const p = applyPatch(ops, { removes: [{ ref: 'i_0', reason: '同篇' }] }, { state: s, issues: [] })
         assert.deepEqual([p.ops.length, p.log[0].ok], [4, false])
+    })
+
+    it('移除判準之意見面為單一來源(removalIssueOf;R2):重複不論嚴重度、離題／捏造須高嚴重度、其餘類型不足;指向以 issueOnOp;可限定類型;未給意見陣列視同空', () => {
+        const op = { _oid: 'i_1', op: 'add', kind: 'rule', text: 't', sources: ['N1'] }
+        const other = { _oid: 'i_2', op: 'add', kind: 'rule', text: 'u', sources: ['N1'] }
+        const iss = (type, severity, ref = 'i_1') => ({ k: 0, ref, severity, type, detail: 'x', fix: 'y' })
+        const of = (...a) => ReviewGuards.removalIssueOf(...a)
+        assert.equal(typeof ReviewGuards.removalIssueOf, 'function', '自 reviewGuards 匯出')
+        for (const sev of ['高', 'high', '嚴重', '中', '低', '']) assert.ok(of(op, [iss('重複', sev)]), `重複不論嚴重度:${sev || '空'}`)
+        for (const t of ['離題', '捏造']) {
+            for (const sev of ['高', 'high', 'High', 'HIGH', '嚴重']) assert.ok(of(op, [iss(t, sev)]), `${t}須高:${sev}`)
+            for (const sev of ['中', '低', '']) assert.equal(of(op, [iss(t, sev)]), undefined, `${t}非高不足:${sev || '空'}`)
+        }
+        for (const t of ['超限', '檢定標準', '措辭', '']) assert.equal(of(op, [iss(t, '高')]), undefined, `${t || '空類型'}不足以移除(高嚴重度亦然)`)
+        assert.equal(of(op, [iss('重複', '高', 'i_2')]), undefined, '指向他條不算')
+        assert.equal(of(other, [iss('重複', '高')]), undefined, '另一條操作不受影響')
+        assert.equal(of(op, [iss('重複', '高', 'i_1、i_2')]), undefined, '合寫之 ref 不指向任一操作(同 issueOnOp)')
+        assert.ok(of({ op: 'revise', id: 'C3', _oid: 'i_9' }, [iss('重複', '低', 'C3')]), '指向目標 id(同 issueOnOp)')
+        // 限定類型:只問「以該類型」足以移除
+        assert.ok(of(op, [iss('重複', '低')], [ISSUE_TYPES.duplicate]))
+        assert.equal(of(op, [iss('重複', '低')], [ISSUE_TYPES.fabricated]), undefined, '重複之意見不能充作捏造')
+        assert.equal(of(op, [iss('捏造', '中')], [ISSUE_TYPES.fabricated]), undefined, '捏造須高')
+        assert.ok(of(op, [iss('重複／捏造', '中')], [ISSUE_TYPES.duplicate]), '合寫之類型含重複 → 以重複計(同 includes)')
+        assert.equal(of(op, [iss('重複／捏造', '中')], [ISSUE_TYPES.fabricated]), undefined, '同一意見以捏造計仍須高')
+        assert.equal(of(op, [iss('重複', '低')], []), undefined, '空的限定類型 → 無')
+        assert.equal(of(op, undefined), undefined)
+        assert.equal(of(op, null), undefined)
+        // 回傳足以移除之那筆意見
+        const first = iss('捏造', '高')
+        assert.equal(of(op, [iss('捏造', '中'), first, iss('重複', '低')]), first, '回傳第一筆足以移除之意見')
+    })
+
+    it('removalAllowed 之既有行為不變(R3:抽出共用判定件前後逐格同——操作類別×意見類型×嚴重度×指向×移除方自述之理由 全積,對照抽出前之逐字舊式)', () => {
+        const s = baseState()
+        const ops = {
+            constructive: { _oid: 'i_1', op: 'add', kind: 'rule', text: 't', sources: ['N1'] },
+            destructive: { _oid: 'i_2', op: 'retract', id: s.claims[2].id, reason: '離題' },
+            dispute: { _oid: 'i_0', op: 'dispute_add', question: 'q', sides: [{ position: '甲', sources: ['N1'] }, { position: '乙', sources: ['N2'] }] },
+        }
+        // 抽出前之 removalAllowed(逐字,含其兩個模組內判定)
+        const high = (o, iss) => iss.find((x) => issueOnOp(x, o) && SEV_HIGH.has(x.severity) && REMOVE_TYPES.some((t) => x.type.includes(t)))
+        const dupI = (o, iss) => iss.find((x) => issueOnOp(x, o) && x.type.includes(ISSUE_TYPES.duplicate))
+        const legacy = (op, state, issues, reason = '') => {
+            if (opClass(op, state) === 'destructive') return { ok: true, why: '破壞性操作，移除即保住既有知識' }
+            if (DISPUTE_OPS.has(op.op) && !DISPUTE_DROP_REASONS.includes(String(reason)) && !high(op, issues)) {
+                return { ok: false, why: `爭議類操作只能以「${DISPUTE_DROP_REASONS.join('」「')}」移除（假爭議不是移除理由）` }
+            }
+            if (dupI(op, issues) || String(reason) === '重複') return { ok: true, why: '重複' }
+            if (high(op, issues)) return { ok: true, why: '引用高嚴重度之離題／捏造意見' }
+            return { ok: false, why: '建設性操作只准以「重複」或「高」嚴重度之離題／捏造意見移除（中、低嚴重度請修訂措辭）' }
+        }
+        const types = ['重複', '離題', '捏造', '超限', '檢定標準', '措辭', '重複／捏造', '離題、重複', '']
+        const sevs = ['高', 'high', '嚴重', '中', '低', '']
+        const refs = ['i_1', 'i_0', 'i_2', 'i_1、i_0', 'C9']
+        const reasons = ['', '重複', '離題', '捏造', '性質標錯', '同篇']
+        let cells = 0
+        let allowed = 0
+        for (const [cls, op] of Object.entries(ops)) {
+            for (const type of types) for (const severity of sevs) for (const ref of refs) for (const reason of reasons) {
+                const issues = normalizeIssues([{ ref, severity, type, detail: 'x', fix: 'y' }])
+                const got = removalAllowed(op, s, issues, reason)
+                assert.deepEqual(got, legacy(op, s, issues, reason), `${cls} type=${type} severity=${severity} ref=${ref} reason=${reason}`)
+                cells++
+                if (got.ok) allowed++
+            }
+            const none = removalAllowed(op, s, [], '')
+            assert.deepEqual(none, legacy(op, s, [], ''), `${cls} 無意見`)
+        }
+        assert.equal(cells, 3 * types.length * sevs.length * refs.length * reasons.length)
+        assert.ok(allowed > 0 && allowed < cells, '格內有放行亦有擋下')
+        // 兩條意見:任一條足以即放行;破壞性操作恆放行
+        const two = normalizeIssues([{ ref: 'i_1', severity: '中', type: '離題' }, { ref: 'i_1', severity: '低', type: '重複' }])
+        assert.deepEqual(removalAllowed(ops.constructive, s, two, ''), legacy(ops.constructive, s, two, ''))
+    })
+
+    it('審計意見缺 ref(或為空字串)不指向任何操作(R8):issueOnOp、removalIssueOf、removalAllowed、applyPatch、gateVerdicts 皆不因缺 ref 之意見放行移除;非空 ref 照舊', () => {
+        const s = baseState()
+        const op = { _oid: 'i_1', op: 'add', kind: 'rule', text: 't', sources: ['N1'] }
+        const withId = { _oid: 'i_2', op: 'confirm', id: 'C1', sources: ['N1'] }
+        const withRef = { _oid: 'i_3', op: 'add', ref: 'x', kind: 'rule', text: 'u', sources: ['N1'] }
+        // 審計回覆之意見不必帶 ref:checkAudit 只要求 issues 為陣列,正規化後缺 ref 者之 ref 為空字串
+        const raw = [{ severity: '高', type: '離題', detail: 'x' }, { ref: '', severity: '中', type: '重複', detail: 'x' }, { target: '', severity: '高', type: '捏造', detail: 'x' }]
+        const issues = normalizeIssues(raw)
+        assert.deepEqual(issues.map((x) => x.ref), ['', '', ''])
+        for (const x of issues) for (const o of [op, withId, withRef]) assert.equal(issueOnOp(x, o), false, `空 ref 不指向 ${o._oid}`)
+        assert.equal(issueOnOp({ ref: 'i_1' }, op), true, '以 _oid')
+        assert.equal(issueOnOp({ ref: 'C1' }, withId), true, '以目標 id')
+        assert.equal(issueOnOp({ ref: 'x' }, withRef), true, '以新項 ref')
+        assert.equal(ReviewGuards.removalIssueOf(op, issues), undefined, '缺 ref 之意見(含高嚴重度離題、中嚴重度重複)不足以移除任何操作')
+        assert.equal(removalAllowed(op, s, issues, '').ok, false)
+        assert.equal(removalAllowed(op, s, issues, '離題').ok, false)
+        assert.equal(removalAllowed(op, s, issues, '重複').ok, true, '移除方自述「重複」仍放行(不屬意見面;既有行為不變)')
+        // 另有指向他條之合法意見:他條照常、i_1 仍擋
+        const mixed = normalizeIssues([...raw, { ref: 'i_3', severity: '高', type: '離題', detail: 'x' }])
+        assert.equal(removalAllowed(withRef, s, mixed, '離題').ok, true)
+        assert.equal(removalAllowed(op, s, mixed, '離題').ok, false)
+        // 修訂之 removes、終審之剔除閘
+        const p = applyPatch([op, withRef], { removes: [{ ref: 'i_1', issue: 0, reason: '離題' }] }, { state: s, issues })
+        assert.deepEqual([p.ops.length, p.log[0].ok], [2, false])
+        const g = gateVerdicts([op], [{ i: 0, action: 'drop', reason: '離題' }], { state: s, issues })
+        assert.deepEqual([g.verdicts[0].action, g.blocked.length], ['keep', 1])
+    })
+
+    it('正式 runPass:審計回覆之意見缺 ref(高嚴重度離題)不使修訂之移除、終審之剔除得以放行(R8;缺 ref 之意見在修前會指向一切無 id／ref 之操作)', async () => {
+        const s = baseState()
+        const text = '動量報酬可持續 3 到 12 個月'
+        const mk = () => ({ ops: [{ op: 'add', kind: 'rule', text, sources: ['N1'], ...ANN }], skipped: [] })
+        const base = { d1: mk(), d2: mk(), d3: mk(), int: { ops: [{ op: 'add', kind: 'rule', text, sources: ['N1'], ...ANN, via: ['a1_1'] }], skipped: [] } }
+        const aud = { issues: [{ severity: '高', type: '離題', detail: '整批與概念無關' }] }
+        const viaPatch = await run(s, fakeAi({ ...base, aud, rev: { removes: [{ ref: 'i_1', issue: 0 }] }, acc: keepAll }))
+        assert.equal(viaPatch.applied.filter((a) => a.op === 'add').length, 1, '修訂之移除被擋下(缺 ref 之意見不指向 i_1)')
+        assert.equal(viaPatch.stats.patch.blocked, 1)
+        const viaVerdict = await run(s, fakeAi({ ...base, aud, rev: { edits: [] }, acc: { verdicts: [{ i: 0, action: 'drop', reason: '離題' }] } }))
+        assert.equal(viaVerdict.applied.filter((a) => a.op === 'add').length, 1, '終審之剔除被剔除閘擋下改為保留')
+        assert.equal(viaVerdict.stats.verdictBlocked, 1)
+        // 對照:ref 指向 i_1 之同一意見 → 照常放行
+        const withRef = await run(s, fakeAi({ ...base, aud: { issues: [{ ref: 'i_1', severity: '高', type: '離題', detail: 'x' }] }, rev: { removes: [{ ref: 'i_1', issue: 0 }] }, acc: keepAll }))
+        assert.equal(withRef.applied.filter((a) => a.op === 'add').length, 0, '指向 i_1 之高嚴重度離題 → 可移除')
     })
 
     it('待審逾上限丟最舊:丟棄之提案內容隨結果回傳(pendingDroppedOps;提煉段逐項落帳)——丟棄的是提案、不是知識,落帳可查', async () => {

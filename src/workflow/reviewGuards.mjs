@@ -3,7 +3,8 @@
 // 【補丁＋守門(補丁守門)】整份重寫之 B 段會把既有內容改壞(評比平均為負分);改「只輸出補丁、程式套回、守門」後審後不比審前差。
 //   補丁守門之六條規則依操作類別映射:
 //   ①修訂只輸出 {edits, adds, removes},程式套回,未點名之操作逐字保留;
-//   ②要移除「建設性」操作只准:重複,或引用嚴重度「高」之離題／捏造意見(中嚴重度之「離題」多落在範圍有爭議或應保留者);
+//   ②要移除「建設性」操作只准:重複(不論嚴重度),或引用嚴重度「高」之離題／捏造意見(中嚴重度之「離題」多落在範圍有爭議或應保留者);
+//     意見面之判定只此一份(removalIssueOf;評分之審計角色 wf-audit 之謂詞 flags 共用);
 //     移除「破壞性」操作一律放行(＝保住既有知識);
 //   ③改寫只限該操作之可改欄位(FIXABLE_FIELDS),不得改 op 與目標 id;改寫文字須保有原文過半(包含率 ≥0.5);
 //   ④「假爭議」不是移除理由(爭議類操作只能以離題移除且須引用高嚴重度之離題／捏造意見——coreState.DISPUTE_DROP_REASONS;
@@ -60,16 +61,18 @@ export const ISSUE_TYPES = Object.freeze({ fabricated: '捏造', offTopic: '離�
 export const REMOVE_TYPES = [ISSUE_TYPES.offTopic, ISSUE_TYPES.fabricated]
 
 /**
- * 意見是否指向某操作(ref＝操作之 _oid、目標 id 或新項之 ref;補丁守門、終審剔除之閘與評分之審計角色同一判準)
+ * 意見是否指向某操作(ref＝操作之 _oid、目標 id 或新項之 ref;補丁守門、終審剔除之閘與評分之審計角色同一判準)。
+ *   ref 為空(審計回覆之意見可不帶 ref,checkAudit 只要求 issues 為陣列,正規化後 ref 為空字串)不指向任何操作——
+ *   否則空字串會與一切無 id、無 ref 之操作(多數新增主張)相符,使缺 ref 之意見成為移除之放行依據
  *
  * @param {Object} x 輸入正規化之審計意見(normalizeIssues 之項)
  * @param {Object} op 輸入操作(帶 _oid)
  * @returns {Boolean} 回傳是否指向該操作
  * @example
- * console.log(issueOnOp({ ref: 'a1_2' }, { op: 'add', _oid: 'a1_2' }), issueOnOp({ ref: 'C3' }, { op: 'revise', id: 'C3', _oid: 'i_1' }))
- * // => true true
+ * console.log(issueOnOp({ ref: 'a1_2' }, { op: 'add', _oid: 'a1_2' }), issueOnOp({ ref: 'C3' }, { op: 'revise', id: 'C3', _oid: 'i_1' }), issueOnOp({ ref: '' }, { op: 'add', _oid: 'a1_2' }))
+ * // => true true false
  */
-export const issueOnOp = (x, op) => x.ref === op._oid || x.ref === str(op.id) || x.ref === str(op.ref)
+export const issueOnOp = (x, op) => !!x.ref && (x.ref === op._oid || x.ref === str(op.id) || x.ref === str(op.ref))
 
 /**
  * 審計意見正規化:ref(操作 id 或條目 id)、severity、type、detail、fix
@@ -100,9 +103,30 @@ export function normalizeIssues(issues) {
     }))
 }
 
-/** 某操作是否被「高」嚴重度之離題／捏造意見指出 */
-const highRemovalIssue = (op, issues) => issues.find((x) => issueOnOp(x, op) && SEV_HIGH.has(x.severity) && REMOVE_TYPES.some((t) => x.type.includes(t)))
-const dupIssue = (op, issues) => issues.find((x) => issueOnOp(x, op) && x.type.includes(ISSUE_TYPES.duplicate))
+/** 只問「重複」(removalAllowed 之重複條) */
+const DUP_ONLY = Object.freeze([ISSUE_TYPES.duplicate])
+
+/**
+ * 移除判準之意見面(單一來源):哪一筆審計意見足以使某建設性操作被移除——意見指向該操作(issueOnOp),且依其類型:
+ *   「重複」不論嚴重度;「離題」「捏造」須「高」嚴重度(SEV_HIGH);其餘類型(超限、檢定標準、措辭…)不足。
+ *   removalAllowed(修訂之 removes、終審之剔除閘)與評分之審計角色(wf-audit 之謂詞 flags:植入之缺陷是否被指出)共用此一份——
+ *   審計提示詞之「高」＝不改會留下錯誤知識或遺失知識,「重複」兩者皆非,故模型標中嚴重度之重複屬正確,正式之修訂、終審照樣依之移除。
+ *   只含意見面:操作類別(破壞性操作移除不需意見)、爭議類操作之移除理由(須為「離題」或有高嚴重度意見)、移除方自述之理由(終審 drop 之 reason)
+ *   屬操作與移除方之性質,不在意見之內,仍由 removalAllowed 判
+ *
+ * @param {Object} op 輸入操作(帶 _oid;或 id、ref)
+ * @param {Array} issues 輸入正規化之審計意見(normalizeIssues 之項);非陣列視同無意見
+ * @param {Array} [types=[ISSUE_TYPES.duplicate, ...REMOVE_TYPES]] 輸入限定之意見類型(ISSUE_TYPES 之重複／離題／捏造之子集;給了只問「以這些類型」是否足以;不在其中之類型恆不足;未給＝三者皆可)
+ * @returns {Object|undefined} 回傳第一筆足以移除該操作之意見;無則 undefined
+ * @example
+ * const issues = normalizeIssues([{ ref: 'a1_2', severity: '中', type: '重複', detail: '與 a1_1 同義', fix: '刪除' }, { ref: 'a1_3', severity: '中', type: '捏造', detail: '出處未載', fix: '刪除' }])
+ * console.log(removalIssueOf({ _oid: 'a1_2' }, issues)?.type, removalIssueOf({ _oid: 'a1_3' }, issues)?.type, removalIssueOf({ _oid: 'a1_2' }, issues, [ISSUE_TYPES.fabricated])?.type)
+ * // => 重複 undefined undefined
+ */
+export function removalIssueOf(op, issues, types = [ISSUE_TYPES.duplicate, ...REMOVE_TYPES]) {
+    if (!Array.isArray(issues) || !Array.isArray(types)) return undefined
+    return issues.find((x) => issueOnOp(x, op) && types.some((t) => x.type.includes(t) && (t === ISSUE_TYPES.duplicate || (REMOVE_TYPES.includes(t) && SEV_HIGH.has(x.severity)))))
+}
 
 /**
  * 移除一條操作是否合法(補丁守門,依類別)
@@ -118,11 +142,11 @@ const dupIssue = (op, issues) => issues.find((x) => issueOnOp(x, op) && x.type.i
  */
 export function removalAllowed(op, state, issues, reason = '') {
     if (opClass(op, state) === 'destructive') return { ok: true, why: '破壞性操作，移除即保住既有知識' }
-    if (DISPUTE_OPS.has(op.op) && !DISPUTE_DROP_REASONS.includes(str(reason)) && !highRemovalIssue(op, issues)) {
+    if (DISPUTE_OPS.has(op.op) && !DISPUTE_DROP_REASONS.includes(str(reason)) && !removalIssueOf(op, issues, REMOVE_TYPES)) {
         return { ok: false, why: `爭議類操作只能以「${DISPUTE_DROP_REASONS.join('」「')}」移除（假爭議不是移除理由）` }
     }
-    if (dupIssue(op, issues) || str(reason) === '重複') return { ok: true, why: '重複' }
-    if (highRemovalIssue(op, issues)) return { ok: true, why: '引用高嚴重度之離題／捏造意見' }
+    if (removalIssueOf(op, issues, DUP_ONLY) || str(reason) === '重複') return { ok: true, why: '重複' }
+    if (removalIssueOf(op, issues, REMOVE_TYPES)) return { ok: true, why: '引用高嚴重度之離題／捏造意見' }
     return { ok: false, why: '建設性操作只准以「重複」或「高」嚴重度之離題／捏造意見移除（中、低嚴重度請修訂措辭）' }
 }
 
@@ -294,4 +318,4 @@ export function gateVerdicts(ops, verdicts, ctx = {}) {
     return { verdicts: out, blocked, rejected }
 }
 
-export default { ISSUE_TYPES, SEV_HIGH, REMOVE_TYPES, issueOnOp, inferOp, normalizeIssues, removalAllowed, applyPatch, gateVerdicts }
+export default { ISSUE_TYPES, SEV_HIGH, REMOVE_TYPES, issueOnOp, inferOp, normalizeIssues, removalIssueOf, removalAllowed, applyPatch, gateVerdicts }
