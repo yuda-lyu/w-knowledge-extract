@@ -5,6 +5,9 @@
 // 【計票以實際成交之 provider】三席首選失敗而同落同一遞補家時,三份候選來自同一家,不算三個獨立支持(同一 provider 只算一票)。
 // 【程式聯集保留單票者】整合失敗時之降級:保留全部合格操作(含只出現在一份候選者)——三家聯集勝過單家,
 //   多出之知識正是這些單票者;「≥2 票才收」會把它們丟掉。
+// 【整合員改 ref 名:「候選 ref → 輸出 ref／輸出操作」之對照只定義一份】整合員合併同義新增而只留一條時,常去掉席位前綴 a{席}_ 或取另一席之名,
+//   依附該新條目之 param_add／dispute_add 等之目標隨之改指新名。對照定義於 successorOf(承接者)與 refAliasOf(改名表),兩處共用:
+//   validateVia 之目標比對(目標＝候選目標經改名表之輸出名者視為相同)與 closeRefs 之別名(引用仍寫舊名者指向輸出)皆由此取,不各寫一份。
 
 import { applyDelta } from '../stores/coreDelta.mjs'
 import { normalizeConflictDecl } from '../standards/conflictDisposition.mjs'
@@ -161,13 +164,70 @@ export function programUnion(cands, votes) {
 
 /** 整合者輸出與候選比對之文字(依操作種類:新增類之 text／question、修訂之 fields.text、本質之 text、參數之名稱＋值) */
 const viaTextOf = (op) => (op?.op === 'revise' ? str(op.fields?.text) : (op?.op === 'param_add' ? [str(op.name), str(op.value)].filter(Boolean).join(' ') : (str(op?.text) || str(op?.question))))
-/** 改狀態類之目標欄位(整合不得改目標) */
+/** 改狀態類之目標欄位(整合不得改目標;目標為同差量 ref 且整合員已改名者,依 refAliasOf 對回候選 ref 視為相同) */
 const TARGET_KEYS = ['id', 'into', 'by', 'dispute', 'claim']
 
 /**
- * 驗證整合者之輸出:每條須以 via 指回候選操作;操作種類須同所引候選之一;改狀態類之目標須同所引候選;出處(含各方之出處)不得超出 via 所指操作之
- *   出處聯集;文字(新增類之 text／question、修訂之 fields.text、本質之 text、參數之名稱＋值)須保有 via 原文過半(終審 §3 D5i)——
- *   判式為兩向包含率任一 ≥0.5(新文為原文之子集而僅縮短者亦過;同 opGuards 之 revise 判式),非嚴格之「原文過半在新文」
+ * 候選定義操作在整合者輸出中之承接者(「候選 ref → 輸出操作／輸出 ref」之唯一判準,refAliasOf 與 closeRefs 共用):
+ *   同操作種類、_via 含該候選 _oid 者之第一條;to＝其 ref(空字串＝整合員未給 ref)
+ */
+function successorOf(def, ops) {
+    const twin = ops.find((o) => o?.op === def.op && Array.isArray(o._via) && o._via.includes(def._oid))
+    return twin ? { twin, to: str(twin.ref) } : null
+}
+
+/**
+ * 整合員對同差量 ref 之改名表(候選 ref → 輸出 ref):候選定義操作(帶 ref)之承接者(輸出中同操作種類、_via 含其 _oid 之第一條)帶 ref 且名不同者入表——
+ *   整合員合併同義新增而只留一條時,去掉席位前綴 a{席}_ 或取另一席之名,依附之 param_add／dispute_add 等之目標隨之改指新名,由此對回候選 ref。
+ *   承接者未給 ref(由 closeRefs 補上候選之 ref)、名相同者不列;同一候選 ref 只取先見者
+ *
+ * @param {Array} ops 輸入整合者輸出之操作(帶 _via:Array 候選 _oid)
+ * @param {Iterable} defs 輸入候選定義操作(帶 _oid、ref;無 ref 者略過)
+ * @returns {Map} 回傳 候選 ref → 輸出 ref(皆不含 @)
+ * @example
+ * const def = { _oid: 'a2_1', op: 'add', ref: 'a2_def', kind: 'rule', text: '甲', sources: ['N2'] }
+ * const out = [{ op: 'add', ref: 'def', kind: 'rule', text: '甲', sources: ['N2'], _via: ['a1_1', 'a2_1'] }]
+ * console.log([...refAliasOf(out, [def])])
+ * // => [ [ 'a2_def', 'def' ] ]
+ */
+export function refAliasOf(ops, defs) {
+    const alias = new Map()
+    for (const def of defs || []) {
+        const from = str(def?.ref)
+        if (!from || alias.has(from)) continue
+        const s = successorOf(def, Array.isArray(ops) ? ops : [])
+        if (s?.to && s.to !== from) alias.set(from, s.to)
+    }
+    return alias
+}
+
+/**
+ * 單條整合輸出之判式(依序:via、操作種類、目標、出處、文字),回第一個不合之拒收理由,合格回空字串;sameTarget 為 null 時略過目標比對
+ */
+function viaProblemOf(op, via, byOid, sameTarget) {
+    if (!via.length) return 'via 未指回任何候選操作（整合不可新增候選沒有之操作）'
+    const cands = via.map((x) => byOid.get(x))
+    if (!cands.some((c) => str(c.op) === str(op.op))) return `操作種類 ${str(op.op) || '?'} 與所引候選（${uniq(cands.map((c) => str(c.op))).join('、')}）不同（整合不可改變操作種類）`
+    const badTarget = sameTarget ? TARGET_KEYS.find((k) => typeof op[k] === 'string' && str(op[k]) && !cands.some((c) => sameTarget(str(op[k]), str(c[k])))) : ''
+    if (badTarget) return `目標 ${badTarget}＝${str(op[badTarget])} 與所引候選不同（整合不可改變操作之目標）`
+    const srcs = srcUnion(cands)
+    const extra = [...strs(op.sources), ...(Array.isArray(op.sides) ? op.sides.flatMap((sd) => strs(sd?.sources)) : [])].filter((x) => !srcs.has(x))
+    if (extra.length) return `出處 ${uniq(extra).join('、')} 不在所引候選之出處內`
+    const t = viaTextOf(op)
+    if (t) {
+        const base = cands.map(viaTextOf).filter(Boolean)
+        if (base.length && Math.max(...base.map((b) => containment(t, b))) < 0.5 && Math.max(...base.map((b) => containment(b, t))) < 0.5) return '文字與所引候選差異過大（整合不可改寫成候選沒有之內容）'
+    }
+    return ''
+}
+
+/**
+ * 驗證整合者之輸出:每條須以 via 指回候選操作;操作種類須同所引候選之一;改狀態類之目標須同所引候選(目標為同差量 ref〔'@名'〕且整合員已改名者,
+ *   候選之目標經 refAliasOf 之輸出名等於輸出之目標視為相同;既有條目編號不經改名表,真改指他條、或改指候選沒有且輸出亦未定義之 '@名' 仍拒);
+ *   出處(含各方之出處)不得超出 via 所指操作之出處聯集;文字(新增類之 text／question、修訂之 fields.text、本質之 text、參數之名稱＋值)須保有 via 原文過半
+ *   (終審 §3 D5i)——判式為兩向包含率任一 ≥0.5(新文為原文之子集而僅縮短者亦過;同 opGuards 之 revise 判式),非嚴格之「原文過半在新文」。
+ *   兩段式:先以「其餘判式(via、種類、出處、文字)皆過」之輸出建改名表(定義該 ref 之新增本身被拒者不入表,依附操作不因改名而通過、目標懸空),再逐條全判;
+ *   拒收理由字樣與判式次序不變(目標在出處、文字之前)
  *
  * @param {Array} ops 輸入整合者回傳之操作(各帶 via:Array)
  * @param {Map} byOid 輸入 _oid → 候選操作
@@ -179,40 +239,26 @@ const TARGET_KEYS = ['id', 'into', 'by', 'dispute', 'claim']
  * // => 1 1
  */
 export function validateVia(ops, byOid) {
-    const ok = []
-    const rejected = []
+    const items = []
     for (const op0 of Array.isArray(ops) ? ops : []) {
         if (!op0 || typeof op0 !== 'object') continue
         const op = clone(op0)
         const via = strs(op.via).filter((x) => byOid.has(x))
         delete op.via
-        if (!via.length) {
-            rejected.push({ op, reason: 'via 未指回任何候選操作（整合不可新增候選沒有之操作）' })
+        items.push({ op, via })
+    }
+    // 第一段:其餘判式皆過者才是改名表之來源
+    const solid = items.filter((it) => !viaProblemOf(it.op, it.via, byOid, null)).map((it) => ({ ...it.op, _via: it.via }))
+    const alias = refAliasOf(solid, byOid.values())
+    const sameTarget = (v, cv) => cv === v || (v.startsWith('@') && cv.startsWith('@') && alias.get(cv.slice(1)) === v.slice(1))
+    // 第二段:逐條全判
+    const ok = []
+    const rejected = []
+    for (const { op, via } of items) {
+        const reason = viaProblemOf(op, via, byOid, sameTarget)
+        if (reason) {
+            rejected.push({ op, reason })
             continue
-        }
-        const cands = via.map((x) => byOid.get(x))
-        if (!cands.some((c) => str(c.op) === str(op.op))) {
-            rejected.push({ op, reason: `操作種類 ${str(op.op) || '?'} 與所引候選（${uniq(cands.map((c) => str(c.op))).join('、')}）不同（整合不可改變操作種類）` })
-            continue
-        }
-        const badTarget = TARGET_KEYS.find((k) => typeof op[k] === 'string' && str(op[k]) && !cands.some((c) => str(c[k]) === str(op[k])))
-        if (badTarget) {
-            rejected.push({ op, reason: `目標 ${badTarget}＝${str(op[badTarget])} 與所引候選不同（整合不可改變操作之目標）` })
-            continue
-        }
-        const srcs = srcUnion(cands)
-        const extra = [...strs(op.sources), ...(Array.isArray(op.sides) ? op.sides.flatMap((sd) => strs(sd?.sources)) : [])].filter((x) => !srcs.has(x))
-        if (extra.length) {
-            rejected.push({ op, reason: `出處 ${uniq(extra).join('、')} 不在所引候選之出處內` })
-            continue
-        }
-        const t = viaTextOf(op)
-        if (t) {
-            const base = cands.map(viaTextOf).filter(Boolean)
-            if (base.length && Math.max(...base.map((b) => containment(t, b))) < 0.5 && Math.max(...base.map((b) => containment(b, t))) < 0.5) {
-                rejected.push({ op, reason: '文字與所引候選差異過大（整合不可改寫成候選沒有之內容）' })
-                continue
-            }
         }
         op._via = via
         ok.push(op)
@@ -306,7 +352,8 @@ export function normalizeBareRefs(ops, names) {
 
 /**
  * ref 依賴閉包:整合(或程式聯集、修訂)後之操作所引之 '@ref' 未在本差量定義時——
- *   ①本差量中有操作之 _via 含該 ref 之定義操作(整合員把它合併改名或未給 ref)→ 別名指向它(必要時補上 ref);
+ *   ①本差量中有操作之 _via 含該 ref 之定義操作(整合員把它合併改名或未給 ref)→ 別名指向它(必要時補上 ref;「承接者」之判準與 validateVia 之
+ *     改名表 refAliasOf 同一份〔successorOf〕:引用仍寫候選舊名者在此指向輸出,引用已改寫為輸出名者由 validateVia 認得、無需別名);
  *   ②否則自候選取回定義操作(未被試套拒收者)一併收入,標 _closure。重複至不再增加。
  * (整合員常收了引用 @ref 之 param_add 與 dispute_add,卻漏了定義它之 add,不閉包則兩條皆被拒)
  *
@@ -335,11 +382,11 @@ export function closeRefs(ops, cands) {
         for (const [r, by] of missing) {
             if (defined().has(r) || alias.has(r)) continue
             const def = pool.get(r)
-            const twin = out.find((o) => o.op === def.op && Array.isArray(o._via) && o._via.includes(def._oid))
-            if (twin) {
-                if (!str(twin.ref)) twin.ref = r
-                else alias.set(r, str(twin.ref))
-                added.push({ ref: r, by, how: `別名→${twin._oid}` })
+            const s = successorOf(def, out) // 候選 ref → 輸出操作／輸出 ref:與 validateVia 之改名表(refAliasOf)同一判準
+            if (s) {
+                if (!s.to) s.twin.ref = r
+                else alias.set(r, s.to)
+                added.push({ ref: r, by, how: `別名→${s.twin._oid}` })
                 continue
             }
             const copy = clone(def)
@@ -368,4 +415,4 @@ export const stripProgramFields = (op) => {
     return o
 }
 
-export default { remapRefs, prefixCandidate, trialApply, voteOps, programUnion, validateVia, droppedMajority, applyRefAliases, refsOf, normalizeBareRefs, closeRefs, stripProgramFields }
+export default { remapRefs, prefixCandidate, trialApply, voteOps, programUnion, refAliasOf, validateVia, droppedMajority, applyRefAliases, refsOf, normalizeBareRefs, closeRefs, stripProgramFields }

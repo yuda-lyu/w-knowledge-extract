@@ -265,6 +265,40 @@ describe('unit-extract-workflow', function() {
         assert.ok(r.state.claims.some((c) => c.text === '動量報酬在空頭反轉期仍可持續'), '被引用之新主張一併收入')
     })
 
+    // ── 整合員合併同義新增而改 ref 名(EXT-28;使用端 Gitea #91):依附之 param_add 之目標隨之改指新名,validateVia 須認得,依附知識才進得了套用 ──
+    //   兩席各新增同義主張(ref g)與依附之 param_add(claim @g),經 prefixCandidate 得 a1_g／a2_g、_oid a{席}_1(add)／a{席}_2(param_add)
+    const MERGE_TEXT = '盈餘消息反應不足使動量報酬持續 3 到 12 個月'
+    const mergeSeat = { ops: [{ op: 'add', ref: 'g', kind: 'rule', text: MERGE_TEXT, basis: '實證', sources: ['N1'], ...ANN }, { op: 'param_add', claim: '@g', name: '持續期間', value: '12 個月', sources: ['N1'] }], skipped: [] }
+    const mergeAdd = (ref) => ({ op: 'add', ref, kind: 'rule', text: MERGE_TEXT, basis: '實證', sources: ['N1'], ...ANN, via: ['a1_1', 'a2_1'] })
+    const mergeDep = (claim, via) => ({ op: 'param_add', claim, name: '持續期間', value: '12 個月', sources: ['N1'], via })
+    const mergeRun = (int) => run(baseState(), fakeAi({ d1: mergeSeat, d2: mergeSeat, d3: 'fail', int: { ops: int, skipped: [] }, aud: { issues: [] }, acc: keepAll }))
+    for (const [title, ref, dep] of [
+        ['場景①去前綴合併(g)、依附操作出自第 2 席', 'g', mergeDep('@g', ['a2_2'])],
+        ['場景②取第 2 席之名(a2_g)、依附操作出自第 1 席', 'a2_g', mergeDep('@a2_g', ['a1_2'])],
+    ]) {
+        it(`整合員合併同義新增而改 ref 名,${title} → 依附之 param_add 通過整合驗證、進入套用,目標＝合併後之新主張`, async () => {
+            // 規則:validateVia JSDoc「目標為同差量 ref 且整合員已改名者…視為相同」;runPass 整合後段 validateVia → closeRefs → 守門 → applyDelta
+            const r = await mergeRun([mergeAdd(ref), dep])
+            assert.equal(r.ok, true, r.error)
+            assert.equal(r.trace.integrateRejected.length, 0, JSON.stringify(r.trace.integrateRejected))
+            assert.equal(r.stats.closure, 0, '新增本身在輸出內定義,不需閉包')
+            const claim = r.state.claims.find((c) => c.text === MERGE_TEXT)
+            const param = r.state.parameters.find((p) => p.name === '持續期間')
+            assert.ok(claim, '合併後之新主張')
+            assert.ok(param, '依附之參數進入套用')
+            assert.equal(param.claim, claim.id, '參數掛在合併後之新主張上')
+        })
+    }
+
+    it('整合員合併同義新增而改 ref 名:依附操作改指候選沒有且輸出亦未定義之名 → 仍被整合驗證拒收(理由字樣不變),參數不進套用', async () => {
+        const r = await mergeRun([mergeAdd('g'), mergeDep('@other', ['a2_2'])])
+        assert.equal(r.ok, true, r.error)
+        assert.equal(r.trace.integrateRejected.length, 1)
+        assert.equal(r.trace.integrateRejected[0].reason, '目標 claim＝@other 與所引候選不同（整合不可改變操作之目標）')
+        assert.ok(r.state.claims.some((c) => c.text === MERGE_TEXT), '新增本身仍成立')
+        assert.equal(r.state.parameters.some((p) => p.name === '持續期間'), false)
+    })
+
     it('integrate:program 不呼叫整合員、改程式聯集;candidates 沿用前次起草(不再起草)——同一份起草只差整合方式', async () => {
         const s = baseState()
         const d = { ops: [{ op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN }], skipped: [] }

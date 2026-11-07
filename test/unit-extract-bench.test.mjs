@@ -1189,6 +1189,19 @@ describe('unit-extract-bench', function() {
             assert.equal(one([{ ...A, kind: 'law' }, P]).cls, 'applies', '種類不在清單 → 套用拒收')
         })
 
+        it('整合(wf-integrate)謂詞 viaValid 與正式 runPass 同讀 validateVia:整合員合併同義新增而改 ref 名、依附之 param_add 隨之改指新名者不算 via 不合(EXT-28);改指候選沒有之名仍算', () => {
+            // 規則:wf-integrate 之 judgeOf 直接呼叫正式之 validateVia 與 closeRefs;validateVia JSDoc「目標為同差量 ref 且整合員已改名者…視為相同」
+            const g = wfCase('wf-integrate', 'g01')
+            const dep = { op: 'param_add', claim: '@x', name: '開放時段', value: '週末', conditions: ['某社區圖書館之統計'], sources: ['N1'] }
+            const renamed = { ...structuredClone(g), expect: { viaValid: true, keepsMajority: true, refsClosed: true, applies: true } }
+            renamed.input.candidates = [{ provider: 'p1', ops: [{ ...OP_A, ref: 'x' }, dep] }, { provider: 'p2', ops: [{ ...OP_A, ref: 'x' }] }]
+            const answer = (target) => ({ ops: [{ ...OP_A, ref: 'z', via: ['a1_1', 'a2_1'] }, { ...dep, claim: target, via: ['a1_2'] }], skipped: [] })
+            assert.equal(wfJudge('wf-integrate', renamed, answer('@z')).cls, 'ok', '去前綴改名為 z、依附操作改指 @z → 自足、可套用')
+            const bad = wfJudge('wf-integrate', renamed, answer('@other'))
+            assert.equal(bad.cls, 'viaValid', '改指候選沒有且輸出未定義之名 → 仍 via 不合')
+            assert.match(bad.fields.why, /目標 claim＝@other/)
+        })
+
         it('起草(wf-draft;結構合規):未引為出處 → cites;未以合法理由略過 → skips;漏交代 → covered;爭議與否不符 → dispute;未紮根之數字 → grounded;套用被拒收 → noRejected;種類未出現 → kinds', () => {
             const d = wfCase('wf-draft', 'd01')
             const one = (j, cc = d) => wfJudge('wf-draft', cc, j)

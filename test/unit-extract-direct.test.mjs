@@ -2,7 +2,8 @@
 // 規則出處(每條斷言之上一行註明所對之規則句):
 //   guards/similarity.mjs     檔頭【判準】【字組袋必須快取】與 bagOf／containment／bestContainment／mutualContainment／sameNegation／sameSubstance 之 JSDoc(thr=0.7)
 //   workflow/candidates.mjs   檔頭【穩定 id 依席位】【計票以實際成交之 provider】【程式聯集保留單票者】與 remapRefs／prefixCandidate／trialApply／voteOps／
-//                             programUnion／validateVia／droppedMajority／applyRefAliases／refsOf／stripProgramFields 之 JSDoc
+//                             programUnion／refAliasOf／validateVia／closeRefs／droppedMajority／applyRefAliases／refsOf／stripProgramFields 之 JSDoc
+//                             與檔頭【整合員改 ref 名:「候選 ref → 輸出 ref／輸出操作」之對照只定義一份】(EXT-28;使用端 Gitea #91)
 //   standards/opGuards.mjs    檔頭【補丁守門依操作類別映射】與 CONSTRUCTIVE_OPS／DESTRUCTIVE_OPS／textFieldsOf／opClass／rewriteTextFields 之 JSDoc
 //   standards/parse.mjs       「各棒之形狀檢查(嚴格布林…)」與檔頭【為何只收含鍵之物件、取最後一個合格者】
 //   domain/prompts.mjs        檔頭【規則表單一來源】【契約段】【依據】【稱呼只有一種機制】【意見類型由常數產生】與四函數之 JSDoc
@@ -12,7 +13,7 @@
 
 import assert from 'node:assert/strict'
 import { bagOf, containment, bestContainment, mutualContainment, sameNegation, sameSubstance } from '../src/guards/similarity.mjs'
-import { remapRefs, prefixCandidate, trialApply, voteOps, programUnion, validateVia, droppedMajority, applyRefAliases, refsOf, stripProgramFields } from '../src/workflow/candidates.mjs'
+import { remapRefs, prefixCandidate, trialApply, voteOps, programUnion, refAliasOf, validateVia, droppedMajority, applyRefAliases, refsOf, closeRefs, stripProgramFields } from '../src/workflow/candidates.mjs'
 import { CONSTRUCTIVE_OPS, DESTRUCTIVE_OPS, textFieldsOf, opClass, rewriteTextFields } from '../src/standards/opGuards.mjs'
 import { checkAudit, checkPatch, checkVerdicts, parseDraft, parseAudit, parsePatch } from '../src/standards/parse.mjs'
 import { buildIntegratePrompt, buildAuditPrompt, buildRevisePrompt, buildAcceptAppendix } from '../src/domain/prompts.mjs'
@@ -509,6 +510,105 @@ describe('unit-extract-direct', function() {
                 assert.equal(ok.ops.length, 1)
             })
 
+            describe('目標為同差量 ref 且整合員已改名(EXT-28)', function() {
+                // 規則:validateVia JSDoc「目標為同差量 ref〔'@名'〕且整合員已改名者,候選之目標經 refAliasOf 之輸出名等於輸出之目標視為相同;既有條目編號不經改名表,
+                //   真改指他條、或改指候選沒有且輸出亦未定義之 '@名' 仍拒」「兩段式:定義該 ref 之新增本身被拒者不入表」;拒收理由字樣與判式次序不變
+                // 夾具:兩席各新增同義條目(ref def)與依附之 param_add(claim @def),經正式 prefixCandidate 得 a{席}_def 與 _oid a{席}_{n}(1＝add、2＝param_add);
+                //   第 3 席另有改既有條目 C2 之 retract(a3_1)
+                const seatOf = (seat) => prefixCandidate({
+                    ops: [
+                        { op: 'add', ref: 'def', kind: 'rule', text: T1, basis: '觀測', sources: [`N${seat}`] },
+                        { op: 'param_add', claim: '@def', name: '門檻', value: '3', sources: [`N${seat}`] },
+                    ],
+                    skipped: [],
+                }, seat)
+                const cands = [1, 2].map((seat) => ({ seat, ...seatOf(seat) }))
+                const by = new Map([...cands.flatMap((c) => c.ops.map((op) => [op._oid, op])), ['a3_1', { op: 'retract', id: 'C2', reason: '重複', _oid: 'a3_1' }]])
+                const addOut = (ref, o = {}) => ({ op: 'add', ref, kind: 'rule', text: T1, basis: '觀測', sources: ['N1', 'N2'], via: ['a1_1', 'a2_1'], ...o })
+                const depOut = (claim, via, src, o = {}) => ({ op: 'param_add', claim, name: '門檻', value: '3', sources: [src], via, ...o })
+
+                it('夾具前提:候選之 ref 與依附目標皆帶席位前綴、_oid 依序', () => {
+                    assert.deepEqual([...by.values()].map((o) => `${o._oid}:${o.op}:${o.ref || o.claim || o.id}`), ['a1_1:add:a1_def', 'a1_2:param_add:@a1_def', 'a2_1:add:a2_def', 'a2_2:param_add:@a2_def', 'a3_1:retract:C2'])
+                })
+
+                it('場景①去前綴合併:兩席同義新增合為 def,第 2 席之依附操作改指 @def → 通過(目標原樣保留)、拒收 0', () => {
+                    const r = validateVia([addOut('def'), depOut('@def', ['a2_2'], 'N2')], by)
+                    assert.equal(r.rejected.length, 0, r.rejected[0]?.reason)
+                    assert.equal(r.ops.length, 2)
+                    assert.equal(r.ops[1].claim, '@def', '目標原樣保留(由輸出之 ref 定義閉包,不需 closeRefs 補)')
+                    assert.deepEqual(r.ops[1]._via, ['a2_2'])
+                })
+
+                it('場景②保留另一席之名:合併後取第 2 席之名 a2_def,第 1 席之依附操作 via 指 a1_2 而改指 @a2_def → 通過', () => {
+                    const r = validateVia([addOut('a2_def'), depOut('@a2_def', ['a1_2'], 'N1')], by)
+                    assert.equal(r.rejected.length, 0, r.rejected[0]?.reason)
+                    assert.equal(r.ops.length, 2)
+                })
+
+                it('依附操作之目標不改(仍寫候選舊名)者維持通過(既有行為:由其後之 closeRefs 別名指向輸出)', () => {
+                    const r = validateVia([addOut('def'), depOut('@a2_def', ['a2_2'], 'N2')], by)
+                    assert.equal(r.rejected.length, 0, r.rejected[0]?.reason)
+                })
+
+                it('真改目標仍拒:改指候選沒有且輸出亦未定義之 @other;理由字樣不變', () => {
+                    const r = validateVia([addOut('def'), depOut('@other', ['a2_2'], 'N2')], by)
+                    assert.equal(r.ops.length, 1, '只剩 add')
+                    assert.equal(r.rejected.length, 1)
+                    assert.equal(r.rejected[0].reason, '目標 claim＝@other 與所引候選不同（整合不可改變操作之目標）')
+                })
+
+                it('改名表只對回「候選自身之目標」:依附操作 via 指第 2 席而目標寫第 1 席之舊名 @a1_def,即使兩席之新增已合併為 def 仍拒(現況邊界:與修前相同、不放寬)', () => {
+                    const r = validateVia([addOut('def'), depOut('@a1_def', ['a2_2'], 'N2')], by)
+                    assert.equal(r.ops.length, 1)
+                    assert.match(r.rejected[0].reason, /目標 claim＝@a1_def/)
+                })
+
+                it('既有條目編號不經改名表:候選改既有 C2 者輸出改指 C9 或 @新名、候選指 @新名者輸出改指既有編號,皆拒', () => {
+                    const toOther = validateVia([addOut('def'), { op: 'retract', id: 'C9', reason: '重複', via: ['a3_1'] }], by)
+                    assert.match(toOther.rejected[0].reason, /目標 id＝C9/)
+                    const toRef = validateVia([addOut('def'), { op: 'retract', id: '@def', reason: '重複', via: ['a3_1'] }], by)
+                    assert.match(toRef.rejected[0].reason, /目標 id＝@def/, '候選之目標是既有編號(非 @)→ 不經改名表')
+                    const toId = validateVia([addOut('def'), depOut('C2', ['a1_2'], 'N1')], by)
+                    assert.match(toId.rejected[0].reason, /目標 claim＝C2/, '候選之目標是 @a1_def,輸出改指既有編號 → 不是改名')
+                    const same = validateVia([addOut('def'), { op: 'retract', id: 'C2', reason: '重複', via: ['a3_1'] }], by)
+                    assert.equal(same.rejected.length, 0, '同編號照過')
+                    // 非 @ 之目標去首字元後即使恰等於改名表之鍵(a1_def→def)亦不經改名表:候選目標 Xa1_def、輸出目標 Xdef 仍視為不同
+                    const odd = new Map(by).set('a3_2', { op: 'retract', id: 'Xa1_def', reason: '重複', _oid: 'a3_2' })
+                    const viaOdd = validateVia([addOut('def'), { op: 'retract', id: 'Xdef', reason: '重複', via: ['a3_2'] }], odd)
+                    assert.equal(viaOdd.rejected.length, 1)
+                    assert.match(viaOdd.rejected[0].reason, /目標 id＝Xdef/)
+                })
+
+                it('兩段式:定義該 ref 之新增本身被其餘判式拒收(文字、出處)→ 不入改名表,依附操作不因改名而通過(以原理由拒、不留懸空目標)', () => {
+                    assert.ok(containment(T1, T3) < 0.5 && containment(T3, T1) < 0.5, '夾具:T3 與 T1 無關')
+                    for (const [bad, why] of [[addOut('def', { text: T3 }), /文字/], [addOut('def', { sources: ['N1', 'N2', 'N9'] }), /出處/]]) {
+                        const r = validateVia([bad, depOut('@def', ['a2_2'], 'N2')], by)
+                        assert.equal(r.ops.length, 0, JSON.stringify(r.ops))
+                        assert.equal(r.rejected.length, 2)
+                        assert.match(r.rejected[0].reason, why, '定義之新增:其自身之理由')
+                        assert.match(r.rejected[1].reason, /目標 claim＝@def/, '依附操作:目標無從對回(定義本身被拒)')
+                    }
+                    // 定義之新增 via 不合(未指回任何候選)者同
+                    const noVia = validateVia([addOut('def', { via: [] }), depOut('@def', ['a2_2'], 'N2')], by)
+                    assert.equal(noVia.ops.length, 0)
+                    assert.match(noVia.rejected[1].reason, /目標 claim＝@def/)
+                })
+
+                it('判式次序不變:目標在出處、文字之前——目標不合者以目標為由,目標已對回而出處超出者以出處為由', () => {
+                    const t = validateVia([addOut('def'), depOut('@other', ['a2_2'], 'N9')], by)
+                    assert.match(t.rejected[0].reason, /^目標 claim＝@other/, '目標與出處皆不合 → 以目標為由(與修前同)')
+                    const s = validateVia([addOut('def'), depOut('@def', ['a2_2'], 'N9')], by)
+                    assert.match(s.rejected[0].reason, /^出處 N9 /, '目標已對回、出處超出 → 以出處為由')
+                })
+
+                it('候選之定義操作被試套拒收(整合員修正後收入)者仍可對回:改名表以 byOid 全部候選為定義(不同於 closeRefs 之只取回未被拒者)', () => {
+                    const trial = new Map(by)
+                    trial.set('a1_1', { ...by.get('a1_1'), _trial: '缺標注' })
+                    const r = validateVia([addOut('def'), depOut('@def', ['a1_2'], 'N1')], trial)
+                    assert.equal(r.rejected.length, 0, r.rejected[0]?.reason)
+                })
+            })
+
             it('出處(含各方之出處)不得超出 via 所指操作之出處聯集', () => {
                 // 規則:validateVia JSDoc「出處(含各方之出處)不得超出 via 所指操作之出處聯集」
                 const extra = validateVia([{ op: 'add', kind: 'rule', text: T1, sources: ['N1', 'N7'], via: ['a1_1'] }], byOid)
@@ -541,6 +641,76 @@ describe('unit-extract-direct', function() {
                 assert.deepEqual(validateVia(null, byOid), { ops: [], rejected: [] })
                 assert.deepEqual(validateVia(undefined, byOid), { ops: [], rejected: [] })
                 assert.deepEqual(validateVia([null, 'x', 3], byOid), { ops: [], rejected: [] })
+            })
+        })
+
+        describe('refAliasOf 與 closeRefs 共用同一份「候選 ref → 輸出 ref／輸出操作」對照(EXT-28)', function() {
+            // 規則:refAliasOf JSDoc「候選定義操作(帶 ref)之承接者(輸出中同操作種類、_via 含其 _oid 之第一條)帶 ref 且名不同者入表;承接者未給 ref、名相同者不列;
+            //   同一候選 ref 只取先見者」;closeRefs JSDoc「本差量中有操作之 _via 含該 ref 之定義操作 → 別名指向它(必要時補上 ref)」;兩者之承接者判準同為 successorOf
+            const defA1 = { _oid: 'a1_1', op: 'add', ref: 'a1_def', kind: 'rule', text: T1, sources: ['N1'] }
+            const defA2 = { _oid: 'a2_1', op: 'add', ref: 'a2_def', kind: 'rule', text: T1, sources: ['N2'] }
+            const defs = [defA1, defA2]
+            const merged = (ref, o = {}) => ({ _oid: 'i_1', op: 'add', ref, kind: 'rule', text: T1, sources: ['N1', 'N2'], _via: ['a1_1', 'a2_1'], ...o })
+
+            it('去前綴合併:兩候選之 ref 皆對回輸出之 def;取另一席之名:只有對方之名入表(同名者不列)', () => {
+                assert.deepEqual([...refAliasOf([merged('def')], defs)], [['a1_def', 'def'], ['a2_def', 'def']])
+                assert.deepEqual([...refAliasOf([merged('a2_def')], defs)], [['a1_def', 'a2_def']])
+            })
+
+            it('不列:承接者未給 ref(交 closeRefs 補上候選之 ref)、via 未含該候選、操作種類不同(不是承接者)', () => {
+                assert.equal(refAliasOf([merged('')], defs).size, 0)
+                assert.equal(refAliasOf([merged('def', { _via: ['a9_9'] })], defs).size, 0)
+                assert.equal(refAliasOf([merged('def', { op: 'dispute_add' })], defs).size, 0)
+                assert.equal(refAliasOf([merged('def', { _via: 'a1_1' })], defs).size, 0, '_via 非陣列者不認(同 closeRefs)')
+            })
+
+            it('同一候選 ref 被多條輸出承接者只取先見者;無 ref 之候選略過;輸入防呆(ops、defs 非陣列／空)回空表', () => {
+                assert.deepEqual([...refAliasOf([merged('x1'), merged('x2', { _oid: 'i_2' })], [defA1])], [['a1_def', 'x1']])
+                assert.equal(refAliasOf([merged('def')], [{ _oid: 'a1_1', op: 'add' }]).size, 0)
+                assert.equal(refAliasOf(null, defs).size, 0)
+                assert.equal(refAliasOf([merged('def')], undefined).size, 0)
+                assert.equal(refAliasOf([null, 'x', 3], defs).size, 0)
+            })
+
+            it('defs 可為任何可迭代(如 byOid.values())', () => {
+                const m = new Map(defs.map((d) => [d._oid, d]))
+                assert.deepEqual([...refAliasOf([merged('def')], m.values())], [['a1_def', 'def'], ['a2_def', 'def']])
+            })
+
+            it('共用同一份對照:對同一組輸出,closeRefs 把舊名引用改指之輸出名＝refAliasOf 之改名表', () => {
+                const cand = (seat) => ({ seat, ops: [{ _oid: `a${seat}_1`, op: 'add', ref: `a${seat}_def`, kind: 'rule', text: T1, sources: [`N${seat}`] }, { _oid: `a${seat}_2`, op: 'param_add', claim: `@a${seat}_def`, name: '門檻', value: '3', sources: [`N${seat}`] }] })
+                const cs = [cand(1), cand(2)]
+                const out = () => [
+                    merged('def'),
+                    { _oid: 'i_2', op: 'param_add', claim: '@a1_def', name: '門檻', value: '3', sources: ['N1'], _via: ['a1_2'] },
+                    { _oid: 'i_3', op: 'param_add', claim: '@a2_def', name: '門檻', value: '3', sources: ['N2'], _via: ['a2_2'] },
+                ]
+                const table = refAliasOf(out(), cs.flatMap((c) => c.ops))
+                assert.deepEqual([...table], [['a1_def', 'def'], ['a2_def', 'def']])
+                const cl = closeRefs(out(), cs)
+                assert.deepEqual(cl.ops.map((o) => o.claim || o.ref), ['def', '@def', '@def'], 'closeRefs 把 @a1_def、@a2_def 都指向 refAliasOf 所列之 def')
+                assert.deepEqual(cl.added.map((a) => [a.ref, a.how]), [['a1_def', '別名→i_1'], ['a2_def', '別名→i_1']])
+                for (const [from, to] of table) assert.ok(cl.added.some((a) => a.ref === from) && cl.ops.some((o) => o.claim === `@${to}`), `${from}→${to}`)
+            })
+
+            it('closeRefs 既有行為(承接者須同操作種類):輸出中 _via 含該候選但種類不同者不是承接者 → 自候選取回定義;改名表不列', () => {
+                const c = { seat: 1, ops: [defA1] }
+                const out = () => [{ _oid: 'i_1', op: 'dispute_add', question: '甲說與乙說何者成立', sides: [{ position: '甲', claims: ['@a1_def'], sources: ['N1'] }, { position: '乙', sources: ['N1'] }], sources: ['N1'], _via: ['a1_1'] }]
+                assert.equal(refAliasOf(out(), c.ops).size, 0)
+                const cl = closeRefs(out(), [c])
+                assert.deepEqual(cl.ops.map((o) => o._oid), ['i_1', 'a1_1'], '定義操作自候選取回')
+                assert.deepEqual(cl.added.map((a) => a.how), ['取回 a1_1'])
+            })
+
+            it('closeRefs 既有行為(承接者未給 ref):補上候選之 ref,引用不變、不取回候選;此時改名表不列', () => {
+                const c = { seat: 1, ops: [defA1, { _oid: 'a1_2', op: 'param_add', claim: '@a1_def', name: '門檻', value: '3', sources: ['N1'] }] }
+                const out = () => [merged('', { _via: ['a1_1'] }), { _oid: 'i_2', op: 'param_add', claim: '@a1_def', name: '門檻', value: '3', sources: ['N1'], _via: ['a1_2'] }]
+                assert.equal(refAliasOf(out(), c.ops).size, 0)
+                const cl = closeRefs(out(), [c])
+                assert.equal(cl.ops.length, 2, '不重複取回')
+                assert.equal(cl.ops[0].ref, 'a1_def', '補上候選之 ref')
+                assert.equal(cl.ops[1].claim, '@a1_def')
+                assert.deepEqual(cl.added.map((a) => a.how), ['別名→i_1'])
             })
         })
 
