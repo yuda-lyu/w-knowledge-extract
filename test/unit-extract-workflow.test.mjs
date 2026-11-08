@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import { runPass, stateView, lengthIssues, trimToLimit, rulesTextOf } from '../src/workflow/runPass.mjs'
 import { relationContextRows } from '../src/workflow/relationContext.mjs'
 import { replyObjectOf, normalizeDelta, parseDraft, parseAudit, parsePatch, parseVerdicts, checkDraft } from '../src/standards/parse.mjs'
-import { closeRefs, normalizeBareRefs } from '../src/workflow/candidates.mjs'
+import { closeRefs, normalizeBareRefs, validateVia } from '../src/workflow/candidates.mjs'
 import { applyPatch, inferOp, normalizeIssues, gateVerdicts, removalAllowed, issueOnOp, SEV_HIGH, REMOVE_TYPES, ISSUE_TYPES } from '../src/workflow/reviewGuards.mjs'
 import * as ReviewGuards from '../src/workflow/reviewGuards.mjs'
 import { DISPUTE_DROP_REASONS } from '../src/workflow/verdicts.mjs'
@@ -352,6 +352,133 @@ describe('unit-extract-workflow', function() {
         assert.ok(fresh && fresh.id !== c1.id, '新主張另立(其 ref 名 C1 與既有條目同形,但不是既有條目)')
         assert.ok(param, `依附之參數進入套用:${JSON.stringify(r.trace.issues)}`)
         assert.equal(param.claim, c1.id, '裸寫之 C1 仍指既有條目')
+    })
+
+    // ── 起草席漏寫 param_add 之 claim(EXT-28;使用端 Gitea #103,補充 #102):claim 為選填,缺 claim 之參數本身合法(試套通過、為不掛主張之參數);
+    //   整合員替它掛到輸出已定義之合併目標是修復不是改目標,validateVia 只在所引候選確有該目標欄位時比對;目標是否存在交其後 closeRefs／applyDelta 守門 ──
+    const orphanSeat = { ops: [{ op: 'add', ref: 'g', kind: 'rule', text: MERGE_TEXT, basis: '實證', sources: ['N1'], ...ANN }, { op: 'param_add', name: '持續期間', value: '12 個月', sources: ['N1'] }], skipped: [] }
+    const orphanRun = (int, { d2 = orphanSeat, s = baseState(), extra } = {}) => run(s, fakeAi({ d1: orphanSeat, d2, d3: 'fail', ...(int ? { int: { ops: int, skipped: [] } } : {}), aud: { issues: [] }, acc: keepAll }), extra)
+    const trialRejectsOf = (r) => r.trace.cands.flatMap((c) => c.ops.filter((o) => o._trial).map((o) => `${o._oid}:${o._trial}`))
+    const paramOf = (r) => r.state.parameters.find((p) => p.name === '持續期間')
+    for (const [title, ref, dep] of [
+        ['場景①去前綴合併(g)、兩席之孤兒參數併為一條', 'g', mergeDep('@g', ['a1_2', 'a2_2'])],
+        ['場景②取第 2 席之名(a2_g)、孤兒參數出自第 1 席', 'a2_g', mergeDep('@a2_g', ['a1_2'])],
+    ]) {
+        it(`起草席漏寫 param_add 之 claim,${title},整合員替孤兒參數指定合併後之目標 → 通過整合驗證、進入套用,掛在合併後之新主張上`, async () => {
+            // 規則:validateVia JSDoc「所引候選皆無該目標欄位者不比對」;runPass 起草後段 → 整合 validateVia → closeRefs → 守門 → applyDelta
+            const r = await orphanRun([mergeAdd(ref), dep])
+            assert.equal(r.ok, true, r.error)
+            assert.equal(r.trace.cands.flatMap((c) => c.ops.filter((o) => o.op === 'param_add' && 'claim' in o)).length, 0, '夾具:候選之 param_add 皆無 claim 鍵')
+            assert.deepEqual(trialRejectsOf(r), [], '候選之孤兒參數試套通過(claim 選填,為不掛主張之參數;並非試套被拒)')
+            assert.equal(r.trace.integrateRejected.length, 0, JSON.stringify(r.trace.integrateRejected))
+            const claim = r.state.claims.find((c) => c.text === MERGE_TEXT)
+            assert.ok(claim && paramOf(r), '合併後之新主張與孤兒參數皆進入套用')
+            assert.equal(paramOf(r).claim, claim.id, '參數掛在合併後之新主張上')
+        })
+    }
+
+    it('起草席漏寫 param_add 之 claim,整合員替孤兒參數指定既有條目編號 → 通過整合驗證、參數掛在既有主張上', async () => {
+        // 規則:同上;既有編號之存在由 applyDelta 判(refOfKind→findItem),此處為存在者
+        const s = baseState()
+        const c1 = c1Of(s)
+        const r = await orphanRun([mergeAdd('g'), { ...mergeDep(c1.id, ['a1_2']), conditions: '僅單一研究' }], { s })
+        assert.equal(r.ok, true, r.error)
+        assert.equal(r.trace.integrateRejected.length, 0, JSON.stringify(r.trace.integrateRejected))
+        assert.ok(paramOf(r), `孤兒參數進入套用:${JSON.stringify(r.rejected)}`)
+        assert.equal(paramOf(r).claim, c1.id)
+    })
+
+    it('起草席漏寫 param_add 之 claim,整合員替孤兒參數指向候選定義之 @a1_g 而漏收其定義 → 通過整合驗證,closeRefs 自候選取回定義、參數掛在取回之主張上', async () => {
+        // 規則:validateVia 不判目標存在;ref 依賴閉包(closeRefs)於其後取回候選定義之新條目(引用之新條目未被收入時)
+        const r = await orphanRun([mergeDep('@a1_g', ['a1_2'])])
+        assert.equal(r.ok, true, r.error)
+        assert.equal(r.trace.integrateRejected.length, 0, JSON.stringify(r.trace.integrateRejected))
+        assert.equal(r.stats.closure, 1, '自候選取回定義 a1_1')
+        const claim = r.state.claims.find((c) => c.text === MERGE_TEXT)
+        assert.ok(claim && paramOf(r))
+        assert.equal(paramOf(r).claim, claim.id)
+    })
+
+    for (const [target, why] of [['@nope', /^所依主張 ref「@nope」未定義$/], ['C99', /^所依主張 引用之項目 C99 不存在$/]]) {
+        it(`起草席漏寫 param_add 之 claim,整合員替孤兒參數指定不存在之目標 ${target}(輸出未定義、候選亦無／無此既有編號) → 整合驗證不拒,由其後套用守門拒收(applyDelta),參數不進套用、新增本身照成立`, async () => {
+            // 規則:validateVia JSDoc「目標是否存在交其後 closeRefs／applyDelta 守門」;param_add 之 claim 解析:stores/coreDelta.mjs case 'param_add' → refOfKind → resolveRef
+            const r = await orphanRun([mergeAdd('g'), mergeDep(target, ['a1_2'])])
+            assert.equal(r.ok, true, r.error)
+            assert.equal(r.trace.integrateRejected.length, 0, '整合驗證不拒(無原目標可比)')
+            assert.equal(r.stats.closure, 0, '候選亦無此名,閉包無從取回')
+            const rej = r.rejected.filter((x) => x.op === 'param_add')
+            assert.equal(rej.length, 1, JSON.stringify(r.rejected))
+            assert.match(rej[0].reason, why)
+            assert.equal(paramOf(r), undefined, '參數不進套用')
+            assert.ok(r.state.claims.some((c) => c.text === MERGE_TEXT), '新增本身照成立')
+        })
+    }
+
+    it('起草席漏寫 param_add 之 claim:混引(孤兒＋帶目標之候選)而整合員改指他處 → 仍被整合驗證拒收(理由字樣不變),參數不進套用;混引而目標對得回帶目標之候選 → 通過', async () => {
+        // 規則:validateVia JSDoc「所引候選只要有一條帶該欄,仍逐條比對」——第 1 席漏寫 claim(a1_2)、第 2 席帶 @g(經前綴化 @a2_g,a2_2)
+        const bad = await orphanRun([mergeAdd('g'), mergeDep('@other', ['a1_2', 'a2_2'])], { d2: mergeSeat })
+        assert.equal(bad.ok, true, bad.error)
+        assert.equal(bad.trace.integrateRejected.length, 1)
+        assert.equal(bad.trace.integrateRejected[0].reason, '目標 claim＝@other 與所引候選不同（整合不可改變操作之目標）')
+        assert.equal(paramOf(bad), undefined)
+        const good = await orphanRun([mergeAdd('g'), mergeDep('@g', ['a1_2', 'a2_2'])], { d2: mergeSeat })
+        assert.equal(good.ok, true, good.error)
+        assert.equal(good.trace.integrateRejected.length, 0, JSON.stringify(good.trace.integrateRejected))
+        assert.equal(paramOf(good).claim, good.state.claims.find((c) => c.text === MERGE_TEXT).id)
+    })
+
+    it('起草席漏寫 param_add 之 claim:程式聯集(integrate:program)照舊保留孤兒參數為不掛主張之參數(既有行為不變)', async () => {
+        // 規則:檔頭【程式聯集保留單票者】;claim 選填——缺 claim 之參數是合法操作,聯集不改其目標
+        const r = await orphanRun(null, { extra: { integrate: 'program' } })
+        assert.equal(r.ok, true, r.error)
+        assert.ok(r.state.claims.some((c) => c.text === MERGE_TEXT))
+        assert.ok(paramOf(r), '孤兒參數進入套用')
+        assert.equal(paramOf(r).claim, '', '不掛主張')
+    })
+
+    it('起草席漏寫必填目標欄位(retract 缺 id,格式不合之候選,試套已拒):整合員替它補上既有編號 → 仍被整合驗證拒收(理由字樣不變),既有主張不被撤回(不放寬至必填欄)', async () => {
+        // 規則:validateVia JSDoc「選填欄(claim、by)之外,目標照舊逐條比對」——整合員不得替破壞性操作(retract)自訂目標;未限縮前此補上會通過整合驗證,終審 keepAll 即撤回既有主張
+        const s = baseState()
+        const victim = s.claims.find((c) => c.text.includes('交易成本'))
+        assert.ok(victim, '夾具:既有主張')
+        const seat = { ops: [{ op: 'add', ref: 'g', kind: 'rule', text: MERGE_TEXT, basis: '實證', sources: ['N1'], ...ANN }, { op: 'retract', reason: '重複', sources: ['N1'] }], skipped: [] }
+        const r = await run(s, fakeAi({
+            d1: seat,
+            d2: seat,
+            d3: 'fail',
+            int: { ops: [mergeAdd('g'), { op: 'retract', id: victim.id, reason: '重複', sources: ['N1'], via: ['a1_2'] }], skipped: [] },
+            aud: { issues: [] },
+            acc: keepAll,
+        }))
+        assert.equal(r.ok, true, r.error)
+        assert.ok(r.trace.cands.every((c) => c.ops.find((o) => o.op === 'retract')?._trial), '夾具:候選之 retract 缺 id,試套已拒')
+        assert.equal(r.trace.integrateRejected.length, 1, JSON.stringify(r.trace.integrateRejected))
+        assert.equal(r.trace.integrateRejected[0].reason, `目標 id＝${victim.id} 與所引候選不同（整合不可改變操作之目標）`)
+        assert.equal(findItem(r.state, victim.id).item.status, 'active', '既有主張不被撤回')
+        assert.ok(r.state.claims.some((c) => c.text === MERGE_TEXT), '新增本身照成立')
+    })
+
+    it('目標欄位之選填／必填界定與 applyDelta 同一事實:缺該欄仍被套用者(claim、by)validateVia 對「所引候選皆缺」不比對;缺則被 applyDelta 拒收者(id、into、dispute)validateVia 照舊比對', () => {
+        // 規則:candidates 之選填目標欄位須與 applyDelta 之選填判斷(param_add 之 claim、supersede 之 by:缺仍合法)一致——兩處各寫一份會漂移,以行為對照鎖住;
+        //   修改任一邊(例如 applyDelta 令 into 為選填、或選填集合加入必填欄)此案即紅
+        const s = baseState()
+        const c1 = c1Of(s)
+        const ctx = { batch: BATCH, mode: 'delta', at: AT }
+        // 各欄之基底操作:除該欄外其餘皆合法;第三項＝applyDelta 缺該欄時是否仍被套用(選填)
+        const CASES = [
+            ['claim', { op: 'param_add', name: '回看期', value: '12 個月', conditions: '僅單一研究', sources: ['N1'] }, true],
+            ['by', { op: 'supersede', id: c1.id, reason: '舊說', validPeriod: '較早之研究', sources: ['N1'] }, true],
+            ['id', { op: 'retract', reason: '離題', sources: ['N1'] }, false],
+            ['into', { op: 'retract', id: c1.id, reason: '重複', sources: ['N1'] }, false],
+            ['dispute', { op: 'contest', id: c1.id, sources: ['N1'] }, false],
+        ]
+        for (const [k, base, optional] of CASES) {
+            assert.equal(k in base, false, `夾具:${k} 缺`)
+            const ap = applyDelta(s, { ops: [base] }, ctx)
+            assert.equal(ap.rejected.length === 0, optional, `${k}:applyDelta 缺該欄之結果 ${JSON.stringify(ap.rejected)}`)
+            const r = validateVia([{ ...base, [k]: 'C9', via: ['x_1'] }], new Map([['x_1', { ...base, _oid: 'x_1' }]]))
+            assert.equal(r.rejected.length === 0, optional, `${k}:validateVia 對「所引候選皆缺」${JSON.stringify(r.rejected.map((x) => x.reason))}`)
+        }
     })
 
     it('integrate:program 不呼叫整合員、改程式聯集;candidates 沿用前次起草(不再起草)——同一份起草只差整合方式', async () => {

@@ -11,6 +11,10 @@
 // 【起草席漏寫 @ 之同差量 ref 在候選前綴化前補回】改名表只對回 '@' 形之候選目標;候選之依附操作若漏寫 '@'(claim:"c8" 指自家 ref:"c8"),前綴化(remapRefs 只改寫 '@' 開頭者)
 //   後仍是裸字串——試套必拒、改名表對不回候選。故 prefixCandidate 於前綴化前以本候選自定義之 ref 名集合呼叫 normalizeBareRefs 補回(整合輸出沿用同一函數;判準只此一份),
 //   候選是各段(試套、計票、via 驗證、改名表、閉包)共讀之單一份,補一次各段同見。
+// 【選填目標欄位之所引候選皆無者,validateVia 不比對目標】param_add 之 claim、supersede 之 by 為選填(OPTIONAL_TARGET_KEYS;applyDelta 缺之仍合法),起草席漏寫 claim 者是合法之不掛主張參數(試套通過);
+//   整合員替它掛到輸出已定義之合併目標是補上而非改變目標。選填欄之目標比對只在所引候選至少一條帶該欄時進行(候選缺該欄以空字串比對必判「改目標」而誤拒);
+//   所引候選只要有一條帶該欄,仍逐條比對(混引孤兒不放寬)。補上之目標是否存在,交其後 closeRefs(輸出已定義或自候選取回)與 applyDelta(既有編號須存在、@名須已定義)守門。
+//   必填目標欄位(id、into、dispute)不在此列:候選皆缺者是格式不合之候選(試套已拒),整合員不得替破壞性操作(retract、contest 等)自訂目標,照舊逐條比對而拒。
 
 import { applyDelta } from '../stores/coreDelta.mjs'
 import { normalizeConflictDecl } from '../standards/conflictDisposition.mjs'
@@ -176,8 +180,15 @@ export function programUnion(cands, votes) {
 
 /** 整合者輸出與候選比對之文字(依操作種類:新增類之 text／question、修訂之 fields.text、本質之 text、參數之名稱＋值) */
 const viaTextOf = (op) => (op?.op === 'revise' ? str(op.fields?.text) : (op?.op === 'param_add' ? [str(op.name), str(op.value)].filter(Boolean).join(' ') : (str(op?.text) || str(op?.question))))
-/** 改狀態類之目標欄位(整合不得改目標;目標為同差量 ref 且整合員已改名者,依 refAliasOf 對回候選 ref 視為相同) */
+/** 改狀態類之目標欄位(整合不得改目標;目標為同差量 ref 且整合員已改名者,依 refAliasOf 對回候選 ref 視為相同;選填欄之所引候選皆無者不比對,見 OPTIONAL_TARGET_KEYS) */
 const TARGET_KEYS = ['id', 'into', 'by', 'dispute', 'claim']
+/**
+ * 目標欄位中「選填」者——所引候選皆缺這些欄時 validateVia 不比對目標(缺＝候選本無原目標,整合員補上是補全、不是改變);其餘欄位候選皆缺者是格式不合之候選(試套已拒),照舊逐條比對。
+ *   依據＝applyDelta 缺該欄仍合法者:param_add 之 claim＝不掛主張之參數(stores/coreDelta.mjs:872 `if (str(op.claim))`)、supersede 之 by＝未指明取代者(:573 `if (str(op.by))`);
+ *   缺則 applyDelta 拒收者不列入:各改狀態操作之 id(目標不存在)、retract 理由「重複」之 into(:612-615)、contest 之 dispute(:651-653)。
+ *   界定只此一處;test/unit-extract-workflow 以行為對照(applyDelta 缺該欄是否仍被套用 ⇔ validateVia 對「所引候選皆缺」是否不比對)鎖住兩邊一致,不各寫一份
+ */
+const OPTIONAL_TARGET_KEYS = ['claim', 'by']
 
 /**
  * 候選定義操作在整合者輸出中之承接者(「候選 ref → 輸出操作／輸出 ref」之唯一判準,refAliasOf 與 closeRefs 共用):
@@ -220,7 +231,11 @@ function viaProblemOf(op, via, byOid, sameTarget) {
     if (!via.length) return 'via 未指回任何候選操作（整合不可新增候選沒有之操作）'
     const cands = via.map((x) => byOid.get(x))
     if (!cands.some((c) => str(c.op) === str(op.op))) return `操作種類 ${str(op.op) || '?'} 與所引候選（${uniq(cands.map((c) => str(c.op))).join('、')}）不同（整合不可改變操作種類）`
-    const badTarget = sameTarget ? TARGET_KEYS.find((k) => typeof op[k] === 'string' && str(op[k]) && !cands.some((c) => sameTarget(str(op[k]), str(c[k])))) : ''
+    // 目標比對:必填欄(id、into、dispute)一律逐條比對;選填欄(OPTIONAL_TARGET_KEYS)只在所引候選至少一條帶該欄時比對——候選皆缺選填欄(str 為空字串:缺鍵、null、空白)者
+    //   無「原目標」可改,整合員替它指定目標是補上、不是改變(起草席漏寫 param_add 之 claim 等),目標是否存在交其後 closeRefs／applyDelta 守門;
+    //   所引候選只要有一條帶該欄,仍逐條比對(混引孤兒不放寬)。必填欄候選皆缺者是格式不合之候選(試套已拒),整合員不得替它自訂目標(破壞性操作之目標不放寬)
+    const compared = (k) => !OPTIONAL_TARGET_KEYS.includes(k) || cands.some((c) => str(c[k]))
+    const badTarget = sameTarget ? TARGET_KEYS.find((k) => typeof op[k] === 'string' && str(op[k]) && compared(k) && !cands.some((c) => sameTarget(str(op[k]), str(c[k])))) : ''
     if (badTarget) return `目標 ${badTarget}＝${str(op[badTarget])} 與所引候選不同（整合不可改變操作之目標）`
     const srcs = srcUnion(cands)
     const extra = [...strs(op.sources), ...(Array.isArray(op.sides) ? op.sides.flatMap((sd) => strs(sd?.sources)) : [])].filter((x) => !srcs.has(x))
@@ -235,7 +250,10 @@ function viaProblemOf(op, via, byOid, sameTarget) {
 
 /**
  * 驗證整合者之輸出:每條須以 via 指回候選操作;操作種類須同所引候選之一;改狀態類之目標須同所引候選(目標為同差量 ref〔'@名'〕且整合員已改名者,
- *   候選之目標經 refAliasOf 之輸出名等於輸出之目標視為相同;既有條目編號不經改名表,真改指他條、或改指候選沒有且輸出亦未定義之 '@名' 仍拒);
+ *   候選之目標經 refAliasOf 之輸出名等於輸出之目標視為相同;既有條目編號不經改名表,真改指他條、或改指候選沒有且輸出亦未定義之 '@名' 仍拒;
+ *   選填目標欄位〔claim、by;OPTIONAL_TARGET_KEYS〕之所引候選皆無者不比對〔缺鍵、null、空白皆算無〕——無原目標即無可改,起草席漏寫 param_add 之 claim 等,
+ *   整合員替該孤兒操作指定之目標是補上而非改變,目標是否存在交其後 closeRefs／applyDelta 守門;所引候選只要有一條帶該欄,仍逐條比對,混引孤兒不放寬;
+ *   必填目標欄位〔id、into、dispute〕候選皆缺者是格式不合之候選,照舊逐條比對、仍拒);
  *   出處(含各方之出處)不得超出 via 所指操作之出處聯集;文字(新增類之 text／question、修訂之 fields.text、本質之 text、參數之名稱＋值)須保有 via 原文過半
  *   (終審 §3 D5i)——判式為兩向包含率任一 ≥0.5(新文為原文之子集而僅縮短者亦過;同 opGuards 之 revise 判式),非嚴格之「原文過半在新文」。
  *   兩段式:先以「其餘判式(via、種類、出處、文字)皆過」之輸出建改名表(定義該 ref 之新增本身被拒者不入表,依附操作不因改名而通過、目標懸空),再逐條全判;

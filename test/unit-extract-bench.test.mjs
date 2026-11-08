@@ -1202,6 +1202,20 @@ describe('unit-extract-bench', function() {
             assert.match(bad.fields.why, /目標 claim＝@other/)
         })
 
+        it('整合(wf-integrate)謂詞 viaValid 同讀正式 validateVia:候選之 param_add 漏寫 claim(孤兒參數)而整合員替它指定輸出已定義之目標者不算 via 不合(EXT-28;使用端 Gitea #103);指定輸出未定義之名則 via 合、由其後之套用守門拒(cls＝applies)', () => {
+            // 規則:wf-integrate 之 judgeOf 直接呼叫正式之 validateVia 與 applyDelta;validateVia JSDoc「所引候選皆無該目標欄位者不比對——目標是否存在交其後 closeRefs／applyDelta 守門」
+            const g = wfCase('wf-integrate', 'g01')
+            const dep = { op: 'param_add', name: '開放時段', value: '週末', conditions: ['某社區圖書館之統計'], sources: ['N1'] }
+            const orphan = { ...structuredClone(g), expect: { viaValid: true, keepsMajority: true, refsClosed: true, applies: true } }
+            orphan.input.candidates = [{ provider: 'p1', ops: [{ ...OP_A, ref: 'x' }, dep] }, { provider: 'p2', ops: [{ ...OP_A, ref: 'x' }] }]
+            assert.equal('claim' in orphan.input.candidates[0].ops[1], false, '夾具:候選之 param_add 無 claim 鍵')
+            const answer = (target) => ({ ops: [{ ...OP_A, ref: 'z', via: ['a1_1', 'a2_1'] }, { ...dep, claim: target, via: ['a1_2'] }], skipped: [] })
+            assert.equal(wfJudge('wf-integrate', orphan, answer('@z')).cls, 'ok', '孤兒參數改掛合併後之 @z → 自足、可套用')
+            const undef = wfJudge('wf-integrate', orphan, answer('@other'))
+            assert.equal(undef.cls, 'applies', '指向輸出未定義且候選亦無之名 → via 合,套用被拒')
+            assert.match(undef.fields.why, /ref「@other」未定義/)
+        })
+
         it('起草(wf-draft;結構合規):未引為出處 → cites;未以合法理由略過 → skips;漏交代 → covered;爭議與否不符 → dispute;未紮根之數字 → grounded;套用被拒收 → noRejected;種類未出現 → kinds', () => {
             const d = wfCase('wf-draft', 'd01')
             const one = (j, cc = d) => wfJudge('wf-draft', cc, j)

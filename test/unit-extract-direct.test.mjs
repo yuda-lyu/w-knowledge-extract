@@ -5,6 +5,7 @@
 //                             programUnion／refAliasOf／validateVia／closeRefs／droppedMajority／applyRefAliases／refsOf／stripProgramFields 之 JSDoc
 //                             與檔頭【整合員改 ref 名:「候選 ref → 輸出 ref／輸出操作」之對照只定義一份】(EXT-28;使用端 Gitea #91)
 //                             與【起草席漏寫 @ 之同差量 ref 在候選前綴化前補回】(EXT-28;使用端 Gitea #102,補充 #91)
+//                             與【選填目標欄位之所引候選皆無者,validateVia 不比對目標;必填欄照舊比對】(EXT-28;使用端 Gitea #103,補充 #102)
 //   standards/opGuards.mjs    檔頭【補丁守門依操作類別映射】與 CONSTRUCTIVE_OPS／DESTRUCTIVE_OPS／textFieldsOf／opClass／rewriteTextFields 之 JSDoc
 //   standards/parse.mjs       「各棒之形狀檢查(嚴格布林…)」與檔頭【為何只收含鍵之物件、取最後一個合格者】
 //   domain/prompts.mjs        檔頭【規則表單一來源】【契約段】【依據】【稱呼只有一種機制】【意見類型由常數產生】與四函數之 JSDoc
@@ -524,6 +525,24 @@ describe('unit-extract-direct', function() {
             assert.equal(two({ op: 'add', text: T1 }, { op: 'add', text: T3 }).get('a1_1').votes, 1, '文字無關')
         })
 
+        it('voteOps／programUnion／droppedMajority 對缺目標欄位之比對(同形盤查,EXT-28 使用端 Gitea #103):essence／related_add 無目標欄位,以空鍵互為相似是設計;缺 id 之必填目標類操作彼此相似但已被試套拒收,不入聯集與漏收清單;缺 id 者不與帶 id 者相似', () => {
+            // 規則:candidates.mjs sigOf「改狀態類以『操作＋目標』」——本質與關聯概念本無目標欄位(每差量至多一條,跨席互為支持;programUnion 對 related_add 取概念聯集);
+            //   缺目標而本應有目標者(retract 缺 id)被試套拒收(_trial),programUnion 只取未被拒收者、droppedMajority 只列未被拒收者,故空鍵相等不產生任何收入或拒收之後果(只影響提示詞顯示之票數)
+            const two = (a, b) => [{ seat: 1, provider: 'p1', ops: [{ ...a, _oid: 'a1_1' }] }, { seat: 2, provider: 'p2', ops: [{ ...b, _oid: 'a2_1' }] }]
+            const ess = voteOps(two({ op: 'essence', text: T1, claims: ['@x'] }, { op: 'essence', text: T2, claims: ['@y'] }))
+            assert.equal(ess.get('a1_1').votes, 2, '本質跨席互為支持')
+            const rel = voteOps(two({ op: 'related_add', concepts: ['甲'] }, { op: 'related_add', concepts: ['乙'] }))
+            assert.equal(rel.get('a1_1').votes, 2, '關聯概念跨席互為支持')
+            const bad = two({ op: 'retract', reason: '重複', _trial: '缺 id' }, { op: 'retract', reason: '重複', _trial: '缺 id' })
+            const vb = voteOps(bad)
+            assert.equal(vb.get('a1_1').votes, 2, '缺 id 者彼此以空鍵相似(顯示用票數)')
+            assert.deepEqual(programUnion(bad, vb), [], '已被試套拒收 → 不入程式聯集')
+            assert.deepEqual(droppedMajority(bad, vb, []), [], '已被試套拒收 → 不列為多數支持而漏收')
+            const mix = voteOps(two({ op: 'retract', reason: '重複', _trial: '缺 id' }, { op: 'retract', id: 'C2', reason: '重複' }))
+            assert.equal(mix.get('a2_1').votes, 1, '缺 id 者不與帶 id 者相似')
+            assert.deepEqual(mix.get('a2_1').similar, [])
+        })
+
         it('programUnion:保留全部未被試套拒收之操作(含單票者),相似者合為一條(出處取聯集、文字取長者),每條附 _via', () => {
             // 規則:programUnion JSDoc「保留全部未被試套拒收之操作,相似者合為一條(取票多、文字長者為代表,出處取聯集),每條附 _via」;檔頭【程式聯集保留單票者】
             assert.ok(mutualContainment(T1, T2) >= 0.6 && mutualContainment(T1, T3) < 0.6, '夾具:T1、T2 相似,T3 無關')
@@ -735,6 +754,143 @@ describe('unit-extract-direct', function() {
                     trial.set('a1_1', { ...by.get('a1_1'), _trial: '缺標注' })
                     const r = validateVia([addOut('def'), depOut('@def', ['a1_2'], 'N1')], trial)
                     assert.equal(r.rejected.length, 0, r.rejected[0]?.reason)
+                })
+            })
+
+            describe('選填目標欄位(claim／by)之所引候選皆無者不比對目標,必填欄(id／into／dispute)照舊逐條比對(EXT-28;使用端 Gitea #103,補充 #102)', function() {
+                // 規則:validateVia JSDoc「選填目標欄位〔claim、by〕之所引候選皆無者不比對——無原目標即無可改,整合員替孤兒操作指定之目標交其後 closeRefs／applyDelta 守門;
+                //   所引候選只要有一條帶該欄,仍逐條比對;必填目標欄位〔id、into、dispute〕候選皆缺者照舊逐條比對、仍拒」;拒收理由字樣與判式次序不變
+                // 夾具:兩席各新增同義條目(ref def);第 1 席之 param_add 漏寫 claim(孤兒參數,a1_2;claim 為選填,其本身是合法之不掛主張參數),
+                //   第 2 席之 param_add 帶 claim @def(經前綴化得 @a2_def,a2_2);第 3 席另有 retract C2(a3_1)
+                const seatOf = (seat, withClaim) => prefixCandidate({
+                    ops: [
+                        { op: 'add', ref: 'def', kind: 'rule', text: T1, basis: '觀測', sources: [`N${seat}`] },
+                        { op: 'param_add', ...(withClaim ? { claim: '@def' } : {}), name: '門檻', value: '3', sources: [`N${seat}`] },
+                    ],
+                    skipped: [],
+                }, seat)
+                const cands = [seatOf(1, false), seatOf(2, true)]
+                const by = new Map([...cands.flatMap((c) => c.ops.map((op) => [op._oid, op])), ['a3_1', { op: 'retract', id: 'C2', reason: '重複', _oid: 'a3_1' }]])
+                const addOut = (ref, o = {}) => ({ op: 'add', ref, kind: 'rule', text: T1, basis: '觀測', sources: ['N1', 'N2'], via: ['a1_1', 'a2_1'], ...o })
+                const depOut = (claim, via, src, o = {}) => ({ op: 'param_add', claim, name: '門檻', value: '3', sources: [src], via, ...o })
+                const rej = (k, v) => `目標 ${k}＝${v} 與所引候選不同（整合不可改變操作之目標）`
+
+                it('夾具前提:第 1 席之 param_add 無 claim 鍵、第 2 席帶 @a2_def;_oid 依序', () => {
+                    assert.equal('claim' in by.get('a1_2'), false)
+                    assert.equal(by.get('a1_2').op, 'param_add')
+                    assert.equal(by.get('a2_2').claim, '@a2_def')
+                    assert.deepEqual([...by.values()].map((o) => o._oid), ['a1_1', 'a1_2', 'a2_1', 'a2_2', 'a3_1'])
+                })
+
+                it('孤兒參數(所引候選皆無 claim)由整合員指定輸出已定義之目標 → 通過、目標原樣保留、拒收 0', () => {
+                    // 規則:候選無 claim 即無「原目標」可改;整合員替它掛到合併後之條目是修復不是改目標
+                    const r = validateVia([addOut('def'), depOut('@def', ['a1_2'], 'N1')], by)
+                    assert.equal(r.rejected.length, 0, r.rejected[0]?.reason)
+                    assert.equal(r.ops.length, 2)
+                    assert.equal(r.ops[1].claim, '@def', '目標原樣保留')
+                    assert.deepEqual(r.ops[1]._via, ['a1_2'])
+                })
+
+                it('孤兒參數指既有條目編號、或指輸出未定義之 @名、不存在之編號 → validateVia 皆不拒(目標是否存在交其後 closeRefs／applyDelta 守門)', () => {
+                    // 規則:validateVia JSDoc「整合員替孤兒操作指定之目標交其後 closeRefs／applyDelta 守門」——本層不判存在
+                    for (const target of ['C2', '@def', '@nope', 'C99']) {
+                        const r = validateVia([addOut('def'), depOut(target, ['a1_2'], 'N1')], by)
+                        assert.equal(r.rejected.length, 0, `${target}:${r.rejected[0]?.reason}`)
+                        assert.equal(r.ops[1].claim, target)
+                    }
+                })
+
+                it('候選之目標欄位為 undefined／null／空字串／空白,皆視為「缺」(同 str 之判準)', () => {
+                    for (const empty of [undefined, null, '', '   ']) {
+                        const m = new Map(by).set('a1_2', { ...by.get('a1_2'), claim: empty })
+                        const r = validateVia([addOut('def'), depOut('@def', ['a1_2'], 'N1')], m)
+                        assert.equal(r.rejected.length, 0, `${JSON.stringify(empty)}:${r.rejected[0]?.reason}`)
+                    }
+                })
+
+                it('混引仍逐條比對:孤兒(a1_2)＋帶目標之候選(a2_2,@a2_def) 而輸出指他處 → 仍拒、理由字樣不變(不因混入孤兒而放寬)', () => {
+                    // 規則:validateVia JSDoc「所引候選只要有一條帶該欄,仍逐條比對」
+                    const r = validateVia([addOut('def'), depOut('@other', ['a1_2', 'a2_2'], 'N2')], by)
+                    assert.equal(r.ops.length, 1, '只剩 add')
+                    assert.equal(r.rejected.length, 1)
+                    assert.equal(r.rejected[0].reason, rej('claim', '@other'))
+                    // 混引而輸出之目標對得回帶目標之候選(改名表) → 照舊通過
+                    const ok = validateVia([addOut('def'), depOut('@def', ['a1_2', 'a2_2'], 'N2')], by)
+                    assert.equal(ok.rejected.length, 0, ok.rejected[0]?.reason)
+                })
+
+                it('帶目標之候選(a2_2,@a2_def)真改目標仍拒:輸出改指候選沒有且輸出亦未定義之 @other;理由字樣不變', () => {
+                    const r = validateVia([addOut('def'), depOut('@other', ['a2_2'], 'N2')], by)
+                    assert.equal(r.ops.length, 1)
+                    assert.equal(r.rejected[0].reason, rej('claim', '@other'))
+                    const toId = validateVia([addOut('def'), depOut('C2', ['a2_2'], 'N2')], by)
+                    assert.equal(toId.rejected[0].reason, rej('claim', 'C2'), '候選之目標是 @a2_def,輸出改指既有編號 → 仍拒')
+                })
+
+                // 五個目標欄位(TARGET_KEYS)之基底操作:候選皆缺該欄之形、x＝候選所帶之目標、y＝他處之目標;
+                //   opt＝applyDelta 缺該欄是否仍合法(選填):claim(param_add 缺 claim＝不掛主張之參數)、by(supersede 缺 by＝未指明取代者)為選填;
+                //   id(各改狀態操作缺 id＝目標不存在)、into(retract 理由「重複」須帶 into)、dispute(contest 缺 dispute)缺則 applyDelta 拒收
+                const KEYS = [
+                    { k: 'id', base: { op: 'retract', reason: '重複', into: 'C1' }, x: 'C2', y: 'C9', opt: false },
+                    { k: 'into', base: { op: 'retract', id: 'C2', reason: '重複' }, x: 'C1', y: 'C3', opt: false },
+                    { k: 'dispute', base: { op: 'contest', id: 'C1', sources: ['N1'] }, x: 'D1', y: 'D2', opt: false },
+                    { k: 'by', base: { op: 'supersede', id: 'C1', reason: '舊說', validPeriod: '較早', sources: ['N1'] }, x: 'C3', y: 'C4', opt: true },
+                    { k: 'claim', base: { op: 'param_add', name: '門檻', value: '3', sources: ['N1'] }, x: 'C1', y: 'C2', opt: true },
+                ]
+                const pairOf = ({ k, base, x }) => new Map([['k_1', { ...base, _oid: 'k_1' }], ['k_2', { ...base, [k]: x, _oid: 'k_2' }]])
+
+                it('選填目標欄位(claim／by):所引候選皆缺該欄 → 不比對而通過;混引帶不同目標之候選 → 拒;只引帶目標者改目標 → 拒;混引而目標相同 → 通過', () => {
+                    // 規則:validateVia JSDoc「所引候選皆無該目標欄位者不比對」——只對 applyDelta 為選填之目標欄位(claim、by)
+                    for (const e of KEYS.filter((z) => z.opt)) {
+                        const { k, base, x, y } = e
+                        const m = pairOf(e)
+                        const out = (target, via) => ({ ...base, [k]: target, via })
+                        for (const target of [x, y]) {
+                            const orphan = validateVia([out(target, ['k_1'])], m)
+                            assert.equal(orphan.rejected.length, 0, `${k}＝${target} 孤兒:${orphan.rejected[0]?.reason}`)
+                        }
+                        const mixed = validateVia([out(y, ['k_1', 'k_2'])], m)
+                        assert.equal(mixed.rejected[0]?.reason, rej(k, y), `${k} 混引改目標`)
+                        const only = validateVia([out(y, ['k_2'])], m)
+                        assert.equal(only.rejected[0]?.reason, rej(k, y), `${k} 只引帶目標者改目標`)
+                        const same = validateVia([out(x, ['k_1', 'k_2'])], m)
+                        assert.equal(same.rejected.length, 0, `${k} 混引而目標相同:${same.rejected[0]?.reason}`)
+                    }
+                })
+
+                it('必填目標欄位(id／into／dispute)反向案:所引候選皆缺該欄(格式不合之候選)而整合員替它指定目標 → 仍拒、理由字樣不變(不放寬);混引改目標、只引帶目標者改目標亦拒;混引而目標相同 → 通過', () => {
+                    // 規則:validateVia JSDoc「選填欄(claim、by)之外,目標照舊逐條比對」——必填欄缺值＝候選格式不合(已被試套拒收),
+                    //   整合員不得替破壞性操作(retract／contest 等)自訂目標;拒收理由字樣同改目標
+                    for (const e of KEYS.filter((z) => !z.opt)) {
+                        const { k, base, x, y } = e
+                        const m = pairOf(e)
+                        const out = (target, via) => ({ ...base, [k]: target, via })
+                        for (const target of [x, y]) {
+                            const orphan = validateVia([out(target, ['k_1'])], m)
+                            assert.equal(orphan.ops.length, 0, `${k}＝${target} 孤兒須拒`)
+                            assert.equal(orphan.rejected[0]?.reason, rej(k, target), `${k}＝${target} 孤兒`)
+                        }
+                        const mixed = validateVia([out(y, ['k_1', 'k_2'])], m)
+                        assert.equal(mixed.rejected[0]?.reason, rej(k, y), `${k} 混引改目標`)
+                        const only = validateVia([out(y, ['k_2'])], m)
+                        assert.equal(only.rejected[0]?.reason, rej(k, y), `${k} 只引帶目標者改目標`)
+                        const same = validateVia([out(x, ['k_1', 'k_2'])], m)
+                        assert.equal(same.rejected.length, 0, `${k} 混引而目標相同:${same.rejected[0]?.reason}`)
+                    }
+                })
+
+                it('必填目標欄位反向案(實例):缺 id 之 retract(格式不合之候選)由整合員補上既有編號 → 仍拒,字樣為「目標 id＝C2 與所引候選不同…」', () => {
+                    const m = new Map([['a1_1', { op: 'retract', reason: '重複', _oid: 'a1_1', _trial: '目標 (空) 不存在' }]])
+                    const r = validateVia([{ op: 'retract', id: 'C2', reason: '重複', via: ['a1_1'] }], m)
+                    assert.equal(r.ops.length, 0)
+                    assert.equal(r.rejected[0].reason, '目標 id＝C2 與所引候選不同（整合不可改變操作之目標）')
+                })
+
+                it('判式次序不變:孤兒參數不比對目標後,輪到出處與文字——出處超出者以出處為由、文字差異過大者以文字為由', () => {
+                    const s = validateVia([addOut('def'), depOut('@def', ['a1_2'], 'N9')], by)
+                    assert.match(s.rejected[0].reason, /^出處 N9 /)
+                    const t = validateVia([addOut('def'), depOut('@def', ['a1_2'], 'N1', { name: '完全無關之名稱', value: '另一值' })], by)
+                    assert.match(t.rejected[0].reason, /^文字與所引候選差異過大/)
                 })
             })
 
