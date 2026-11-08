@@ -16411,7 +16411,7 @@ conflictGone 衝突已撤銷、relationChanged 關聯已變更、conflictReason 
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line168">line 168</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line180">line 180</a>
     </li></ul></dd>
     
 
@@ -20560,7 +20560,7 @@ console.log(programWriteProblems(s, s))
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line412">line 412</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line425">line 425</a>
     </li></ul></dd>
     
 
@@ -24323,7 +24323,7 @@ problemsOf?:(ops)=&gt;Map(op → 檢定標準問題)(extract/standards/opStandar
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line299">line 299</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line311">line 311</a>
     </li></ul></dd>
     
 
@@ -31073,7 +31073,7 @@ await closeHolds(env, ctx, { coreId, ap: { resendDone: ['n-a'] }, msg })</code><
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line370">line 370</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line383">line 383</a>
     </li></ul></dd>
     
 
@@ -43289,7 +43289,7 @@ console.log(doubtCheckedOf(s, s.disputes[0]))
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line283">line 283</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line295">line 295</a>
     </li></ul></dd>
     
 
@@ -65814,13 +65814,14 @@ const id = newCoreIdOf({ concept: '黑洞', scope: 'concept', key: '黑洞' }, c
     
     <dt class="tag-description">Description:</dt>
     <dd class="tag-description"><ul class="dummy"><li><p>漏寫 @ 之 ref 補回:引用欄位之值等於某個已知 ref 名(候選或本差量所定義)而非既有條目編號者,改為 '@名'
-(整合員常寫 claims:[&quot;a3_c_xxx&quot;] 而漏了 @,不補回則整條以「引用之項目不存在」被拒)</p></li></ul></dd>
+(整合員常寫 claims:[&quot;a3_c_xxx&quot;] 而漏了 @,不補回則整條以「引用之項目不存在」被拒;起草席漏寫者由 prefixCandidate 於前綴化前同法補回)。
+names 不可含既有條目編號:整合側之 names 取自前綴化後之 ref(a{席}_…),形狀上不撞編號(C／D／P／Q＋數字);候選側之 names 未帶前綴,由 prefixCandidate 以狀態排除</p></li></ul></dd>
     
 
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line343">line 343</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line356">line 356</a>
     </li></ul></dd>
     
 
@@ -76389,7 +76390,7 @@ counts:{ violations:{ 標準: 掃描之違反數 }, items, unfixable, resolvable
 
     
 
-    <h4 class="name" id="prefixCandidate"><span class="type-signature"></span>prefixCandidate<span class="signature">(delta, seat)</span><span class="type-signature"> &rarr; {Object}</span></h4>
+    <h4 class="name" id="prefixCandidate"><span class="type-signature"></span>prefixCandidate<span class="signature">(delta, seat, state<span class="signature-attributes">opt</span>)</span><span class="type-signature"> &rarr; {Object}</span></h4>
 
     
 
@@ -76399,13 +76400,18 @@ counts:{ violations:{ 標準: 掃描之違反數 }, items, unfixable, resolvable
 <dl class="details">
     
     <dt class="tag-description">Description:</dt>
-    <dd class="tag-description"><ul class="dummy"><li><p>候選加席位前綴:每條操作給穩定 id(a{席}<em>{n})、ref 改為 a{席}</em>{ref}、引用同步改寫;skipped 與衝突去向之宣告(conflicts,檢定標準 ES5)標席位</p></li></ul></dd>
+    <dd class="tag-description"><ul class="dummy"><li><p>候選加席位前綴:每條操作給穩定 id(a{席}<em>{n})、ref 改為 a{席}</em>{ref}、引用同步改寫;skipped 與衝突去向之宣告(conflicts,檢定標準 ES5)標席位。
+起草席漏寫 @ 之同差量引用(引用欄位之值恰等於本候選某操作之 ref,如 claim:&quot;c8&quot; 指自家 ref:&quot;c8&quot;)於改名與改寫之前先補回 '@'(沿用 normalizeBareRefs),
+使其與 '@' 形引用同被前綴化——候選是試套、計票、via 驗證、改名表、ref 閉包共讀之單一份,在此補一次即各段同見;不補則成懸空字串:
+試套必拒(引用之項目不存在),且整合員把依附操作改掛合併後之目標時,validateVia 之改名表對不回候選而以「目標…與所引候選不同」拒收。
+只補本候選自定義之 ref 名:既有條目編號、他席之名、不在本候選 ref 集合之值、文字中之提及一概不動;
+與既有條目編號同形之 ref 名(狀態內以 findItem 查得到,即 applyDelta 判裸值為既有條目之同一判準)不入集合——該裸值是對既有條目之引用,補回會改指本候選之新條目</p></li></ul></dd>
     
 
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line54">line 54</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line63">line 63</a>
     </li></ul></dd>
     
 
@@ -76472,6 +76478,8 @@ console.log(d.ops.map((o) => [o._oid, o.ref, o.claims]))
         <th>Type</th>
 
         
+        <th>Attributes</th>
+        
 
         
 
@@ -76498,6 +76506,14 @@ console.log(d.ops.map((o) => [o._oid, o.ref, o.claims]))
             </td>
 
             
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
 
             
 
@@ -76522,10 +76538,52 @@ console.log(d.ops.map((o) => [o._oid, o.ref, o.claims]))
             </td>
 
             
+                <td class="attributes">
+                
+
+                
+
+                
+                </td>
+            
 
             
 
             <td class="description last"><p>輸入席位序號(1 起)</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>state</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Object</span>
+
+
+
+            
+            </td>
+
+            
+                <td class="attributes">
+                
+                    &lt;optional><br>
+                
+
+                
+
+                
+                </td>
+            
+
+            
+
+            <td class="description last"><p>輸入目前狀態(只讀;用於排除與既有條目編號同形之 ref 名;不給則無從排除)</p></td>
         </tr>
 
     
@@ -77181,7 +77239,7 @@ console.log(rows.map((r) => r.core))</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line138">line 138</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line150">line 150</a>
     </li></ul></dd>
     
 
@@ -81231,7 +81289,7 @@ console.log(stat.repaired)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line193">line 193</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line205">line 205</a>
     </li></ul></dd>
     
 
@@ -81506,7 +81564,7 @@ console.log([...refAliasOf(out, [def])])
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line320">line 320</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line332">line 332</a>
     </li></ul></dd>
     
 
@@ -83628,7 +83686,7 @@ console.log(r.released, unsupportedOf(held).held.size, unsupportedOf(r.state).he
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line33">line 33</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line36">line 36</a>
     </li></ul></dd>
     
 
@@ -100547,7 +100605,7 @@ await settleTwins(rec, env, domain)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line88">line 88</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line100">line 100</a>
     </li></ul></dd>
     
 
@@ -103374,7 +103432,7 @@ console.log(stockNeedsOf(s, { coreId: 'c1', recOf: () => null, keyOf: () => 'k',
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line174">line 174</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line186">line 186</a>
     </li></ul></dd>
     
 
@@ -106996,7 +107054,7 @@ console.log(due.map((x) => x.key))</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line81">line 81</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line93">line 93</a>
     </li></ul></dd>
     
 
@@ -108111,7 +108169,7 @@ console.log([...unsupportedOf(s).items], unsupportedOf(s).any)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line241">line 241</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line253">line 253</a>
     </li></ul></dd>
     
 
@@ -109025,7 +109083,7 @@ console.log((await verifyCoreStockChain(deps, r.rows)).problems)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line207">line 207</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line219">line 219</a>
     </li></ul></dd>
     
 
@@ -109110,7 +109168,7 @@ console.log((await verifyCoreStockChain(deps, r.rows)).problems)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line166">line 166</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line178">line 178</a>
     </li></ul></dd>
     
 
@@ -109401,7 +109459,7 @@ console.log((await verifyCoreStockChain(deps, r.rows)).problems)
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line114">line 114</a>
+        <a href="workflow_candidates.mjs.html">workflow/candidates.mjs</a>, <a href="workflow_candidates.mjs.html#line126">line 126</a>
     </li></ul></dd>
     
 
@@ -112299,7 +112357,7 @@ writeRegenIntents(dirs, { cores: { [coreId]: intent } })</code></pre>
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sat Nov 07 2026 11:14:31 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Sun Nov 08 2026 08:14:57 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>

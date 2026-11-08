@@ -299,6 +299,61 @@ describe('unit-extract-workflow', function() {
         assert.equal(r.state.parameters.some((p) => p.name === '持續期間'), false)
     })
 
+    // ── 起草席漏寫 @ 之同差量 ref(EXT-28;使用端 Gitea #102,補充 #91):依附操作之目標寫成裸 ref(g)而非 @g——候選前綴化前須補回,
+    //   否則該依附操作在起草側試套即被拒(引用之項目 g 不存在),整合員改掛合併後之目標時又因候選目標懸空、改名表對不回候選而被拒 ──
+    const bareSeat = { ops: [{ op: 'add', ref: 'g', kind: 'rule', text: MERGE_TEXT, basis: '實證', sources: ['N1'], ...ANN }, { op: 'param_add', claim: 'g', name: '持續期間', value: '12 個月', sources: ['N1'] }], skipped: [] }
+    const bareRun = (int, extra = {}) => run(baseState(), fakeAi({ d1: bareSeat, d2: bareSeat, d3: 'fail', ...(int ? { int: { ops: int, skipped: [] } } : {}), aud: { issues: [] }, acc: keepAll }), extra)
+    for (const [title, ref, dep] of [
+        ['場景①去前綴合併(g)、依附操作出自第 2 席', 'g', mergeDep('@g', ['a2_2'])],
+        ['場景②取第 2 席之名(a2_g)、依附操作出自第 1 席', 'a2_g', mergeDep('@a2_g', ['a1_2'])],
+    ]) {
+        it(`起草席漏寫 @ 之依附操作,${title} → 候選補回後試套通過、整合驗證不再以「目標與所引候選不同」拒收,進入套用且掛在合併後之新主張上`, async () => {
+            // 規則:prefixCandidate 於前綴化前補回漏寫 @ 之同差量 ref;runPass 起草後段 normalizeDelta → prefixCandidate → trialApply → 整合 validateVia → closeRefs → 守門 → applyDelta
+            const r = await bareRun([mergeAdd(ref), dep])
+            assert.equal(r.ok, true, r.error)
+            assert.deepEqual(r.trace.cands.flatMap((c) => c.ops.filter((o) => o._trial).map((o) => `${o._oid}:${o._trial}`)), [], '候選之依附操作試套通過(補回前:引用之項目 g 不存在)')
+            assert.equal(r.trace.integrateRejected.length, 0, JSON.stringify(r.trace.integrateRejected))
+            const claim = r.state.claims.find((c) => c.text === MERGE_TEXT)
+            const param = r.state.parameters.find((p) => p.name === '持續期間')
+            assert.ok(claim && param, '合併後之新主張與依附之參數皆進入套用')
+            assert.equal(param.claim, claim.id, '參數掛在合併後之新主張上')
+        })
+    }
+
+    it('起草席漏寫 @ 之依附操作:整合員之 add 未以 via 含候選目標之定義(真改目標) → 仍被整合驗證拒收(理由字樣不變),參數不進套用', async () => {
+        // 規則:validateVia JSDoc「改指候選沒有且輸出亦未定義之 '@名' 仍拒」——補回只讓候選目標進得了改名表,不放寬真改目標
+        const r = await bareRun([{ ...mergeAdd('g'), via: ['a2_1'] }, mergeDep('@g', ['a1_2'])])
+        assert.equal(r.ok, true, r.error)
+        assert.equal(r.trace.integrateRejected.length, 1)
+        assert.equal(r.trace.integrateRejected[0].reason, '目標 claim＝@g 與所引候選不同（整合不可改變操作之目標）')
+        assert.equal(r.state.parameters.some((p) => p.name === '持續期間'), false)
+    })
+
+    it('起草席漏寫 @ 之依附操作:程式聯集(integrate:program)亦保留——補回前該操作在起草側試套即被拒、聯集時已流失', async () => {
+        // 規則:檔頭【程式聯集保留單票者】——programUnion 取未被試套拒收者;候選側不補回則依附操作在到達聯集前已先流失一次
+        const r = await bareRun(null, { integrate: 'program' })
+        assert.equal(r.ok, true, r.error)
+        const claim = r.state.claims.find((c) => c.text === MERGE_TEXT)
+        const param = r.state.parameters.find((p) => p.name === '持續期間')
+        assert.ok(claim && param, '新主張與依附之參數皆進入套用')
+        assert.equal(param.claim, claim.id)
+    })
+
+    it('起草席把 ref 命名為與既有條目編號同形(C1)而依附操作寫既有編號:runPass 把狀態交給 prefixCandidate → 該裸值仍指既有條目,不被補回成指向本候選之新主張', async () => {
+        // 規則:prefixCandidate JSDoc「與既有條目編號同形之 ref 名(狀態內以 findItem 查得到…)不入集合」;runPass 起草後段 prefixCandidate(nd, seat, state)
+        const s = baseState()
+        const c1 = c1Of(s)
+        assert.equal(c1.id, 'C1', '夾具:狀態內有既有條目 C1')
+        const draft = { ops: [{ op: 'add', ref: c1.id, kind: 'rule', text: MERGE_TEXT, basis: '實證', sources: ['N1'], ...ANN }, { op: 'param_add', claim: c1.id, name: '持續期間', value: '12 個月', conditions: '僅單一研究', sources: ['N1'] }], skipped: [] }
+        const r = await run(s, fakeAi({ d1: draft, d2: 'fail', d3: 'fail', aud: { issues: [] }, acc: keepAll }))
+        assert.equal(r.ok, true, r.error)
+        const fresh = r.state.claims.find((c) => c.text === MERGE_TEXT)
+        const param = r.state.parameters.find((p) => p.name === '持續期間')
+        assert.ok(fresh && fresh.id !== c1.id, '新主張另立(其 ref 名 C1 與既有條目同形,但不是既有條目)')
+        assert.ok(param, `依附之參數進入套用:${JSON.stringify(r.trace.issues)}`)
+        assert.equal(param.claim, c1.id, '裸寫之 C1 仍指既有條目')
+    })
+
     it('integrate:program 不呼叫整合員、改程式聯集;candidates 沿用前次起草(不再起草)——同一份起草只差整合方式', async () => {
         const s = baseState()
         const d = { ops: [{ op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN }], skipped: [] }

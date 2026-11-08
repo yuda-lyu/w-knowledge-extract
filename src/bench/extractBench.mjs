@@ -1307,7 +1307,7 @@ const WF_PENDING_DEF = wfRoleDef({
 function integrateCandsOf(inp, x) {
     const cands = inp.candidates.map((c0, k) => {
         const seat = k + 1
-        const c = prefixCandidate(normalizeDelta(c0), seat)
+        const c = prefixCandidate(normalizeDelta(c0), seat, x.state)
         trialApply(x.state, c.ops, x.applyCtx)
         return { seat, provider: textValueOf(c0.provider) || `seat${seat}`, ops: c.ops, skipped: c.skipped, conflicts: c.conflicts }
     })
@@ -1405,7 +1405,7 @@ const WF_DRAFT_DEF = wfRoleDef({
     promptOf: (inp, domain) => draftPromptOf(inp, domain, wfCtxOf(inp, domain)),
     judgeOf: (data, c, domain) => {
         const x = wfCtxOf(c.input, domain)
-        const cand = prefixCandidate(normalizeDelta(data), 1)
+        const cand = prefixCandidate(normalizeDelta(data), 1, x.state)
         trialApply(x.state, cand.ops, x.applyCtx)
         // 只一份候選:試套被拒收者不入(同正式 runPass 之跳過整合)
         const g = x.guard(cand.ops.filter((op) => !op._trial))
@@ -1556,7 +1556,7 @@ const WF_CONSOLIDATE_DEF = wfRoleDef({
     },
     judgeOf: (data, c, domain) => {
         const x = wfCtxOf(c.input, domain, { mode: 'consolidate' })
-        const cand = prefixCandidate(normalizeDelta(data), 1)
+        const cand = prefixCandidate(normalizeDelta(data), 1, x.state)
         const g = x.guard(cand.ops)
         const sc = x.std.screen(applyRefAliases(g.ops))
         const ap = applyDelta(x.state, { ops: sc.ops }, x.applyCtx)
@@ -1598,7 +1598,7 @@ const WF_ESSENCE_DEF = wfRoleDef({
     },
     judgeOf: (data, c, domain) => {
         const x = wfCtxOf(c.input, domain, { mode: 'essence' })
-        const cand = prefixCandidate(normalizeDelta(data), 1)
+        const cand = prefixCandidate(normalizeDelta(data), 1, x.state)
         const ess = cand.ops.filter((op) => op.op === 'essence')
         const over = ess.map((op) => opLengthProblem(op, domain.limits)).filter(Boolean)
         // 尚無本質之核心:定稿前仍逾硬上限者截至句界(同正式 runPass 之最後防線)——withinLimit 量的是模型之輸出,essenceOk 量的是落地之結果

@@ -316,7 +316,7 @@ export async function runPass(o) {
             if (!x.r.ok || !x.r.json) continue
             const seat = x.k + 1
             const nd = normalizeDelta(x.r.json)
-            const c = prefixCandidate(nd, seat)
+            const c = prefixCandidate(nd, seat, state)
             trialApply(state, c.ops, applyCtx)
             cands.push({ seat, provider: x.r.providerId || `seat${seat}`, ops: c.ops, skipped: c.skipped, conflicts: c.conflicts, dropped: nd.dropped })
         }

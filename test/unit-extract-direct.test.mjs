@@ -4,6 +4,7 @@
 //   workflow/candidates.mjs   檔頭【穩定 id 依席位】【計票以實際成交之 provider】【程式聯集保留單票者】與 remapRefs／prefixCandidate／trialApply／voteOps／
 //                             programUnion／refAliasOf／validateVia／closeRefs／droppedMajority／applyRefAliases／refsOf／stripProgramFields 之 JSDoc
 //                             與檔頭【整合員改 ref 名:「候選 ref → 輸出 ref／輸出操作」之對照只定義一份】(EXT-28;使用端 Gitea #91)
+//                             與【起草席漏寫 @ 之同差量 ref 在候選前綴化前補回】(EXT-28;使用端 Gitea #102,補充 #91)
 //   standards/opGuards.mjs    檔頭【補丁守門依操作類別映射】與 CONSTRUCTIVE_OPS／DESTRUCTIVE_OPS／textFieldsOf／opClass／rewriteTextFields 之 JSDoc
 //   standards/parse.mjs       「各棒之形狀檢查(嚴格布林…)」與檔頭【為何只收含鍵之物件、取最後一個合格者】
 //   domain/prompts.mjs        檔頭【規則表單一來源】【契約段】【依據】【稱呼只有一種機制】【意見類型由常數產生】與四函數之 JSDoc
@@ -304,6 +305,134 @@ describe('unit-extract-direct', function() {
             const refs = all.flatMap((c) => c.ops.map((o) => o.ref)).filter(Boolean)
             assert.equal(new Set(oids).size, oids.length)
             assert.equal(new Set(refs).size, refs.length)
+        })
+
+        describe('prefixCandidate 於前綴化前補回起草席漏寫 @ 之同差量 ref(EXT-28;使用端 Gitea #102,補充 #91)', function() {
+            // 規則:prefixCandidate JSDoc「引用同步改寫」與 normalizeBareRefs JSDoc「漏寫 @ 之 ref 補回:引用欄位之值等於某個已知 ref 名…而非既有條目編號者,改為 '@名'」——
+            //   起草席漏寫 @ 之同差量引用(值恰等於本候選某操作之 ref)須於前綴化前補回,才會與 @ 形引用同被前綴化;不補則成懸空字串:
+            //   試套必拒,且整合員改掛合併後之目標時 validateVia 之改名表(候選 ref → 輸出 ref)對不回候選
+            // 流向(runPass 起草後段):normalizeDelta → prefixCandidate → trialApply(讀的是前綴化後之同一份 c.ops)→ cands → byOid／voteOps／programUnion／validateVia／closeRefs ——
+            //   補回放 prefixCandidate 即讀此一份之最早處,不在試套與前綴化兩處各補一次
+            const TCTX = { batch: [{ code: 'N1', id: 'n1' }], mode: 'delta', at: '2026-10-30T10:00:00+08:00' }
+            const blank = () => emptyState({ coreId: 'c', concept: '潮汐' })
+            const addC = (ref, o = {}) => ({ op: 'add', ref, kind: 'rule', text: T1, basis: '觀測', sources: ['N1'], ...o })
+            const depC = (claim, o = {}) => ({ op: 'param_add', claim, name: '門檻', value: '3', sources: ['N1'], ...o })
+
+            it('引用欄位逐一:claim、claims、sides[].claims、sides_add[].claims、from 之值等於本候選某 ref 者補回並前綴化;已是 @ 形者照舊', () => {
+                // 規則:同上「引用同步改寫」——REF_FIELDS 之 ids(claim)、lists(claims、from)與 sides／sides_add 之 claims 皆是引用欄位
+                const r = prefixCandidate({
+                    ops: [
+                        addC('c8'),
+                        depC('c8'),
+                        { op: 'essence', text: '本質', claims: ['c8', '@c8'] },
+                        { op: 'dispute_add', ref: 'd', question: '問', sides: [{ position: '甲', claims: ['c8'], sources: ['N1'] }, { position: '乙', claims: ['@d'], sources: ['N1'] }], sides_add: [{ position: '丙', claims: ['c8'], sources: ['N1'] }] },
+                        { op: 'merge', from: ['c8', 'C2'], into: 'C1', sources: ['N1'] },
+                    ],
+                    skipped: [],
+                }, 1)
+                assert.equal(r.ops[0].ref, 'a1_c8')
+                assert.equal(r.ops[1].claim, '@a1_c8', '漏寫 @ 之目標補回並前綴化')
+                assert.deepEqual(r.ops[2].claims, ['@a1_c8', '@a1_c8'], '清單欄位:裸寫者與 @ 形者皆前綴化')
+                assert.equal(r.ops[3].ref, 'a1_d')
+                assert.deepEqual(r.ops[3].sides[0].claims, ['@a1_c8'])
+                assert.deepEqual(r.ops[3].sides[1].claims, ['@a1_d'], '@ 形者照舊前綴化')
+                assert.deepEqual(r.ops[3].sides_add[0].claims, ['@a1_c8'])
+                assert.deepEqual(r.ops[4].from, ['@a1_c8', 'C2'], 'from:只補本候選之 ref,既有編號不動')
+                assert.equal(r.ops[4].into, 'C1')
+            })
+
+            it('只補本候選自定義之 ref 名:既有編號(含大小寫不同之同形名)、他席之名、不在本候選 ref 集合之值、文字中之提及一律不動;輸入不被改動', () => {
+                // 規則:normalizeBareRefs JSDoc「引用欄位之值等於某個已知 ref 名…而非既有條目編號者」;本候選之已知 ref 名＝各操作之 ref,不含他席之名
+                const delta = {
+                    ops: [
+                        addC('c8'),
+                        depC('C8'),
+                        depC('a2_c8'),
+                        depC('zzz'),
+                        { op: 'essence', text: '依 c8 之觀測', claims: ['C2', 'zzz', 'a1_c8'] },
+                    ],
+                    skipped: [],
+                }
+                const before = JSON.parse(JSON.stringify(delta))
+                const r = prefixCandidate(delta, 1)
+                assert.deepEqual(delta, before, '輸入不被改動(補回發生在複本上)')
+                assert.equal(r.ops[1].claim, 'C8', '既有編號形(大小寫不同於本候選之 ref)不動')
+                assert.equal(r.ops[2].claim, 'a2_c8', '他席之名不動')
+                assert.equal(r.ops[3].claim, 'zzz', '不在本候選 ref 集合之值不動')
+                assert.deepEqual(r.ops[4].claims, ['C2', 'zzz', 'a1_c8'], '清單欄位只補本候選之 ref(a1_c8 非本候選之 ref 名 c8)')
+                assert.equal(r.ops[4].text, '依 c8 之觀測', '文字中之裸字不是結構引用,不動')
+            })
+
+            it('本候選沒有任何 ref 時行為不變(含空輸入)', () => {
+                // 規則:無已知 ref 名則無可補;與既有案「原無 ref 者不憑空加」同
+                const r = prefixCandidate({ ops: [{ op: 'confirm', id: 'C1', sources: ['N1'] }, depC('c8')], skipped: [] }, 1)
+                assert.equal(r.ops[0].id, 'C1')
+                assert.equal(r.ops[1].claim, 'c8', '沒有 ref 為 c8 之操作 → 不補')
+                assert.deepEqual(prefixCandidate({ ops: [] }, 1), { ops: [], skipped: [], conflicts: [] })
+            })
+
+            it('試套讀前綴化後之同一份:漏寫 @ 之依附操作補回後試套通過;原樣(未補回)試套必拒「引用之項目…不存在」', () => {
+                // 規則:trialApply JSDoc「以 applyDelta 套於複本…標出會被拒收之操作」;applyDelta 之引用解析:非 @ 之值須為既有條目編號(coreDelta resolveRef)
+                const raw = [addC('c8'), depC('c8')]
+                const untouched = trialApply(blank(), JSON.parse(JSON.stringify(raw)), TCTX)
+                assert.deepEqual(untouched, { applied: 1, rejected: 1 }, '前提:裸 ref 在試套中是懸空字串')
+                const probe = JSON.parse(JSON.stringify(raw))
+                trialApply(blank(), probe, TCTX)
+                assert.match(probe[1]._trial, /引用之項目 c8 不存在/)
+                const c = prefixCandidate({ ops: raw, skipped: [] }, 1)
+                assert.deepEqual(trialApply(blank(), c.ops, TCTX), { applied: 2, rejected: 0 })
+                assert.equal(c.ops[1]._trial, undefined)
+            })
+
+            it('與既有條目編號同形之 ref 名:既有條目(狀態內查得到,同 applyDelta 判裸值之 findItem)不被補回;狀態內沒有者視為本候選之 ref 而補回', () => {
+                // 規則:裸值若指既有條目,是對該條目之引用(提示詞:既有條目以編號指稱、同差量新條目以 "@ref名" 引用),補回會把它改指本候選之新條目;
+                //   applyDelta 不禁止把 ref 命名為 C1 之類(只登記重複),故由 prefixCandidate 以狀態排除——判準即 applyDelta 判裸值是否既有條目之 findItem,不另寫一份
+                const st = applyDelta(blank(), { ops: [addC('x', { text: T3 })] }, TCTX).state
+                assert.equal(st.claims[0].id, 'C1', '夾具:狀態內有既有條目 C1')
+                const delta = { ops: [addC('C1'), depC('C1'), addC('C99'), depC('C99')], skipped: [] }
+                const hit = prefixCandidate(delta, 1, st)
+                assert.equal(hit.ops[1].claim, 'C1', 'C1 為既有條目 → 對既有條目之引用,不動')
+                assert.equal(hit.ops[3].claim, '@a1_C99', 'C99 狀態內沒有 → 只可能指本候選之 ref → 補回')
+                const miss = prefixCandidate(delta, 1, blank())
+                assert.equal(miss.ops[1].claim, '@a1_C1', '同一候選對空狀態:C1 非既有條目 → 補回')
+                assert.equal(prefixCandidate(delta, 1).ops[1].claim, '@a1_C1', '不給狀態:無從排除,照補(呼叫端應給)')
+                assert.equal(prefixCandidate(delta, 1, null).ops[3].claim, '@a1_C99')
+            })
+
+            describe('與 validateVia 端對端(整合員改掛合併後之目標)', function() {
+                // 規則:validateVia JSDoc「目標為同差量 ref〔'@名'〕且整合員已改名者,候選之目標經 refAliasOf 之輸出名等於輸出之目標視為相同」——
+                //   候選之目標須是 @ 形才進得了改名表;席 1 之依附操作漏寫 @ 時,補回後才與 @ 形同路
+                const T = '甲乙丙丁戊己庚辛'
+                const seats = (bareDep) => {
+                    const s1 = prefixCandidate({ ops: [addC('c11', { text: T }), depC(bareDep ? 'c11' : '@c11')], skipped: [] }, 1)
+                    const s3 = prefixCandidate({ ops: [addC('f', { text: T, sources: ['N3'] })], skipped: [] }, 3)
+                    return new Map([...s1.ops, ...s3.ops].map((o) => [o._oid, o]))
+                }
+                const merged = (o = {}) => ({ op: 'add', ref: 'a3_f', kind: 'rule', text: T, basis: '觀測', sources: ['N1', 'N3'], via: ['a1_1', 'a3_1'], ...o })
+                const depOut = (via) => ({ op: 'param_add', claim: '@a3_f', name: '門檻', value: '3', sources: ['N1'], via })
+
+                it('席 1 之依附操作漏寫 @,整合員把兩席同義新增合為 a3_f 並改掛 → 通過 2、拒收 0,目標原樣保留', () => {
+                    const r = validateVia([merged(), depOut(['a1_2'])], seats(true))
+                    assert.equal(r.rejected.length, 0, r.rejected[0]?.reason)
+                    assert.equal(r.ops.length, 2)
+                    assert.equal(r.ops[1].claim, '@a3_f')
+                })
+
+                it('漏寫 @ 與寫 @ 兩形結果一致(補回後同路)', () => {
+                    const a = validateVia([merged(), depOut(['a1_2'])], seats(true))
+                    const b = validateVia([merged(), depOut(['a1_2'])], seats(false))
+                    assert.deepEqual(a, b)
+                })
+
+                it('真改目標仍拒:整合員之 add 未以 via 含候選目標之定義(a1_1) → 候選目標 @a1_c11 對不回輸出之 @a3_f,理由字樣不變;補回不放寬', () => {
+                    for (const bareDep of [true, false]) {
+                        const r = validateVia([merged({ via: ['a3_1'], sources: ['N3'] }), depOut(['a1_2'])], seats(bareDep))
+                        assert.equal(r.ops.length, 1, '只剩 add')
+                        assert.equal(r.rejected.length, 1)
+                        assert.equal(r.rejected[0].reason, '目標 claim＝@a3_f 與所引候選不同（整合不可改變操作之目標）')
+                    }
+                })
+            })
         })
 
         it('trialApply:以 applyDelta 套於複本(不落盤),拒收者標 _trial＝理由,回 { applied, rejected } 計數', () => {
