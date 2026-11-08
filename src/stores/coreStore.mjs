@@ -19,8 +19,27 @@ import { writeFileAtomic } from '../core/capturePackage.mjs'
 import { sha1 } from '../core/capturePackage.mjs'
 import { normalizeState, FOREIGN_STATE_CODE } from './coreState.mjs'
 
-/** 封存之標記(檔名後綴 .<標記>-<時刻>):壞檔隔離 corrupt、打掉重練 regen、分身併入 merged */
-export const ARCHIVE_TAGS = Object.freeze({ corrupt: 'corrupt', regen: 'regen', merged: 'merged' })
+/** 封存之標記(檔名後綴 .<標記>-<時刻>):壞檔隔離 corrupt、打掉重練 regen、分身併入 merged、回退(被回退之版本之副本)rollback */
+export const ARCHIVE_TAGS = Object.freeze({ corrupt: 'corrupt', regen: 'regen', merged: 'merged', rollback: 'rollback' })
+
+/**
+ * 該核心是否有某標記之狀態檔封存(封存目錄下 `<核心 id>.state.json.<標記>-…`,或只封存了上一版時之 `<核心 id>.state.prev.json.<標記>-…`——
+ *   主檔缺而 .prev 在時之封存只有後者);封存目錄不存在回 false
+ *
+ * @param {Object} dirs 輸入每輪依賴之 dirs(取 state)
+ * @param {String} coreId 輸入核心 id
+ * @param {String} tag 輸入封存標記(ARCHIVE_TAGS 之值)
+ * @returns {Boolean} 回傳是否有
+ * @example
+ * console.log(hasCoreArchive({ state: 'no/such/dir' }, 'c-1', 'regen'))
+ * // => false
+ */
+export function hasCoreArchive(dirs, coreId, tag) {
+    const dir = coreAuxDirs(dirs).archive
+    if (!fs.existsSync(dir)) return false
+    const heads = [`${coreId}.state.json.${tag}-`, `${coreId}.state.prev.json.${tag}-`]
+    return fs.readdirSync(dir).some((f) => heads.some((h) => f.startsWith(h)))
+}
 
 /**
  * 核心狀態檔之目錄:dirs.coreState(非空字串者);未給者＝dirs.core(狀態檔與核心 md 同處)
@@ -102,7 +121,7 @@ export function mdHashOf(text) {
  * @param {String} opt.dir 輸入狀態檔目錄(檔名 <coreId>.state.json)
  * @param {String} [opt.prevDir] 輸入上一版之目錄(檔名 <coreId>.state.prev.json)，預設同 dir
  * @param {String} [opt.archiveDir] 輸入隔離與封存檔之目錄(壞檔、regenCore、分身)，預設同 dir
- * @returns {Object} 回傳 { dir, prevDir, fileOf, prevOf, load, loadUsable, loadPrev, diskRev, save, quarantine, archive, guardManualEdit }
+ * @returns {Object} 回傳 { dir, prevDir, fileOf, prevOf, load, loadUsable, loadPrev, diskRev, save, quarantine, archive, snapshot, guardManualEdit }
  * @throws {Error} opt.dir 非有效字串時拋出
  * @example
  * need test in nodejs.
@@ -267,6 +286,23 @@ export function createCoreStore(opt) {
     }
 
     /**
+     * 複製現存狀態檔至封存目錄(不移動、不動 .prev;回退用:被回退之版本留一份副本,主檔仍在直到被新內容 CAS 取代);撞名加序號;主檔不存在回 ''
+     *
+     * @param {String} coreId 輸入核心 id
+     * @param {String} tag 輸入標籤(ARCHIVE_TAGS 之值)
+     * @param {String} stamp 輸入時間戳(檔名用)
+     * @returns {String} 回傳副本路徑;主檔不存在回 ''
+     */
+    function snapshot(coreId, tag, stamp) {
+        const file = fileOf(coreId)
+        if (!fs.existsSync(file)) return ''
+        const to = archivePathOf(path.basename(file), tag, stamp)
+        fs.mkdirSync(archiveDir, { recursive: true })
+        fs.copyFileSync(file, to)
+        return to
+    }
+
+    /**
      * 覆寫 md 前之手改偵測:現存 md 之雜湊不在「最近兩次渲染」之中 → 先另存副本(於 manualDir,副檔名 .txt,不讓筆記工具當成另一篇核心)
      *
      * 比對兩次:狀態先寫、md 後寫——md 寫前中斷時,磁碟上仍是上一次渲染;無雜湊(新核心首次渲染)不比對。
@@ -300,8 +336,9 @@ export function createCoreStore(opt) {
         save,
         quarantine: (coreId, stamp) => archiveAs(coreId, ARCHIVE_TAGS.corrupt, stamp),
         archive: archiveAs,
+        snapshot,
         guardManualEdit,
     }
 }
 
-export default { ARCHIVE_TAGS, createCoreStore, nextRevOf, mdHashOf, coreStateDirOf, coreAuxDirs, coreStoreOf }
+export default { ARCHIVE_TAGS, createCoreStore, nextRevOf, mdHashOf, coreStateDirOf, coreAuxDirs, coreStoreOf, hasCoreArchive }

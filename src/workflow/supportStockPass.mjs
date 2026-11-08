@@ -19,6 +19,7 @@ import { applyWithInvariants } from './applyWithInvariants.mjs'
 import { guardOps } from '../standards/opGuards.mjs'
 import { panelSeats } from '../core/summarizePackage.mjs'
 import { STATUS, textValueOf as str, textListOf as strs } from '../core/capturePackage.mjs'
+import { producedMetaOf } from '../core/producedChain.mjs'
 import { ES9, SUPPORT_WORD, claimAssertion, runSupportCheck, supportCheckCallOf } from '../standards/supportCheck.mjs'
 import { noteTitleFnOf } from '../stores/noteFacts.mjs'
 import { revisableOf, notSupportedReasonsOf, runSupportRevise, parseSupportRevise, checkSupportRevise } from '../standards/supportRevise.mjs'
@@ -47,6 +48,7 @@ import { extractStatInit } from '../logContract.mjs'
  * @param {Function} [o.shouldStop] 輸入截止判斷
  * @param {Function} [o.remainingMs] 輸入 ()=>整輪剩餘毫秒數
  * @param {Function} [o.onCall] 輸入每棒回來時之回呼
+ * @param {Function} [o.producedOf] 輸入 () => produced|null:各棒完成後、套用前呼叫一次,回傳寫入該版 changelog 之產出鏈(未給或回 null 即不寫)
  * @param {Object} [o.locale] 輸入語言設定(操作守門之正體轉換依之,未給＝臺灣正體)
  * @param {Function} [o.log] 輸入 (line) => void
  * @returns {Promise<Object>} 回傳 { ok, noop?, state, applied, rejected, stats, checks:[{ id, hash, status, seats, reason }], held:[{ id, why, detail }],
@@ -199,7 +201,7 @@ export async function runSupportStockPass(o) {
         if (o.notesById instanceof Map && domain.evidence?.apply) domain.evidence.apply(s, o.notesById)
         return { state: s, released: rel.released, excluded: ex.changed }
     }
-    const res = applyWithInvariants(state, ops, { ...applyCtxOf(domain, { batch: [], mode: 'delta', step: 'support', program: true, onlyOps: ['revise', 'retract'], at, self: concept, meta: { std: 'ES9', pass: 'stock' } }) }, { finish })
+    const res = applyWithInvariants(state, ops, { ...applyCtxOf(domain, { batch: [], mode: 'delta', step: 'support', program: true, onlyOps: ['revise', 'retract'], at, self: concept, meta: { std: 'ES9', pass: 'stock', ...producedMetaOf(o.producedOf) } }) }, { finish })
     if (!res.ok) return { ok: false, error: `不變式違反：${res.inv.slice(0, 3).join('；')}`, ...empty }
     const ap = res.ap
     const s = res.state

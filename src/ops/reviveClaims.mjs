@@ -23,6 +23,7 @@ import isestr from 'wsemi/src/isestr.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import { normalizeConcept, resolveClockCfg, STATUS, strictTextOf as str, jsonClone as clone } from '../core/capturePackage.mjs'
 import { holdKey, resolveHold, acquireLock, noteDocIdOf } from '../core/capturePackage.mjs'
+import { standardsFixProducedOf } from '../core/producedChain.mjs'
 import { checkKey, recordCheck, createMaterialReader } from '../core/relatePackage.mjs'
 import { REVIVABLE_RETRACT, reviveItems, withdrawnOf, liveSourcesOf, findItem } from '../stores/coreState.mjs'
 import { liveCoresOf, coreForKey } from '../stores/conceptSelection.mjs'
@@ -63,9 +64,11 @@ function coreOfArg(cores, arg) {
  * @param {String} opt.ruling 輸入裁示內容
  * @param {String} [opt.lockFile] 輸入執行鎖檔路徑(與管線同一把),給了即取鎖、管線持鎖中即拒絕
  * @param {Integer} [opt.staleMs] 輸入取鎖時持鎖者未宣告陳舊期限所用之毫秒數
+ * @param {String|null} [opt.stamp=null] 輸入輪次 stamp(14 碼;於輪次內呼叫者給 ctx.stamp;輪次外之維運入口未給＝null)——寫入核心 changelog 該筆之 produced
+ *   (stage `standards-fix`、不呼叫 AI 故 seat／provider 同時 null);非 14 碼字串即拋(任何寫入前)
  * @returns {Promise} 回傳 Promise，resolve 回傳 { ok:Boolean(有還原者), notFound:Boolean, locked?:Boolean, core(核心 id), concept, version(還原後之知識版本;未寫回 null),
  *   revived:Array(主張 id), resumed:Array(前次中斷而只結案待判者), holdsResolved:Array(登錄鍵), checks:Array(檢核紀錄鍵), errors:Array({ id, why }) }
- * @throws {Error} deps 缺必要之集合、dirs 或 domain,opt 缺 core／ids／by／ruling 時拋出;寫入違反不變式或 CAS 衝突時拋出(未落盤;裁示紀錄已寫,待判不動——重跑即續作)
+ * @throws {Error} deps 缺必要之集合、dirs 或 domain,opt 缺 core／ids／by／ruling、opt.stamp 非 14 碼字串時拋出;寫入違反不變式或 CAS 衝突時拋出(未落盤;裁示紀錄已寫,待判不動——重跑即續作)
  * @example
  * need test in nodejs.
  *
@@ -101,6 +104,8 @@ export async function reviveClaims(deps, opt = {}) {
         // 時鐘:落盤所讀之 iso8／stamp8 皆有者原樣採用;未給依預設時區建立(給了而不合者由 resolveClockCfg 拋)
         const clock = isfun(deps.clock?.iso8) && isfun(deps.clock?.stamp8) ? deps.clock : resolveClockCfg(deps.clock)
         const at = clock.iso8()
+        // 產出鏈(不呼叫 AI 之確定性寫入;stage standards-fix):任何寫入前先組(stamp 不合即拋)
+        const produced = standardsFixProducedOf({ stamp: opt.stamp ?? null, at })
         const rec = coreOfArg(await stores.cores.select(), opt.core)
         if (!rec) return { ...none, notFound: true, errors: [{ id: '', why: `找不到核心「${opt.core}」` }] }
         const out = { ...none, core: rec.id, concept: rec.concept }
@@ -175,7 +180,7 @@ export async function reviveClaims(deps, opt = {}) {
 
         // ③裁示紀錄(先記;ES9 之雜湊以還原後之狀態預算——出處之內容鍵取提煉段之同一快取,唯讀)
         const before = clone(s0)
-        const rv = reviveItems(s0, pass, { at, why: `使用者裁示（${by}）：${ruling}` })
+        const rv = reviveItems(s0, pass, { at, why: `使用者裁示（${by}）：${ruling}`, produced })
         const cache = createContentCache(path.join(dirs.state, CONTENT_CACHE_FILE), domain)
         const keyOf = (nid) => String(cache.keyOf(notesById.get(nid)) ?? '')
         for (const id of rv.revived) {

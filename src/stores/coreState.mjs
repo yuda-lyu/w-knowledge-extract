@@ -664,7 +664,7 @@ export function releaseHeld(state, ids) {
  *
  * @param {Object} state 輸入狀態(不修改,回傳新狀態)
  * @param {Array} ids 輸入主張 id
- * @param {Object} [o={}] 輸入 { at, why }
+ * @param {Object} [o={}] 輸入 { at, why, produced?(不呼叫 AI 之產出鏈 standardsFixProducedOf 之產物;給了即寫入該筆 changelog 之 produced 欄,未給不寫) }
  * @returns {Object} 回傳 { state, revived:Array(id) }
  * @example
  * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'], status: 'retracted', retractReason: '覆核無出處支持' }] }).state
@@ -688,7 +688,7 @@ export function reviveItems(state, ids, o = {}) {
     s.version = version
     s.updatedAt = at
     deriveStatus(s)
-    s.changelog.push({ version, at, mode: 'revive', revived: pick, why: str(o?.why) })
+    s.changelog.push({ version, at, mode: 'revive', revived: pick, why: str(o?.why), ...(isobj(o?.produced) ? { produced: clone(o.produced) } : {}) })
     return { state: s, revived: pick }
 }
 
@@ -739,7 +739,7 @@ export function essenceNeedOf(s) {
  *   恢復時,理由為「出處已撤他篇無支持」(檢定標準 ES8 之撤回)而出處含被恢復之筆記者一併還原(⑱;同一次升版,revived 列出)
  *
  * @param {Object} state 輸入狀態(不修改,回傳新狀態)
- * @param {Object} o 輸入 { withdraw:[{ id, title, reason }], restore:[id], at }
+ * @param {Object} o 輸入 { withdraw:[{ id, title, reason }], restore:[id], at, produced?(不呼叫 AI 之產出鏈 standardsFixProducedOf 之產物;升版而寫 changelog 時帶入其 produced 欄,未給不寫) }
  * @returns {Object} 回傳 { state, changed:Boolean(withdrawn 有增減), bumped:Boolean(升版), withdrawn:Array(id), restored:Array(id), affected:Array(條目 id), revived:Array(主張 id) }
  * @example
  * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }, { text: '乙', sources: ['n1', 'n2'] }] }).state
@@ -785,7 +785,7 @@ export function withdrawSources(state, o = {}) {
         c.history = [...(isarr(c.history) ? c.history : []), { version: s.version, at, op: 'revive', note: '出處筆記已還原，撤回（出處已撤他篇無支持）隨之還原' }]
     }
     if (revived.length) deriveStatus(s)
-    s.changelog.push({ version: s.version, at, mode: withdrawn.length ? 'withdraw' : 'restore', withdrawn, restored, affected: hit, ...(revived.length ? { revived } : {}) })
+    s.changelog.push({ version: s.version, at, mode: withdrawn.length ? 'withdraw' : 'restore', withdrawn, restored, affected: hit, ...(revived.length ? { revived } : {}), ...(isobj(o?.produced) ? { produced: clone(o.produced) } : {}) })
     return { state: s, changed: true, bumped: true, withdrawn, restored, affected: hit, revived }
 }
 

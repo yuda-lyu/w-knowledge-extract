@@ -246,6 +246,7 @@ export const EXTRACT_STANDARDS = Object.freeze([
 export const EXTRACT_UNGATED_WRITE_ENTRIES = Object.freeze([
     { entry: 'standards/stockFix.mjs:rollbackCoreStockFix', kind: 'undo', why: '存量處置之回退:寫回處置前之整份狀態(不驗不變式;回到處置前者才寫)' },
     { entry: 'ops/regenCore.mjs:regenCore', kind: 'mechanical', why: '打掉重練:封存狀態檔與核心 md(不寫新內容;其後以現有筆記從頭提煉,新內容照過閘)' },
+    { entry: 'ops/rollbackCore.mjs:rollbackCore', kind: 'undo', why: '核心之回退:寫回上一份狀態(.prev;被回退之版本先封存複本)並重建投影(回到曾通過之狀態,不驗新內容;不呼叫 AI)' },
     { entry: 'stores/coreState.mjs:releaseHeld', kind: 'mechanical', why: '隔離之解除:使用者豁免之待判 → 解除隔離(記帳欄位,不升版、不改條目)' },
     { entry: 'standards/stockFix.mjs:edgeSeenSyncOf', kind: 'mechanical', why: '邊庫快照之換簽章:關聯之存量處置改寫邊時同步快照之簽章(不產生影響事件)' },
     { entry: 'stores/coreProjection.mjs:writeProjections', kind: 'mechanical', why: '以狀態重建投影:md、cores 記錄、筆記之提煉時刻與渲染雜湊之回寫(不改條目)' },

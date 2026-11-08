@@ -21,6 +21,7 @@ import W from 'w-data-pipeline/src/WDataPipeline.mjs'
 import { acquireLock, stdReport, CORE_LOG_KNOWN, CORE_LOG_MUST_SEE } from '../src/core/capturePackage.mjs'
 import { writeMd } from '../src/core/summarizePackage.mjs'
 import { EXTRACT_LOG_KNOWN, EXTRACT_LOG_MUST_SEE, EXTRACT_LOG_PARSE, EXTRACT_REPORT_KEYS, extractStatInit } from '../src/logContract.mjs'
+import { REJECT_BY_KEYS } from '../src/core/rejectKinds.mjs'
 import { createExtractObject, EXTRACT_STAGE_KEYS } from '../src/extractObject.mjs'
 import { resolveExtractSettings, extractWarningsOf } from '../src/core/extractSettings.mjs'
 import { lexSource, memStore, sourceFilesOf } from './tools/captureForTest.mjs'
@@ -231,6 +232,8 @@ const siteTable = (c) => [
     { file: 'stages/extractChain.mjs', has: '待審丟棄帳寫入失敗', n: 1, cls: 'must' },
     { file: 'stages/extractChain.mjs', has: '待審逾上限', n: 1, cls: 'must' },
     { file: 'stages/extractChain.mjs', has: '提煉終審自相矛盾[', n: 1, cls: 'must' },
+    // 產出鏈(core/producedChain)組不出(stamp、套件版或時刻不合共用件之格式;程式之錯,該版 changelog 缺 produced)
+    { file: 'stages/extractChain.mjs', has: '提煉產出鏈組不出[', n: 1, cls: 'must' },
     { file: 'stages/extractSteps.mjs', has: '提煉異常[', n: 1, cls: 'must' },
     { file: 'stages/extractSteps.mjs', has: '提煉：失敗帳寫入失敗', n: 2, cls: 'must' },
     // 落盤之 CAS:原因在運算式內(狀態檔被他處改動 → 須見;其餘寫檔失敗——權限、磁碟——不列,即當未知警告呈現)
@@ -521,7 +524,8 @@ describe('unit-extract-log-contract', function() {
             // 初值生成器:未給鍵＝全部非條件鍵(序即契約之序、值皆 0);鍵不在契約或為條件鍵即拋
             const cond = EXTRACT_REPORT_KEYS.conditional.extract
             assert.deepEqual(Object.keys(extractStatInit()), EXTRACT_REPORT_KEYS.detail.extract.filter((k) => !cond.includes(k)))
-            assert.ok(Object.values(extractStatInit()).every((v) => v === 0) && cond.every((k) => declared.has(k)))
+            // 初值皆 0;唯型別計數鍵(REJECT_BY_KEYS;Gitea #109 §1)之初值為空物件 { 碼: 計數 }
+            assert.ok(Object.entries(extractStatInit()).every(([k, v]) => (REJECT_BY_KEYS.includes(k) ? (v !== null && typeof v === 'object' && Object.keys(v).length === 0) : v === 0)) && cond.every((k) => declared.has(k)))
             assert.deepEqual(extractStatInit(['updated', 'failed']), { updated: 0, failed: 0 })
             assert.throws(() => extractStatInit(['nope']), /鍵不在契約（nope）/)
             assert.throws(() => extractStatInit(['backlog']), /條件鍵不入初值（backlog）/)

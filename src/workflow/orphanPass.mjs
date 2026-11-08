@@ -15,6 +15,7 @@ import { TERMINAL_STATUSES, findItem } from '../stores/coreState.mjs'
 import { applyCtxOf } from '../standards/opStandards.mjs'
 import { applyWithInvariants } from './applyWithInvariants.mjs'
 import { STATUS, textValueOf as str } from '../core/capturePackage.mjs'
+import { producedMetaOf } from '../core/producedChain.mjs'
 import { claimAssertion } from '../standards/supportCheck.mjs'
 import { noteTitleFnOf } from '../stores/noteFacts.mjs'
 import { orphanCandidatesOf, orphanHashOf, runOrphanCheck, parseOrphanChecks, checkOrphanChecks } from '../standards/orphanCheck.mjs'
@@ -40,6 +41,7 @@ import { extractStatInit } from '../logContract.mjs'
  * @param {Function} [o.shouldStop] 輸入截止判斷
  * @param {Function} [o.remainingMs] 輸入 ()=>整輪剩餘毫秒數
  * @param {Function} [o.onCall] 輸入每棒回來時之回呼
+ * @param {Function} [o.producedOf] 輸入 () => produced|null:各棒完成後、套用前呼叫一次,回傳寫入該版 changelog 之產出鏈(未給或回 null 即不寫)
  * @param {Function} [o.log] 輸入 (line) => void
  * @returns {Promise<Object>} 回傳 { ok, noop?, state, applied, rejected, stats, checks:[{ id, hash, status, seats, reason }], held:[{ id, why, detail }], retry:Array(id), stopped?, error? }
  * @example
@@ -118,7 +120,7 @@ export async function runOrphanPass(o) {
     let s = state
     let ap = { applied: [], rejected: [], touched: [] }
     if (ops.length) {
-        const applyCtx = applyCtxOf(domain, { batch: [...new Set(batch)].map((id) => ({ id })), mode: 'delta', step: 'orphan', program: true, onlyOps: ['confirm', 'retract'], at, self: concept, meta: { std: 'ES8', pass: 'orphan' } })
+        const applyCtx = applyCtxOf(domain, { batch: [...new Set(batch)].map((id) => ({ id })), mode: 'delta', step: 'orphan', program: true, onlyOps: ['confirm', 'retract'], at, self: concept, meta: { std: 'ES8', pass: 'orphan', ...producedMetaOf(o.producedOf) } })
         const res = applyWithInvariants(state, ops, applyCtx, {
             finish: (x) => {
                 if (o.notesById instanceof Map && domain.evidence?.apply) domain.evidence.apply(x.state, o.notesById)

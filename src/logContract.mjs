@@ -18,6 +18,7 @@
 //   (已知、須見、刻意不列),每個 report 鍵皆須在實際 report 出現,實際 report 亦不得有未列之鍵。
 
 import { CORE_LOG_KNOWN, CORE_LOG_MUST_SEE } from './core/capturePackage.mjs'
+import { REJECT_BY_KEYS } from './core/rejectKinds.mjs'
 
 /** 提煉物件之階段名(執行摘要之段名;段落完成行「步驟N <階段名> 完成：」之正則同讀) */
 const STAGE = '提煉'
@@ -65,6 +66,8 @@ export const EXTRACT_LOG_MUST_SEE = Object.freeze([
     '判定小組永遠無法成立',
     // 統計鍵不在初值表(count 之鍵與初值表、契約之鍵不同步;程式之錯)
     '提煉統計：未知之統計鍵',
+    // 產出鏈(core/producedChain)組不出(輪次 stamp、套件版或寫入時刻不合共用件之格式;程式之錯):該版 changelog 缺 produced,須見
+    '提煉產出鏈組不出',
     // 核心件所發者(本機網路不通:注入之網路判斷器確認不通;不計此次之失敗——行首為已知之「提煉[…]：<pass>」前綴)
     ...CORE_LOG_MUST_SEE,
 ])
@@ -103,6 +106,9 @@ export const EXTRACT_REPORT_KEYS = Object.freeze({
             // 操作與守門、審計、修訂、終審
             'opsApplied', 'opsRejected', 'opsWithheld', 'opsDropped', 'opsDoubted', 'invariantDropped', 'reviewConflicts', 'reviewDisputesCascaded',
             'reviewDisputeOfftopicKept', 'overLimit', 'lengthChecked', 'absoluteTone', 'questionsAdded', 'questionsResolved',
+            // 拒收／擋下／剔除／存疑之型別計數(core/rejectKinds;{ 型別碼: 計數 },各鍵之和等於同組之總數:opsRejectedBy＝opsRejected、integrateRejectedBy＝integrateRejected
+            //   〔整合輸出之驗證拒收;本組總數亦為新增〕、guardBy＝guardRejected、reviseBlockedBy＝patchBlocked、acceptDroppedBy＝opsDropped、doubtedBy＝opsDoubted)
+            'integrateRejected', ...REJECT_BY_KEYS,
             // 筆記之消化與材料
             'notesUsed', 'notesSkipped', 'notesUncovered', 'notesExhausted', 'unsectioned', 'mdMissing', 'twinsMerged', 'repaired', 'guardRejected',
             'stdIssues', 'stdRejected', 'auditIssues', 'patchApplied', 'patchBlocked', 'verdictBlocked',
@@ -145,7 +151,7 @@ export const EXTRACT_REPORT_KEYS = Object.freeze({
  *   鍵不在契約或為條件鍵即拋(模組載入或開工當下即發現,不等到 agg 才 WARN)
  *
  * @param {Array} [keys=null] 輸入鍵之子集(null＝全部非條件鍵)
- * @returns {Object} 回傳 { 鍵: 0 }
+ * @returns {Object} 回傳 { 鍵: 0 }(型別計數鍵〔REJECT_BY_KEYS〕之初值為 {})
  * @throws {Error} 鍵不在契約之 detail 或為條件鍵時拋出
  * @example
  * console.log(extractStatInit(['concepts', 'updated']))
@@ -159,7 +165,7 @@ export function extractStatInit(keys = null) {
     if (missing.length) throw new Error(`提煉統計初值：鍵不在契約（${missing.join('、')}）`)
     const conditional = ks.filter((k) => cond.includes(k))
     if (conditional.length) throw new Error(`提煉統計初值：條件鍵不入初值（${conditional.join('、')}）`)
-    return Object.fromEntries(ks.map((k) => [k, 0]))
+    return Object.fromEntries(ks.map((k) => [k, REJECT_BY_KEYS.includes(k) ? {} : 0]))
 }
 
 export default { EXTRACT_LOG_KNOWN, EXTRACT_LOG_MUST_SEE, EXTRACT_LOG_PARSE, EXTRACT_REPORT_KEYS, extractStatInit }

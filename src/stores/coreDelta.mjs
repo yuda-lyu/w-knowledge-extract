@@ -9,6 +9,7 @@ import isobj from 'wsemi/src/isobj.mjs'
 import { containment } from '../guards/similarity.mjs'
 import { ACCEPT_DROP_PREFIXES, CONSOLIDATE_OPS, KEY_OF_PREFIX, REF_FIELDS, allItemsOf, DEFAULT_CLAIM_KINDS, DEFAULT_LIMITS, DELTA_OPS, DISSOLVED_RETRACT_REASON, EXHAUSTED_REASON, ITEM_TEXT_FIELDS, MERGE_KEEP_MIN, PENDING_REVIEW_CAP, PROGRAM_RETRACT_REASONS, RECHECK_SKIP_REASONS, REPORTED_BASIS, RETRACT_REASONS, SKIP_REASONS, SPLIT_COVER_MIN, SPLIT_PART_MIN, TERMINAL_OPS, TERMINAL_SET, codeMapOf, deriveStatus, dissolveSidesOf, findItem, lengthCapOf, liveSourcesOf, noteOfCode, parseSide, unsupportedOf, withdrawnOf } from './coreState.mjs'
 import { textValueOf as str, textListOf as strs, uniq, jsonClone as clone } from '../core/capturePackage.mjs'
+import { rejectKindOf } from '../core/rejectKinds.mjs'
 
 /** 操作全集(判「未知操作」與「本模式不可用」之別) */
 const ALL_OPS = new Set([...DELTA_OPS, ...CONSOLIDATE_OPS])
@@ -149,8 +150,9 @@ export function applyDelta(state, delta, ctx = {}) {
     const opSources = (op) => uniq([...srcOf(op?.sources), ...(isarr(op?.sides) ? op.sides.flatMap((sd) => srcOf(sd?.sources)) : []), ...(isarr(op?.sides_add) ? op.sides_add.flatMap((sd) => srcOf(sd?.sources)) : [])])
     // 回報用序號:經 applyVerdicts 剔除後之操作帶 _i(差量原序號),回報一律用原序號
     const rep = (index, op) => (Number.isInteger(op?._i) ? op._i : index)
-    const reject = (index, op, reason) => {
-        rejected.push({ index: rep(index, op), op: str(op?.op) || '?', reason, sources: opSources(op) })
+    // kind＝拒收之型別碼(core/rejectKinds 之 opsRejected 組;每個分支之穩定識別,未給或未登記者歸 unclassified);reason 之字樣不變
+    const reject = (index, op, reason, kind) => {
+        rejected.push({ index: rep(index, op), op: str(op?.op) || '?', reason, sources: opSources(op), kind: rejectKindOf('opsRejected', kind) })
     }
 
     // ── 前置掃描:ref 登記(重複者皆拒)、跨操作衝突(既有項至多一個改狀態操作;confirm 與終態操作不並存)──
@@ -181,10 +183,10 @@ export function applyDelta(state, delta, ctx = {}) {
         if (op.op === 'confirm' && preIds.has(str(op.id))) confirmOps.set(str(op.id), [...(confirmOps.get(str(op.id)) || []), index])
     })
     const conflict = new Map() // index → 原因
-    for (const [t, idx] of stateOps) if (idx.length > 1) for (const i of idx) conflict.set(i, `同一項目 ${t} 有多個改狀態操作`)
+    for (const [t, idx] of stateOps) if (idx.length > 1) for (const i of idx) conflict.set(i, { why: `同一項目 ${t} 有多個改狀態操作`, kind: 'state-op-multiple' })
     for (const [t, idx] of terminalOps) {
         if (!confirmOps.has(t)) continue
-        for (const i of [...idx, ...confirmOps.get(t)]) conflict.set(i, `同一項目 ${t} 同時被確認與取代／撤回`)
+        for (const i of [...idx, ...confirmOps.get(t)]) conflict.set(i, { why: `同一項目 ${t} 同時被確認與取代／撤回`, kind: 'state-op-confirm-vs-terminal' })
     }
     // 失撐條目之補出處:同一差量內 confirm 帶本批出處者視為已補,洗白守門對其放行
     const resourced = new Set()
@@ -201,10 +203,12 @@ export function applyDelta(state, delta, ctx = {}) {
         const hit = uniq(ids.filter((x) => x && !x.startsWith('@') && unsup0.items.has(x) && !resourced.has(x)))
         const heldHit = hit.filter((x) => unsup0.held.has(x))
         const lostHit = hit.filter((x) => !unsup0.held.has(x))
-        return [
+        const why = [
             lostHit.length ? `所引〔${lostHit.join('〕〔')}〕之出處已撤（筆記已刪除），須先以本批筆記 confirm 補出處` : '',
             heldHit.length ? `所引〔${heldHit.join('〕〔')}〕出處支持未能判定、已隔離待判，不得引用` : '',
         ].filter(Boolean).join('；')
+        // 兩種並見者以先列者(出處已撤)為碼
+        return why ? { why, kind: lostHit.length ? 'launder-source-withdrawn' : 'launder-source-held' } : ''
     }
     // 重審守門:重審批內,尚有重審筆記以外之存活出處者不得以「無出處支持」撤回(起草者看不到他篇出處;撤回不可逆)
     const recheckRetractOf = (op) => {
@@ -212,7 +216,7 @@ export function applyDelta(state, delta, ctx = {}) {
         const h = findItem(s, str(op.id))
         if (!h) return ''
         const others = liveSourcesOf(h.item, s, W).filter((x) => !recheckIds.has(x))
-        return others.length ? `〔${h.item.id}〕仍有他篇出處（${others.length} 篇），不可以「無出處支持」撤回——只可 revise` : ''
+        return others.length ? { why: `〔${h.item.id}〕仍有他篇出處（${others.length} 篇），不可以「無出處支持」撤回——只可 revise`, kind: 'recheck-retract-has-other-sources' } : ''
     }
 
     // 處理順序:新增主張 → 新增爭議／參數／問題 → 其餘依原序(「先引用、後定義」亦可解析)
@@ -229,11 +233,11 @@ export function applyDelta(state, delta, ctx = {}) {
         const v = str(x)
         if (v.startsWith('@')) {
             const r = refState.get(v.slice(1))
-            if (!r) return { id: null, reason: `ref「${v}」未定義` }
-            if (!r.id) return { id: null, reason: 'dependency-rejected', dep: r.dropped ? `所引 ${v} 已被終審剔除（${r.dropped}）` : `所引 ${v} 已被拒收（${r.why || '未成立'}）` }
+            if (!r) return { id: null, reason: `ref「${v}」未定義`, kind: 'ref-undefined' }
+            if (!r.id) return { id: null, reason: 'dependency-rejected', kind: 'dependency-rejected', dep: r.dropped ? `所引 ${v} 已被終審剔除（${r.dropped}）` : `所引 ${v} 已被拒收（${r.why || '未成立'}）` }
             return { id: r.id }
         }
-        return findItem(s, v) ? { id: v } : { id: null, reason: `引用之項目 ${v || '(空)'} 不存在` }
+        return findItem(s, v) ? { id: v } : { id: null, reason: `引用之項目 ${v || '(空)'} 不存在`, kind: 'item-not-found' }
     }
     // 操作之目標 id 亦可為同一差量新項之「@ref」(新增處理在前,此時已配發;如把本批新主張 contest 進既有爭議——真實模型驗收實測);
     //   所依之新項未成立 → 依賴失敗(dep＝寫明根因之拒收理由)
@@ -248,11 +252,11 @@ export function applyDelta(state, delta, ctx = {}) {
     //   依賴失敗另回 dep(各引用點原樣使用,不加前綴——「所引 @x 已被終審剔除(理由)」於全部引用點同一句)
     const refOfKind = (x, keys, opt = {}) => {
         const r = resolveRef(x)
-        if (!r.id) return { id: null, why: r.dep || r.reason, dep: r.dep || '' }
+        if (!r.id) return { id: null, why: r.dep || r.reason, dep: r.dep || '', kind: r.kind }
         const h = findItem(s, r.id)
         const shown = str(x) === r.id ? r.id : `${str(x)}＝${r.id}`
-        if (!keys.includes(h.key)) return { id: null, why: `${shown} 為${NAME_OF_KEY[h.key] || h.key}，須為${keys.map((k) => NAME_OF_KEY[k] || k).join('或')}` }
-        if (opt.live !== false && TERMINAL_SET.has(h.item.status)) return { id: null, why: `${shown} 已${h.item.status === 'retracted' ? '撤回' : '取代'}` }
+        if (!keys.includes(h.key)) return { id: null, why: `${shown} 為${NAME_OF_KEY[h.key] || h.key}，須為${keys.map((k) => NAME_OF_KEY[k] || k).join('或')}`, kind: 'target-kind-mismatch' }
+        if (opt.live !== false && TERMINAL_SET.has(h.item.status)) return { id: null, why: `${shown} 已${h.item.status === 'retracted' ? '撤回' : '取代'}`, kind: 'target-terminal' }
         return { id: r.id, hit: h }
     }
     // 操作之目標(id)須為指定種類:不成立時回寫明根因之理由——依賴失敗(dep)、ref 未定義、不存在、種類不符;終態由各操作依其語意自判
@@ -260,13 +264,14 @@ export function applyDelta(state, delta, ctx = {}) {
         const tg = targetOf(x)
         if (!tg.hit) {
             const v = str(x)
-            return { hit: null, why: tg.dep || (v.startsWith('@') && !refState.has(v.slice(1)) ? `ref「${v}」未定義` : `${noun} ${tg.shown || '(空)'} 不存在`) }
+            const undef = v.startsWith('@') && !refState.has(v.slice(1))
+            return { hit: null, why: tg.dep || (undef ? `ref「${v}」未定義` : `${noun} ${tg.shown || '(空)'} 不存在`), kind: tg.dep ? 'dependency-rejected' : (undef ? 'ref-undefined' : 'item-not-found') }
         }
         if (!keys.includes(tg.hit.key)) {
             const shown = str(x) === tg.hit.item.id ? tg.hit.item.id : `${str(x)}＝${tg.hit.item.id}`
-            return { hit: null, why: `目標 ${shown} 為${NAME_OF_KEY[tg.hit.key]}，須為${keys.map((k) => NAME_OF_KEY[k]).join('或')}` }
+            return { hit: null, why: `目標 ${shown} 為${NAME_OF_KEY[tg.hit.key]}，須為${keys.map((k) => NAME_OF_KEY[k]).join('或')}`, kind: 'target-kind-mismatch' }
         }
-        return { hit: tg.hit, why: '' }
+        return { hit: tg.hit, why: '', kind: '' }
     }
     const sideRange = (d) => ((d.sides || []).length ? `現有 side 0～${d.sides.length - 1}` : '無任何一方')
     const hist = (item, op, note, before) => {
@@ -281,14 +286,15 @@ export function applyDelta(state, delta, ctx = {}) {
         return ''
     }
     // 文字欄:長度(逾 2 倍拒收、逾上限計數)與文字中之引用;fields 未給即取該種類之全部文字欄
+    //   回傳 { why, kind }(不合)或 ''(合格)
     const textProblem = (key, obj, fields) => {
         for (const f of fields || TEXT_FIELDS[key] || []) {
             const vals = ARRAY_FIELDS.has(f) ? strs(obj[f]) : [str(obj[f])]
             for (const v of vals) {
                 const lp = overLength(f, v, limits)
-                if (lp) return lp
+                if (lp) return { why: lp, kind: 'text-too-long' }
                 const dg = danglingIn(v)
-                if (dg) return dg
+                if (dg) return { why: dg, kind: 'dangling-text-ref' }
             }
         }
         return ''
@@ -354,26 +360,28 @@ export function applyDelta(state, delta, ctx = {}) {
     }
 
     for (const { op, index } of order) {
-        const fail = (reason) => {
+        const fail = (reason, kind) => {
             failRef(op, reason)
-            reject(index, op, reason)
+            reject(index, op, reason, kind)
         }
         if (!isobj(op) || !allowed.includes(op.op)) {
-            fail(isobj(op) && ALL_OPS.has(op.op) ? (only && !only.includes(op.op) ? `本 pass 只收：${only.join('、')}（收到「${op.op}」）` : `${{ consolidate: '整併', delta: '增量' }[mode]}模式不可用「${op.op}」`) : '未知操作')
+            const known = isobj(op) && ALL_OPS.has(op.op)
+            const outOfPass = known && only && !only.includes(op.op)
+            fail(known ? (outOfPass ? `本 pass 只收：${only.join('、')}（收到「${op.op}」）` : `${{ consolidate: '整併', delta: '增量' }[mode]}模式不可用「${op.op}」`) : '未知操作', known ? (outOfPass ? 'op-not-in-pass' : 'op-not-in-mode') : 'op-unknown')
             continue
         }
         const ref = str(op.ref)
         if (ref && refDup.has(ref)) {
-            fail(`ref「${ref}」重複`)
+            fail(`ref「${ref}」重複`, 'ref-duplicate')
             continue
         }
         if (conflict.has(index)) {
-            fail(conflict.get(index))
+            fail(conflict.get(index).why, conflict.get(index).kind)
             continue
         }
         const guardWhy = launderOf(op) || recheckRetractOf(op)
         if (guardWhy) {
-            fail(guardWhy)
+            fail(guardWhy.why, guardWhy.kind)
             continue
         }
         if (withhold.has(op.op) || op._withhold === true) {
@@ -393,21 +401,21 @@ export function applyDelta(state, delta, ctx = {}) {
         case 'add': {
             const kind = str(op.kind || op.type)
             if (!kinds.includes(kind)) {
-                fail(`種類「${kind}」不在許可清單（${kinds.join('、')}）`)
+                fail(`種類「${kind}」不在許可清單（${kinds.join('、')}）`, 'kind-not-allowed')
                 break
             }
             if (!str(op.text)) {
-                fail('缺 text')
+                fail('缺 text', 'missing-field')
                 break
             }
             const src = needSrc(op.sources)
             if (!src) {
-                fail('無本批出處')
+                fail('無本批出處', 'no-batch-source')
                 break
             }
             const tp = textProblem('claims', op)
             if (tp) {
-                fail(tp)
+                fail(tp.why, tp.kind)
                 break
             }
             // 與既有(非終態)主張全文相同 → 改記為 confirm
@@ -456,16 +464,16 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, ['claims', 'parameters', 'disputes'])
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 已${hit.item.status === 'retracted' ? '撤回' : '取代'}`)
+                fail(`目標 ${hit.item.id} 已${hit.item.status === 'retracted' ? '撤回' : '取代'}`, 'target-terminal')
                 break
             }
             const src = needSrc(op.sources)
             if (!src) {
-                fail('無本批出處')
+                fail('無本批出處', 'no-batch-source')
                 break
             }
             const it = hit.item
@@ -475,7 +483,7 @@ export function applyDelta(state, delta, ctx = {}) {
                 const k = given ? parseSide(op.side) : null
                 const side = k === null ? null : it.sides[k]
                 if (given && !side) {
-                    fail(`爭議 ${it.id} 無 side ${str(op.side)}（${sideRange(it)}）`)
+                    fail(`爭議 ${it.id} 無 side ${str(op.side)}（${sideRange(it)}）`, 'side-invalid')
                     break
                 }
                 if (side) side.sources = uniq([...(side.sources || []), ...src])
@@ -491,22 +499,22 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, Object.keys(REVISABLE))
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 為終態，不可修訂`)
+                fail(`目標 ${hit.item.id} 為終態，不可修訂`, 'target-terminal')
                 break
             }
             if (!str(op.reason)) {
-                fail('缺 reason')
+                fail('缺 reason', 'missing-field')
                 break
             }
             let src = []
             if (mode === 'delta' && !program) {
                 src = needSrc(op.sources)
                 if (!src) {
-                    fail('無本批出處')
+                    fail('無本批出處', 'no-batch-source')
                     break
                 }
             }
@@ -514,24 +522,24 @@ export function applyDelta(state, delta, ctx = {}) {
             const f = isobj(op.fields) ? op.fields : {}
             const keys = Object.keys(f).filter((k) => REVISABLE[hit.key].includes(k))
             if (!keys.length) {
-                fail('無可改之欄位')
+                fail('無可改之欄位', 'revise-no-editable-field')
                 break
             }
             if (keys.includes('kind') && !kinds.includes(str(f.kind))) {
-                fail(`種類「${str(f.kind)}」不在許可清單`)
+                fail(`種類「${str(f.kind)}」不在許可清單`, 'kind-not-allowed')
                 break
             }
             const next = {}
             // 參數之 conditions 為字串(與 param_add 同一形狀);主張之 conditions、pros、cons 為陣列
             for (const k of keys) next[k] = k === 'snapshot' ? f[k] === true : (hit.key === 'parameters' && k === 'conditions' ? paramConditions(f[k]) : (ARRAY_FIELDS.has(k) ? strs(f[k]) : str(f[k])))
             if ((hit.key === 'claims' && keys.includes('text') && !next.text) || (hit.key === 'parameters' && ((keys.includes('name') && !next.name) || (keys.includes('value') && !next.value)))) {
-                fail('必要欄位不可改為空')
+                fail('必要欄位不可改為空', 'required-field-emptied')
                 break
             }
             // ⑩只驗被改之欄位
             const tp = textProblem(hit.key, next, keys.filter((k) => (TEXT_FIELDS[hit.key] || []).includes(k)))
             if (tp) {
-                fail(tp)
+                fail(tp.why, tp.kind)
                 break
             }
             const it = hit.item
@@ -549,31 +557,31 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, ['claims', 'parameters'])
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 已為終態`)
+                fail(`目標 ${hit.item.id} 已為終態`, 'target-terminal')
                 break
             }
             if (!str(op.reason)) {
-                fail('缺 reason')
+                fail('缺 reason', 'missing-field')
                 break
             }
             if (!str(op.validPeriod)) {
-                fail('缺 validPeriod（舊觀點成立期間；年份不詳可寫「較早之研究」或「不詳」）')
+                fail('缺 validPeriod（舊觀點成立期間；年份不詳可寫「較早之研究」或「不詳」）', 'missing-field')
                 break
             }
             const src = needSrc(op.sources)
             if (!src) {
-                fail('無本批出處')
+                fail('無本批出處', 'no-batch-source')
                 break
             }
             let by = ''
             if (str(op.by)) {
                 const r = refOfKind(op.by, [hit.key], { live: false })
                 if (!r.id || r.id === hit.item.id) {
-                    fail(r.id ? '取代者不可為自身' : (r.dep || `取代者 ${r.why}`))
+                    fail(r.id ? '取代者不可為自身' : (r.dep || `取代者 ${r.why}`), r.id ? 'supersede-by-self' : (r.dep ? 'dependency-rejected' : r.kind))
                     break
                 }
                 by = r.id
@@ -592,16 +600,16 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, Object.keys(PREFIX_OF_KEY))
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (TERMINAL_SET.has(hit.item.status)) {
-                fail(`目標 ${hit.item.id} 已為終態`)
+                fail(`目標 ${hit.item.id} 已為終態`, 'target-terminal')
                 break
             }
             const reason = str(op.reason)
             if (!retractReasons.includes(reason)) {
-                fail(`撤回理由須為：${retractReasons.join('、')}`)
+                fail(`撤回理由須為：${retractReasons.join('、')}`, 'retract-reason-invalid')
                 break
             }
             const src = srcOf(op.sources)
@@ -612,7 +620,7 @@ export function applyDelta(state, delta, ctx = {}) {
                 const r = resolveRef(op.into)
                 const h = r.id ? findItem(s, r.id) : null
                 if (!h || h.key !== hit.key || h.item.id === it.id || !live(h)) {
-                    fail(r.dep || '理由「重複」須帶 into（存活之同種類項）')
+                    fail(r.dep || '理由「重複」須帶 into（存活之同種類項）', r.dep ? 'dependency-rejected' : 'retract-duplicate-needs-into')
                     break
                 }
                 into = h.item
@@ -637,36 +645,36 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, ['claims'], '目標主張')
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 已為終態`)
+                fail(`目標 ${hit.item.id} 已為終態`, 'target-terminal')
                 break
             }
             if (!str(op.reason)) {
-                fail('缺 reason')
+                fail('缺 reason', 'missing-field')
                 break
             }
             const r = refOfKind(op.dispute, ['disputes'], { live: false })
             if (!r.id) {
-                fail(!str(op.dispute) ? 'contest 須連既有或同一差量新建之爭議' : (r.dep || `所連爭議 ${r.why}`))
+                fail(!str(op.dispute) ? 'contest 須連既有或同一差量新建之爭議' : (r.dep || `所連爭議 ${r.why}`), !str(op.dispute) ? 'contest-needs-dispute' : (r.dep ? 'dependency-rejected' : r.kind))
                 break
             }
             const d = findItem(s, r.id).item
             if (d.status !== 'open') {
-                fail(`爭議 ${d.id} 已非未解決`)
+                fail(`爭議 ${d.id} 已非未解決`, 'target-not-open')
                 break
             }
             const k = parseSide(op.side)
             const side = k === null ? null : d.sides[k]
             if (!side) {
-                fail(`爭議 ${d.id} 無 side ${str(op.side) || '(未給)'}（contest 須指明 side；${sideRange(d)}）`)
+                fail(`爭議 ${d.id} 無 side ${str(op.side) || '(未給)'}（contest 須指明 side；${sideRange(d)}）`, 'side-invalid')
                 break
             }
             const src = needSrc(op.sources)
             if (!src) {
-                fail('無本批出處')
+                fail('無本批出處', 'no-batch-source')
                 break
             }
             side.claims = uniq([...(side.claims || []), hit.item.id])
@@ -687,44 +695,44 @@ export function applyDelta(state, delta, ctx = {}) {
                 const tk = targetOfKind(op.id, ['disputes'], '目標爭議')
                 const hit = tk.hit
                 if (!hit) {
-                    fail(tk.why)
+                    fail(tk.why, tk.kind)
                     break
                 }
                 if (TERMINAL_SET.has(hit.item.status)) {
-                    fail(`爭議 ${hit.item.id} 已撤回`)
+                    fail(`爭議 ${hit.item.id} 已撤回`, 'target-terminal')
                     break
                 }
                 d = hit.item
                 if (!str(op.note)) {
-                    fail('缺 note')
+                    fail('缺 note', 'missing-field')
                     break
                 }
                 if (op.status !== undefined && !['open', 'resolved'].includes(op.status)) {
-                    fail('status 須為 open／resolved')
+                    fail('status 須為 open／resolved', 'dispute-status-invalid')
                     break
                 }
             }
             else if (!str(op.question)) {
-                fail('缺 question')
+                fail('缺 question', 'missing-field')
                 break
             }
             const rawSides = isAdd ? (isarr(op.sides) ? op.sides : []) : (isarr(op.sides_add) ? op.sides_add : [])
             if (isAdd && rawSides.length < 2) {
-                fail('少於兩方')
+                fail('少於兩方', 'dispute-sides-too-few')
                 break
             }
             const sides = []
             let bad = ''
             for (const sd of rawSides) {
                 if (!str(sd?.position)) {
-                    bad = '有一方缺立場'
+                    bad = { why: '有一方缺立場', kind: 'dispute-side-no-position' }
                     break
                 }
                 const claims = []
                 for (const x of strs(sd?.claims)) {
                     const r = refOfKind(x, ['claims'])
                     if (!r.id) {
-                        bad = r.why
+                        bad = { why: r.why, kind: r.kind }
                         break
                     }
                     claims.push(r.id)
@@ -732,7 +740,7 @@ export function applyDelta(state, delta, ctx = {}) {
                 if (bad) break
                 const src = srcOf(sd?.sources)
                 if (!src.length && !claims.length) {
-                    bad = '有一方無本批出處亦無所引主張'
+                    bad = { why: '有一方無本批出處亦無所引主張', kind: 'dispute-side-no-source' }
                     break
                 }
                 const tp = textProblem('disputes', sd, ['position', 'conditions', 'basis'])
@@ -743,23 +751,23 @@ export function applyDelta(state, delta, ctx = {}) {
                 sides.push({ position: str(sd.position), conditions: strs(sd?.conditions), claims, sources: src, ...(str(sd?.basis) ? { basis: str(sd.basis) } : {}) })
             }
             if (bad) {
-                fail(bad)
+                fail(bad.why, bad.kind)
                 break
             }
             const newSrc = uniq([...srcOf(op.sources), ...sides.flatMap((x) => x.sources)])
             if (!newSrc.length) {
-                fail('無本批出處')
+                fail('無本批出處', 'no-batch-source')
                 break
             }
             const tp = textProblem('disputes', isAdd ? { question: op.question } : { note: op.note })
             if (tp) {
-                fail(tp)
+                fail(tp.why, tp.kind)
                 break
             }
             // ④同篇正反不成爭議(⑬轉述之方例外):新立之全部方、補方與既有各方之間,不得新增同篇成對
             const sameDoc = sameDocWhy(isAdd ? [] : d.sides, isAdd ? sides : [...d.sides, ...sides])
             if (sameDoc) {
-                fail(sameDoc)
+                fail(sameDoc, 'same-doc-pair')
                 break
             }
             if (isAdd) {
@@ -785,21 +793,21 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, ['disputes'], '目標爭議')
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (TERMINAL_SET.has(hit.item.status)) {
-                fail(`爭議 ${hit.item.id} 已撤回`)
+                fail(`爭議 ${hit.item.id} 已撤回`, 'target-terminal')
                 break
             }
             const reason = str(op.reason)
             if (!reason) {
-                fail('缺 reason（兩方為何不是對立）')
+                fail('缺 reason（兩方為何不是對立）', 'missing-field')
                 break
             }
             const tp = textProblem('disputes', { note: reason })
             if (tp) {
-                fail(tp)
+                fail(tp.why, tp.kind)
                 break
             }
             const d = hit.item
@@ -825,17 +833,17 @@ export function applyDelta(state, delta, ctx = {}) {
                 const src = (sd.claims || []).length ? extra : (sd.sources || [])
                 const p = textProblem('claims', c0, ['text', 'conditions', 'critique', 'pros', 'cons', 'period'])
                 if (p || !src.length) {
-                    bad = `side ${k} 無法轉為主張：${p || '無出處'}`
+                    bad = { why: `side ${k} 無法轉為主張：${p ? p.why : '無出處'}`, kind: 'dissolve-side-unconvertible' }
                     break
                 }
                 if (!kinds.includes(kindsIn[k])) {
-                    bad = `side ${k} 之種類「${kindsIn[k] || '（未給）'}」不在主張種類（${kinds.join('、')}）`
+                    bad = { why: `side ${k} 之種類「${kindsIn[k] || '（未給）'}」不在主張種類（${kinds.join('、')}）`, kind: 'kind-not-allowed' }
                     break
                 }
                 plan.push({ k, sd, c0, src, kind: kindsIn[k] })
             }
             if (bad) {
-                fail(bad)
+                fail(bad.why, bad.kind)
                 break
             }
             for (const m of merges) {
@@ -860,19 +868,19 @@ export function applyDelta(state, delta, ctx = {}) {
         }
         case 'param_add': {
             if (!str(op.name) || !str(op.value)) {
-                fail('缺 name 或 value')
+                fail('缺 name 或 value', 'missing-field')
                 break
             }
             const src = needSrc(op.sources)
             if (!src) {
-                fail('無本批出處')
+                fail('無本批出處', 'no-batch-source')
                 break
             }
             let claim = ''
             if (str(op.claim)) {
                 const r = refOfKind(op.claim, ['claims'], { live: false })
                 if (!r.id) {
-                    fail(r.dep || `所依主張 ${r.why}`)
+                    fail(r.dep || `所依主張 ${r.why}`, r.dep ? 'dependency-rejected' : r.kind)
                     break
                 }
                 claim = r.id
@@ -880,7 +888,7 @@ export function applyDelta(state, delta, ctx = {}) {
             const p0 = { name: op.name, value: op.value, conditions: op.conditions, period: op.period }
             const tp = textProblem('parameters', p0)
             if (tp) {
-                fail(tp)
+                fail(tp.why, tp.kind)
                 break
             }
             const id = newId('parameters')
@@ -895,12 +903,12 @@ export function applyDelta(state, delta, ctx = {}) {
         }
         case 'question_add': {
             if (!str(op.text)) {
-                fail('缺 text')
+                fail('缺 text', 'missing-field')
                 break
             }
             const tp = textProblem('questions', { text: op.text })
             if (tp) {
-                fail(tp)
+                fail(tp.why, tp.kind)
                 break
             }
             const src = srcOf(op.sources)
@@ -915,25 +923,25 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, ['questions'], '目標問題')
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (hit.item.status !== 'open') {
-                fail(`問題 ${hit.item.id} 已非未解`)
+                fail(`問題 ${hit.item.id} 已非未解`, 'target-not-open')
                 break
             }
             if (!str(op.resolution)) {
-                fail('缺 resolution')
+                fail('缺 resolution', 'missing-field')
                 break
             }
             const src = needSrc(op.sources)
             if (!src) {
-                fail('無本批出處')
+                fail('無本批出處', 'no-batch-source')
                 break
             }
             const tp = textProblem('questions', { resolution: op.resolution })
             if (tp) {
-                fail(tp)
+                fail(tp.why, tp.kind)
                 break
             }
             Object.assign(hit.item, { status: 'resolved', resolution: str(op.resolution), sources: uniq([...hit.item.sources, ...src]) })
@@ -944,24 +952,24 @@ export function applyDelta(state, delta, ctx = {}) {
         }
         case 'essence': {
             if (essenceSeen) {
-                fail('同一差量只能有一個 essence')
+                fail('同一差量只能有一個 essence', 'essence-duplicate')
                 break
             }
             const text = str(op.text)
             if (!text) {
-                fail('缺 text')
+                fail('缺 text', 'missing-field')
                 break
             }
             // reason 只在改寫既有本質時入沿革(essenceHistory);首次歸納不記錄 reason,故不因缺 reason 整條拒收——
             //   整合員重寫本質操作時可漏 reason,整條拒收即新核心無本質
             if (s.essence.text && !str(op.reason)) {
-                fail('缺 reason（改寫本質須說明理由）')
+                fail('缺 reason（改寫本質須說明理由）', 'missing-field')
                 break
             }
             // 本質為硬上限(逾即拒,不同於主張各欄之「2 倍拒收、1～2 倍計數」)
             const eo = essenceOver(text, limits)
             if (eo) {
-                fail(eo)
+                fail(eo, 'essence-too-long')
                 break
             }
             const claims = []
@@ -969,22 +977,22 @@ export function applyDelta(state, delta, ctx = {}) {
             for (const x of strs(op.claims)) {
                 const r = refOfKind(x, ['claims'])
                 if (!r.id) {
-                    why = r.why
+                    why = r
                     break
                 }
                 claims.push(r.id)
             }
             if (why) {
-                fail(why)
+                fail(why.why, why.kind)
                 break
             }
             if (!claims.length) {
-                fail('essence 須引至少一條主張（claims）')
+                fail('essence 須引至少一條主張（claims）', 'essence-claims-required')
                 break
             }
             const dang = danglingIn(text)
             if (dang) {
-                fail(dang)
+                fail(dang, 'dangling-text-ref')
                 break
             }
             essenceSeen = true
@@ -997,7 +1005,7 @@ export function applyDelta(state, delta, ctx = {}) {
         case 'related_prune': {
             const cs = strs(op.concepts)
             if (!cs.length) {
-                fail('缺 concepts')
+                fail('缺 concepts', 'missing-field')
                 break
             }
             const selfKey = keyOf(ctx.self)
@@ -1020,22 +1028,22 @@ export function applyDelta(state, delta, ctx = {}) {
         case 'merge': {
             const ri = refOfKind(op.into, ['claims', 'parameters', 'questions', 'disputes'])
             if (!ri.id) {
-                fail(ri.dep || `into ${ri.why}`)
+                fail(ri.dep || `into ${ri.why}`, ri.dep ? 'dependency-rejected' : ri.kind)
                 break
             }
             const into = ri.hit
             if (!str(op.reason)) {
-                fail('缺 reason')
+                fail('缺 reason', 'missing-field')
                 break
             }
             const from = uniq(strs(op.from))
             if (!from.length || from.includes(into.item.id)) {
-                fail('from 為空或含 into')
+                fail('from 為空或含 into', 'merge-invalid-from')
                 break
             }
             const badFrom = from.map((id) => refOfKind(id, [into.key])).find((r) => !r.id)
             if (badFrom) {
-                fail(badFrom.dep || `from ${badFrom.why}`)
+                fail(badFrom.dep || `from ${badFrom.why}`, badFrom.dep ? 'dependency-rejected' : badFrom.kind)
                 break
             }
             const hits = from.map((id) => findItem(s, id))
@@ -1043,7 +1051,7 @@ export function applyDelta(state, delta, ctx = {}) {
             if (into.key === 'disputes') {
                 const sameDoc = sameDocWhy(into.item.sides || [], [...(into.item.sides || []), ...hits.flatMap((h) => h.item.sides || [])])
                 if (sameDoc) {
-                    fail(`併後${sameDoc}`)
+                    fail(`併後${sameDoc}`, 'same-doc-pair')
                     break
                 }
                 for (const h of hits) {
@@ -1065,17 +1073,17 @@ export function applyDelta(state, delta, ctx = {}) {
                 const inputs = [into.item, ...hits.map((h) => h.item)]
                 const lost = inputs.filter((it) => containment(textOf(it), op.text) < MERGE_KEEP_MIN).map((it) => it.id)
                 if (lost.length) {
-                    fail(`合併稿未保有 ${lost.join('、')} 之過半內容（包含率須 ≥${MERGE_KEEP_MIN}）；不改寫文字可省略 text`)
+                    fail(`合併稿未保有 ${lost.join('、')} 之過半內容（包含率須 ≥${MERGE_KEEP_MIN}）；不改寫文字可省略 text`, 'merge-text-overwrite')
                     break
                 }
                 const cap = Math.max((limits.text || 90) * 2, Math.ceil(1.2 * Math.max(...inputs.map((it) => textOf(it).length))))
                 if (str(op.text).length > cap) {
-                    fail(`text 過長（${str(op.text).length} 字，上限 ${cap}）`)
+                    fail(`text 過長（${str(op.text).length} 字，上限 ${cap}）`, 'text-too-long')
                     break
                 }
                 const dg = danglingIn(str(op.text))
                 if (dg) {
-                    fail(dg)
+                    fail(dg, 'dangling-text-ref')
                     break
                 }
             }
@@ -1084,7 +1092,7 @@ export function applyDelta(state, delta, ctx = {}) {
                 const ids = new Set([into.item.id, ...from])
                 const clash = s.disputes.find((d) => !TERMINAL_SET.has(d.status) && new Set((d.sides || []).map((sd, k) => ((sd.claims || []).some((x) => ids.has(x)) ? k : -1)).filter((k) => k >= 0)).size > 1)
                 if (clash) {
-                    fail(`合併會使爭議 ${clash.id} 之不同方指向同一主張（${[...ids].join('、')} 分屬其各方）`)
+                    fail(`合併會使爭議 ${clash.id} 之不同方指向同一主張（${[...ids].join('、')} 分屬其各方）`, 'merge-dispute-clash')
                     break
                 }
             }
@@ -1128,20 +1136,20 @@ export function applyDelta(state, delta, ctx = {}) {
             const tk = targetOfKind(op.id, ['claims'], '目標主張')
             const hit = tk.hit
             if (!hit) {
-                fail(tk.why)
+                fail(tk.why, tk.kind)
                 break
             }
             if (!live(hit)) {
-                fail(`目標 ${hit.item.id} 已為終態`)
+                fail(`目標 ${hit.item.id} 已為終態`, 'target-terminal')
                 break
             }
             if (!str(op.reason)) {
-                fail('缺 reason')
+                fail('缺 reason', 'missing-field')
                 break
             }
             const parts = isarr(op.parts) ? op.parts.filter((p) => isobj(p) && str(p.text)) : []
             if (parts.length < 2 || parts.length > 8) {
-                fail('parts 須為 2～8 條（各帶 text）')
+                fail('parts 須為 2～8 條（各帶 text）', 'split-parts-invalid')
                 break
             }
             const it = hit.item
@@ -1151,18 +1159,18 @@ export function applyDelta(state, delta, ctx = {}) {
             const orig = textOf(it)
             const weak = parts.map((p, k) => ({ k, c: containment(textOf(p), orig) })).filter((x) => x.c < SPLIT_PART_MIN)
             if (weak.length) {
-                fail(`第 ${weak.map((x) => x.k + 1).join('、')} 條不是原文之子集（包含率須 ≥${SPLIT_PART_MIN}）——拆分不可加入原文沒有之內容`)
+                fail(`第 ${weak.map((x) => x.k + 1).join('、')} 條不是原文之子集（包含率須 ≥${SPLIT_PART_MIN}）——拆分不可加入原文沒有之內容`, 'split-part-not-subset')
                 break
             }
             const cover = containment(orig, parts.map(textOf).join('\n'))
             if (cover < SPLIT_COVER_MIN) {
-                fail(`各條合起來只涵蓋原文 ${cover.toFixed(2)}（須 ≥${SPLIT_COVER_MIN}）——拆分不可丟掉原文內容`)
+                fail(`各條合起來只涵蓋原文 ${cover.toFixed(2)}（須 ≥${SPLIT_COVER_MIN}）——拆分不可丟掉原文內容`, 'split-coverage-low')
                 break
             }
             let bad = ''
             for (const p of parts) {
                 if (str(p.kind) && !kinds.includes(str(p.kind))) {
-                    bad = `種類「${str(p.kind)}」不在許可清單`
+                    bad = { why: `種類「${str(p.kind)}」不在許可清單`, kind: 'kind-not-allowed' }
                     break
                 }
                 const tp = textProblem('claims', p, ['text', 'conditions', 'pros', 'cons', 'critique', 'period', 'basis'])
@@ -1172,7 +1180,7 @@ export function applyDelta(state, delta, ctx = {}) {
                 }
             }
             if (bad) {
-                fail(bad)
+                fail(bad.why, bad.kind)
                 break
             }
             const ids = []
@@ -1217,12 +1225,12 @@ export function applyDelta(state, delta, ctx = {}) {
             const from = str(op.from)
             const to = str(op.to)
             if (!from || !to || from === to) {
-                fail('refacet 須有不同之 from 與 to')
+                fail('refacet 須有不同之 from 與 to', 'refacet-invalid')
                 break
             }
             const hit = s.claims.filter((c) => !TERMINAL_SET.has(c.status) && c.facet === from)
             if (!hit.length) {
-                fail(`無面向為「${from}」之主張`)
+                fail(`無面向為「${from}」之主張`, 'refacet-no-match')
                 break
             }
             for (const c of hit) {
@@ -1234,7 +1242,7 @@ export function applyDelta(state, delta, ctx = {}) {
             break
         }
         default:
-            fail('未知操作')
+            fail('未知操作', 'op-unknown')
         }
         // 終審存疑(stores/coreState 檔頭⑧):附於爭議類操作、且該操作套用成功者,記於其爭議——不移除、不改狀態;被拒收之操作不記
         if (isobj(op._doubt) && applied.length > nApplied) markDoubt(op, applied[applied.length - 1])

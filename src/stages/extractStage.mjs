@@ -30,7 +30,7 @@
 
 import path from 'path'
 import isobj from 'wsemi/src/isobj.mjs'
-import { applyTaps, budgetOf, listHolds, noteDocIdOf, pipelineDueOf, retryRequestedOf, sha1, stageFields, stdReport } from '../core/capturePackage.mjs'
+import { applyTaps, budgetOf, createPromptFpCache, listHolds, noteDocIdOf, oneline, pipelineDueOf, pkgIdOf, retryRequestedOf, sha1, stageFields, stdReport } from '../core/capturePackage.mjs'
 import { RS4, readConflictEvents, readEdgeAudit, relateDomainNeedsOf } from '../core/relatePackage.mjs'
 import { extractFeatureProblems, extractPickOf, extractResolvedProblem, extractSeatsProblem } from '../core/extractSettings.mjs'
 import { extractStatInit } from '../logContract.mjs'
@@ -85,6 +85,8 @@ export function extractPromptId(domain, seats) {
  * @param {Integer} [opt.notesPerTarget] 輸入每批篇數，未給則用 settings.extract.notesPerConcept
  * @param {Integer} [opt.parallel] 輸入本輪並行核心數，未給則用 settings.extract.perRun;0＝本輪停用提煉(記 INFO,不選題、不呼叫 AI)
  * @param {Object} [opt.categoryFallback] 輸入類別後備之門檻 { minNotes, minGain }(給物件＝開啟；false＝停用)，未給或 null 則用 settings.extract.categoryFallback(預設 null＝停用)
+ * @param {Function} [opt.benchRoleOf] 輸入 (評比角色 id) => 評比角色(extractBenchRoleOf;提示詞指紋之來源,產出鏈 steps[].promptFp):由根檔 extractObject 注入
+ *   (本層不取葉);未給者各步省略 promptFp(其餘產出鏈照寫)
  * @param {Function} [opt.deadline] 輸入軟性截止判定函數，未給則用 budgetOf(ctx).expired
  * @param {Integer} [opt.minRemainingMs=900000] 輸入開工與每一步之門檻:剩餘時間不足即不再開始下一步，未給則用 settings.extract.minRemainingMs
  * @returns {Object} 回傳 stage 物件 { name, run }
@@ -200,7 +202,22 @@ export function stageExtract(opt = {}) {
                 conflicts.set(e.to, [...(conflicts.get(e.to) || []), e.from])
             }
             const ledger = createExtractLedger(path.join(dirs.state, ATTEMPTS_FILE), { stamp: clock.stamp8(), log })
+            // 產出鏈(core/producedChain;changelog 每筆之 produced):輪次 stamp＝管線執行器交各段之 ctx.stamp(與該輪 run.json 同一值;輪次外為 null)、套件版、
+            //   提示詞指紋(一個快取實例＝本輪;評比角色由根檔經 opt.benchRoleOf 注入——本層不取葉;未注入者省略 promptFp)
+            const fpCache = createPromptFpCache({ onFail: (id, e) => log.info(`提煉產出鏈：提示詞指紋算不出（${id}：${oneline(e?.message, 100)}），該角色省略 promptFp`) })
+            const promptFpOf = (benchId) => {
+                try {
+                    const role = typeof opt.benchRoleOf === 'function' ? opt.benchRoleOf(benchId) : null
+                    return role ? fpCache.promptFpOf(role, { vocab: ctx.deps.vocab }) : null
+                }
+                catch {
+                    return null
+                }
+            }
             const env = {
+                roundStamp: typeof ctx.stamp === 'string' ? ctx.stamp : null,
+                pkg: pkgIdOf(import.meta.url),
+                promptFpOf,
                 dirs,
                 stores,
                 aux,

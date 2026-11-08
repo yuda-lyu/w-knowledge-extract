@@ -36,6 +36,8 @@ import { callerOf, extractFanout } from './aiCall.mjs'
 import { textValueOf as str, jsonClone as clone } from '../core/capturePackage.mjs'
 import { RECHECK_REASONS } from '../standards/recheck.mjs'
 import { noteTitleFnOf } from '../stores/noteFacts.mjs'
+import { rejectKindOf, rejectTag, kindTally } from '../core/rejectKinds.mjs'
+import { producedMetaOf } from '../core/producedChain.mjs'
 
 const liveItems = (s) => [...s.claims, ...s.disputes, ...s.parameters, ...s.questions].filter((x) => !TERMINAL_SET.has(x.status) && x.status !== 'resolved')
 const itemText = (x) => str(x.text) || str(x.question) || `${str(x.name)} ${str(x.value)}`
@@ -176,6 +178,8 @@ export function touchedText(state, ops) {
  *   'essence'(本質專步:有效主張而無本質或本質待重寫之核心,起草用 domain.buildEssencePrompt、只收 essence 操作,不處理筆記;檢定標準 ES6)
  * @param {Integer} [o.claimsCap] 輸入有效主張上限(整併提示詞顯示用)
  * @param {Function} [o.onCall] 輸入逐棒呼叫回來時之回呼 (entry:{ stage, ok, providerId, ms, error, promptLen, tried }) => void(生產之逐次日誌)
+ * @param {Function} [o.producedOf] 輸入 () => produced|null:各棒完成後、套用前呼叫一次,回傳寫入該版 changelog 之產出鏈(core/producedChain 以逐棒呼叫組出;
+ *   未給即不寫 produced;回 null 亦不寫)
  * @param {Object} o.domain 輸入提煉 domain(rules、claimKinds、limits、evidence、weakEvidence 與各步之提示詞:buildProposePrompt、buildIntegratePrompt、
  *   buildAuditPrompt、buildRevisePrompt、buildReviewPrompt、buildAcceptAppendix;整併、本質另需 buildConsolidatePrompt、buildEssencePrompt)
  * @param {Object} o.seats 輸入席位 { drafters:[3], integrate, audit, revise, accept }
@@ -218,7 +222,8 @@ export async function runPass(o) {
     const rulesText = rulesTextOf(domain, state)
     const calls = []
     const degrade = []
-    const stats = { candidates: 0, integrated: 0, guardRejected: 0, issues: 0, stdIssues: 0, stdRejected: 0, patch: { ok: 0, blocked: 0 }, verdictBlocked: 0, closure: 0 }
+    // 各 By 計數(型別碼 → 計數;各鍵之和等於同組之總數:guardBy＝guardRejected、reviseBlockedBy＝patch.blocked、integrateRejectedBy＝integrateRejected)
+    const stats = { candidates: 0, integrated: 0, integrateRejected: 0, integrateRejectedBy: {}, guardRejected: 0, guardBy: {}, issues: 0, stdIssues: 0, stdRejected: 0, patch: { ok: 0, blocked: 0 }, reviseBlockedBy: {}, verdictBlocked: 0, closure: 0 }
     // 診斷軌跡(各棒之產物與程式處置;拒收原因須可逐項追查——候選與中間產物不留存即無從查起)
     const trace = { cands: [], integrated: null, integrateRejected: [], closure: [], guard0: null, missing: [], issues: [], patch: null, patchLog: [], verdicts: null, verdictBlocked: [], final: null, stdOut: [], invariants: [] }
     // 重審:本批中被本核心消化過、因內容更新或新判衝突而重新呈現之筆記——起草、審計、修訂、終審附重審段,
@@ -353,8 +358,10 @@ export async function runPass(o) {
         if (r.ok && r.json) {
             const j = normalizeDelta(r.json)
             const v = validateVia(j.ops, byOid)
-            for (const x of v.rejected) log(`提煉整合拒收[${concept}]：${x.reason}`)
-            trace.integrateRejected = v.rejected.map((x) => ({ op: clone(x.op), reason: x.reason }))
+            for (const x of v.rejected) log(`提煉整合拒收[${concept}]${rejectTag(rejectKindOf('integrateRejected', x.kind))}：${x.reason}`)
+            stats.integrateRejected = v.rejected.length
+            stats.integrateRejectedBy = kindTally('integrateRejected', v.rejected)
+            trace.integrateRejected = v.rejected.map((x) => ({ op: clone(x.op), reason: x.reason, kind: rejectKindOf('integrateRejected', x.kind) }))
             if (j.dropped) trace.integrateDropped = j.dropped
             if (!v.ops.length && v.rejected.length) union('整合全數拒收')
             else {
@@ -383,8 +390,9 @@ export async function runPass(o) {
     const g0 = guard(integrated)
     let ops = applyRefAliases(g0.ops)
     stats.guardRejected = g0.rejected.length
-    trace.guard0 = { rejected: g0.rejected.map((x) => ({ oid: x.op?._oid, op: x.op?.op, reason: x.reason })), flagged: g0.flagged.map((f) => ({ oid: f.op?._oid, flag: f.flag, detail: f.detail })) }
-    for (const x of g0.rejected) log(`提煉守門[${concept}]：${x.op?.op || '?'} ${x.reason}`)
+    stats.guardBy = kindTally('guard', g0.rejected)
+    trace.guard0 = { rejected: g0.rejected.map((x) => ({ oid: x.op?._oid, op: x.op?.op, reason: x.reason, kind: rejectKindOf('guard', x.kind) })), flagged: g0.flagged.map((f) => ({ oid: f.op?._oid, flag: f.flag, detail: f.detail })) }
+    for (const x of g0.rejected) log(`提煉守門[${concept}]${rejectTag(rejectKindOf('guard', x.kind))}：${x.op?.op || '?'} ${x.reason}`)
     const flags = g0.flagged.map((f) => `${f.op?._oid || ''} ${f.flag}：${f.detail}`)
 
     // ── B1 審計(程式判得出之超限與檢定標準先列為意見,與審計意見一併交修訂)──
@@ -426,7 +434,8 @@ export async function runPass(o) {
             trace.patchLog = p.log
             stats.patch.ok = p.log.filter((x) => x.ok).length
             stats.patch.blocked = p.log.filter((x) => !x.ok).length
-            for (const x of p.log.filter((y) => !y.ok)) log(`提煉修訂擋下[${concept}]：${x.act} ${x.ref || ''} ${x.why}`)
+            stats.reviseBlockedBy = kindTally('reviseBlocked', p.log.filter((x) => !x.ok))
+            for (const x of p.log.filter((y) => !y.ok)) log(`提煉修訂擋下[${concept}]${rejectTag(rejectKindOf('reviseBlocked', x.kind))}：${x.act} ${x.ref || ''} ${x.why}`)
         }
         else degrade.push(`修訂失敗（${str(r.error).slice(0, 80)}）：採整合後之差量`)
     }
@@ -520,7 +529,8 @@ export async function runPass(o) {
     trace.final = clone(finalDelta.ops)
 
     // ── 套用＋尾端寫入(涵蓋落帳、待審存入、出處排除集、證據重算)＋不變式(違反者逐條剔除後重套;workflow/applyWithInvariants 一份) ──
-    const meta = { accepted, degrade: degrade.length }
+    // 產出鏈(core/producedChain;呼叫端以 o.producedOf 供應,於各棒皆完成後、套用前組出一次):changelog 之 produced
+    const meta = { accepted, degrade: degrade.length, ...producedMetaOf(o.producedOf) }
     const finish = (ap) => {
         const queued = ap.withheld.filter((w) => w.resolved)
         const cov = coverageOf({ batch: applyCtx.batch, applied: ap.applied, skipped, dropped: verdictInfo.dropped, queued, removed: verdictInfo.removed, recheckIds: applyCtx.recheckIds })

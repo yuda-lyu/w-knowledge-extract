@@ -14,6 +14,7 @@
 | `rulebook_standards_extract.md` | 本套件實作之檢定標準 STD-08（提煉納入閘）、STD-12（出處支持覆核 ES9）、STD-15（爭議覆核 ES14）、STD-18（關聯變更之影響 ES10）、STD-21（同義核心 ES11）、STD-23（失撐主張 ES8） |
 | `rulebook_bench.md` | EXT-35 工作流類八角色評分題組之概念名（逐案概念名全集、反向案與排除案、盤點指令）；EXT-36 審計謂詞與正式移除判準共用一份、審計與起草題組之材料守則（逐案改動、限制、指紋） |
 | `rulebook_prompt.md` | EXT-37 提示詞須以字面寫出程式以字面判讀之要求（站點全集：已套二處、未套十四項待 A/B、刻意不套；盤點指令） |
+| `rulebook_provenance.md` | EXT-38 拒收／擋下／剔除／存疑之型別碼（單一來源 `REJECT_KINDS`、六組、日誌行插入位置、站點全集〔碼 → 分支 file:line〕）；EXT-39 核心版本之產出鏈（changelog 之 `produced`；step 角色對照表；不呼叫 AI 之確定性寫入之 stage `standards-fix`；changelog 寫入站點全集〔5 站〕）；EXT-40 核心回退 `rollbackCore` 與依產出鏈取版本 `coreVersionsByProvenance`（既有能力盤點、規則、限制） |
 | 本檔 | 鐵則、EXT-23～37、盤點指令、測試清單 |
 
 ## 已移出
@@ -116,4 +117,5 @@
 - 檢定標準與專步：`unit-extract-standards`、`unit-extract-audit`、`unit-extract-support`、`unit-extract-dispute`、`unit-extract-orphan`、`unit-extract-synonym`、`unit-extract-stockfix`
 - 模組之直接案、失敗路徑、不可逆涵蓋表：`unit-extract-direct`（相似度閾值邊界、候選十件、opGuards、parse、提示詞四件、`bodyHashOf`、重審理由常數）、`unit-extract-failpaths`（四態於段層、高水位、投影補正、分身補完、維護失敗四站、專步斷網、並行共寫、reviveClaims CAS／半套、手改另存、步 × 到點表、失敗帳寫入失敗）、`unit-extract-irreversible`（`TERMINAL_OPS` × 套用／待審／拒絕／還原之涵蓋表、撤銷與重新收件兩契約）
 - 評分：`unit-extract-bench`、`unit-bench-wf-concept`（工作流類八角色題組之概念名與守門）；真 AI：`api-extract-bench-ai`（`WK_LIVE_AI=1` 且 `WK_BENCH_OUT`）
-- 以上共 42 個 `test/*.test.mjs`；工具（`test/tools/`，不帶 `.test.`）：`extractTestKit`（`tmpRoot`／`removeRoots`、`buildTestExtractor`、`landNote`）、`extractKit`（`scriptAi`、`mkEnvIn`、`ledgerOf`、`noAi`／`blankAi`、`ANN`、`clock`）、`promptInputs`、`quantVocab`、三橋接 `captureForTest`／`summarizeForTest`／`relateForTest`、`regen-golden.mjs`；README §17 之表與本清單須與實際檔一致（`unit-extract-package` ⑧ 守 README；本清單人工對）
+- 型別碼與產出鏈（EXT-38～40，條文在 `rulebook_provenance.md`）：`unit-extract-reject-kinds`（型別碼清單、各判定分支逐碼觸發、原始碼掃描、日誌行↔detail↔stats 同源）、`unit-extract-provenance`（changelog 之 produced、stamp、遞補與 failures、promptFp、regen-core、依產出鏈取版本）、`unit-extract-rollback`（rollbackCore 之成功、拒收、預演）
+- 以上共 46 個 `test/*.test.mjs`；工具（`test/tools/`，不帶 `.test.`）：`extractTestKit`（`tmpRoot`／`removeRoots`、`buildTestExtractor`、`landNote`）、`extractKit`（`scriptAi`、`mkEnvIn`、`ledgerOf`、`noAi`／`blankAi`、`ANN`、`clock`）、`promptInputs`、`quantVocab`、三橋接 `captureForTest`／`summarizeForTest`／`relateForTest`、`regen-golden.mjs`；README §17 之表與本清單須與實際檔一致（`unit-extract-package` ⑧ 守 README；本清單人工對）

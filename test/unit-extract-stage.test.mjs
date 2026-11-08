@@ -8,7 +8,8 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { memStore, nullLogger, setConceptFold, resetConceptFold, requestRetry, waiveHold } from './tools/captureForTest.mjs'
-import { tmpRoot, removeRoots } from './tools/extractTestKit.mjs'
+import { tmpRoot, removeRoots, PKG_ROOT } from './tools/extractTestKit.mjs'
+import { coreVersionsByProvenance } from '../src/ops/coreVersionsByProvenance.mjs'
 import { stageExtract } from '../src/stages/extractStage.mjs'
 import { mwLoadState, mwSelectNotes, mwPass, mwRenderState, mwPersistState } from '../src/stages/extractChain.mjs'
 import { createExtractDomain } from '../src/domain/extractDomain.mjs'
@@ -614,7 +615,9 @@ describe('unit-extract-stage', function() {
             const rec = (await env.stores.cores.select())[0]
             const d = readState(env, rec.id).disputes[0]
             assert.deepEqual([d?.status, d?.doubt?.reason, r1.report.detail.opsDoubted], ['open', '非對立', 1], verdict.action)
-            assert.ok(has(r1.log, /^INFO 提煉終審存疑\[學習率\]：i=1 dispute_add「預熱是否必要」（非對立：兩方回答不同情境）/), r1.log.lines.join('\n'))
+            // 刻意更新(Gitea #109 §1):每項理由前插入型別碼〔not-opposed〕(理由與說明之字樣不變)
+            assert.ok(has(r1.log, /^INFO 提煉終審存疑\[學習率\]：i=1 dispute_add「預熱是否必要」（〔not-opposed〕非對立：兩方回答不同情境）/), r1.log.lines.join('\n'))
+            assert.deepEqual(r1.report.detail.doubtedBy, { 'not-opposed': 1 }, 'detail 之型別計數與日誌行之碼同源,和等於 opsDoubted')
             if (verdict.action === 'drop') assert.ok(has(r1.log, /以「剔除＋非對立」表達，已轉為存疑/), r1.log.lines.join('\n'))
             assert.match(readMd(rec.file).body, / {2}- 終審存疑（v1；非對立）：兩方回答不同情境/)
             // 起草端:存疑產生後之下一次提煉看得到;其後(下一次提煉落盤後)不再呈現,避免同一懷疑逐批累積成拆解
@@ -647,9 +650,11 @@ describe('unit-extract-stage', function() {
         // 以「離題」剔除所引新主張(有高嚴重度意見,閘門放行)
         const r = await once({ audit: auditHigh(isJia), accept: verdictOn(isJia, { action: 'drop', reason: '離題', note: '與本概念無關' }) })
         assert.deepEqual([r.st.disputes.length, r.report.detail.opsDropped, r.report.detail.reviewConflicts, r.report.detail.reviewDisputesCascaded], [0, 1, 1, 1])
-        assert.ok(has(r.log, /^INFO 提煉終審剔除\[學習率\]：離題×1$/), r.log.lines.join('\n'))
+        // 刻意更新(Gitea #109 §1):每項理由前插入型別碼〔off-topic〕／〔dependency-rejected〕(理由字樣不變);detail 之型別計數同源
+        assert.ok(has(r.log, /^INFO 提煉終審剔除\[學習率\]：〔off-topic〕離題×1$/), r.log.lines.join('\n'))
+        assert.deepEqual([r.report.detail.acceptDroppedBy, r.report.detail.opsRejectedBy], [{ 'off-topic': 1 }, { 'dependency-rejected': 1 }])
         assert.ok(has(r.log, /^WARN 提煉終審自相矛盾\[學習率\]：保留 i=1 dispute_add「預熱是否必要」，卻以「離題」剔除其所引 @\S+（i=0）——所引不成立，該操作連帶拒收$/), r.log.lines.join('\n'))
-        assert.ok(has(r.log, /^INFO 提煉拒收\[學習率\]：所引 @\S+ 已被終審剔除（離題）×1$/), r.log.lines.join('\n'))
+        assert.ok(has(r.log, /^INFO 提煉拒收\[學習率\]：〔dependency-rejected〕所引 @\S+ 已被終審剔除（離題）×1$/), r.log.lines.join('\n'))
         // 以「重複」剔除(閘門恆放行)亦 WARN
         const rd = await once({ accept: verdictOn(isJia, { action: 'drop', reason: '重複' }) })
         assert.deepEqual([rd.st.disputes.length, rd.report.detail.reviewDisputesCascaded], [0, 1])
@@ -670,7 +675,7 @@ describe('unit-extract-stage', function() {
         const isDispute = (op) => op.op === 'dispute_add'
         const r1 = await once({ audit: auditHigh(isDispute), accept: verdictOn(isDispute, { action: 'drop', reason: '離題', note: '與學習率無關' }) })
         assert.deepEqual([r1.st.disputes.length, r1.report.detail.reviewDisputeOfftopicKept], [0, 1])
-        assert.ok(has(r1.log, /^INFO 提煉終審剔除\[學習率\]：離題×1；爭議類 i=1 dispute_add「預熱是否必要」（離題：與學習率無關）$/), r1.log.lines.join('\n'))
+        assert.ok(has(r1.log, /^INFO 提煉終審剔除\[學習率\]：〔off-topic〕離題×1；爭議類 i=1 dispute_add「預熱是否必要」（離題：與學習率無關）$/), r1.log.lines.join('\n'))
         assert.ok(has(r1.log, /^INFO 提煉終審不一致\[學習率\]：以「離題」剔除爭議 i=1 dispute_add「預熱是否必要」，其所引主張卻皆保留$/), r1.log.lines.join('\n'))
     })
 
@@ -1180,6 +1185,64 @@ describe('unit-extract-stage', function() {
         assert.deepEqual((await reviveClaims(deps, { core: rec.id, ids: [q1.id], by: '王小明', ruling: 'r' })).errors, [{ id: q1.id, why: '非撤回之主張（狀態 active）' }], '非撤回且非使用者裁示者仍為錯誤')
         const nf = await reviveClaims(deps, { core: '不存在之概念', ids: [q2.id], by: '王小明', ruling: 'r' })
         assert.deepEqual([nf.ok, nf.notFound, nf.errors], [false, true, [{ id: '', why: '找不到核心「不存在之概念」' }]])
+    })
+
+    it('reviveClaims 之產出鏈(EXT-39;stage standards-fix):changelog 該筆(mode revive)帶 produced——單一形(seat／provider 皆 null、無 promptFp／steps)、stamp 依 opt.stamp(輪次外未給 null、給了即該值)、at＝還原時刻;stamp 不合式即拋且未寫入;依產出鏈取回該等版本(stage 選得到、provider 選不到)', async () => {
+        const KEYS = ['v', 'stamp', 'stage', 'seat', 'provider', 'pkg', 'at']
+        const PKG = `w-knowledge-extract@${JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')).version}`
+        const STAMP_R = '20261108160000'
+        const env = mkEnv(['q1', 'q2', 'q3'].map((id) => ({ id, concepts: ['存量'] })))
+        env.stores.holds = memStore([])
+        env.stores.checks = memStore([])
+        env.settings.extract.standards.ai = { first: { use: 'ck1' }, second: { use: 'ck2' }, third: { use: 'ck3' } }
+        /** 覆核替身:依斷言開頭回裁決(by:{ 開頭: 裁決 });其餘 supported */
+        const ck = (by = {}) => (p) => {
+            const checks = [...p.matchAll(/^--- 第(\d+)項（.+?）---\n斷言：(.+)$/gm)].map((m) => {
+                const hit = Object.keys(by).find((k) => m[2].startsWith(k))
+                return { index: Number(m[1]), verdict: hit ? by[hit] : 'supported', reason: '出處之內容與斷言之關係說明' }
+            })
+            return { checks }
+        }
+        await runStage(env, scriptAi({ draft: draftAll }), {}, { clock: fixedClock('2026-10-01') })
+        const rec = (await env.stores.cores.select())[0]
+        env.settings.extract.standards.supportStock.perRun = 10
+        // q2、q3 皆被存量覆核撤回(兩席皆不支持)→ 各以一次還原驗兩種 stamp
+        await runStage(env, scriptAi({ ck1: ck({ '主張 q2': 'insufficient', '主張 q3': 'insufficient' }), ck2: ck({ '主張 q2': 'contradicted', '主張 q3': 'contradicted' }) }), {}, { clock: fixedClock('2026-10-02') })
+        const s1 = readState(env, rec.id)
+        const q2 = s1.claims.find((c) => c.text === '主張 q2')
+        const q3 = s1.claims.find((c) => c.text === '主張 q3')
+        assert.deepEqual([q2.status, q3.status], ['retracted', 'retracted'], '前提:存量覆核撤回')
+        const deps = { stores: env.stores, dirs: env.dirs, domain: env.domains.extract, clock: fixedClock('2026-10-03') }
+        const stateFile = `${env.dirs.coreState}/${rec.id}.state.json`
+        // stamp 不合式:寫入前即拋(狀態檔不動、檢核紀錄不動)
+        const text1 = fs.readFileSync(stateFile, 'utf8')
+        const chk0 = await env.stores.checks.get(`claim:${rec.id}:${q2.id}`)
+        await assert.rejects(() => reviveClaims(deps, { core: rec.id, ids: [q2.id], by: '王小明', ruling: '裁示', stamp: 'BADSTAMP' }), (x) => /invalid o\.stamp/.test(x.message) && !x.message.includes('BADSTAMP'))
+        assert.equal(fs.readFileSync(stateFile, 'utf8'), text1, '未寫入')
+        assert.deepEqual(await env.stores.checks.get(`claim:${rec.id}:${q2.id}`), chk0, '檢核紀錄不動')
+        // 輪次外(未給 opt.stamp):stamp null
+        const ra = await reviveClaims(deps, { core: rec.id, ids: [q2.id], by: '王小明', ruling: '原文第二段即支持此主張' })
+        assert.deepEqual([ra.ok, ra.revived], [true, [q2.id]])
+        const ea = readState(env, rec.id).changelog.at(-1)
+        assert.deepEqual([ea.mode, ea.revived, ea.version, ea.at], ['revive', [q2.id], s1.version + 1, '2026-10-03T00:00:00+08:00'])
+        assert.deepEqual(Object.keys(ea.produced), KEYS, '規格 §2.1 單一形')
+        assert.deepEqual([ea.produced.v, ea.produced.stamp, ea.produced.stage, ea.produced.seat, ea.produced.provider, ea.produced.pkg, ea.produced.at], [1, null, 'standards-fix', null, null, PKG, ea.at])
+        // 給 opt.stamp(輪次內之呼叫者):stamp 為該值
+        const rb = await reviveClaims(deps, { core: rec.id, ids: [q3.id], by: '王小明', ruling: '第三段亦支持', stamp: STAMP_R })
+        assert.deepEqual([rb.ok, rb.revived], [true, [q3.id]])
+        const eb = readState(env, rec.id).changelog.at(-1)
+        assert.deepEqual([eb.mode, eb.revived, eb.version], ['revive', [q3.id], s1.version + 2])
+        assert.deepEqual([eb.produced.stamp, eb.produced.stage, eb.produced.seat, eb.produced.provider, eb.produced.pkg, eb.produced.at], [STAMP_R, 'standards-fix', null, null, PKG, eb.at])
+        // 依產出鏈取回:stage 選得到兩版、stamp 精確選到一版、起草席成交者選不到、不呼叫 AI(provider null)選得到
+        const q = (o) => coreVersionsByProvenance(env.stores, { dirs: env.dirs, ...o })
+        const vs = [s1.version + 1, s1.version + 2]
+        assert.deepEqual((await q({ stage: 'standards-fix' })).map((x) => x.version), vs)
+        assert.deepEqual((await q({ stage: 'standards-fix', stamp: STAMP_R })).map((x) => x.version), [vs[1]])
+        assert.deepEqual((await q({ stage: 'standards-fix', stamp: null })).map((x) => x.version), [vs[0]])
+        const byDrafter = (await q({ provider: 'stub-d1' })).map((x) => x.version)
+        assert.ok(byDrafter.includes(1), '前提:起草席成交者選得到 AI 產出之版本')
+        assert.deepEqual(byDrafter.filter((v) => vs.includes(v)), [], '起草席成交者選不到不呼叫 AI 之版本')
+        assert.deepEqual((await q({ provider: null })).map((x) => x.version).filter((v) => vs.includes(v)), vs)
     })
 
     it('reviveClaims 之閘、序與續作:還原後不過檢定標準子集(ES2 數字紮根)者不還原、逐條列 errors;裁示紀錄先於落盤、待判結案於落盤後;主張已 active 而紀錄為使用者裁示者(前次中斷)只結案待判(resumed);管線持鎖中拒絕', async () => {

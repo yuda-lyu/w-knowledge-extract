@@ -147,7 +147,7 @@ export function rewriteTextFields(op, fn) {
  *
  * @param {Array} ops 輸入操作陣列(可帶 _oid 等程式欄位)
  * @param {Object} ctx 輸入 { state, visible:Set|null(全文可見之條目 id;null＝全部可見), locale?(語言設定或字形政策;未給＝臺灣正體) }
- * @returns {Object} 回傳 { ops:Array(通過者;轉確認者已改寫、正體已轉換、旗標已標), rejected:Array({op,reason}), flagged:Array({op,flag,detail}) }
+ * @returns {Object} 回傳 { ops:Array(通過者;轉確認者已改寫、正體已轉換、旗標已標), rejected:Array({op,reason,kind(型別碼;core/rejectKinds 之 guard 組)}), flagged:Array({op,flag,detail}) }
  * @throws {Error} ctx.locale 不合時拋出
  * @example
  * const s = coreStateOf({ claims: [{ text: '甲', sources: ['n1'] }] }).state
@@ -171,7 +171,7 @@ export function guardOps(ops, ctx = {}) {
             const tgts = TARGET_FIELDS[op.op].flatMap((f) => strs(op[f])).filter((x) => !x.startsWith('@'))
             const hidden = tgts.filter((x) => findItem(state, x) && !visible.has(x))
             if (hidden.length) {
-                rejected.push({ op, reason: `目標 ${hidden.join('、')} 未於提示詞中附全文（只見索引行之條目不可改狀態）` })
+                rejected.push({ op, reason: `目標 ${hidden.join('、')} 未於提示詞中附全文（只見索引行之條目不可改狀態）`, kind: 'target-not-in-prompt' })
                 continue
             }
         }

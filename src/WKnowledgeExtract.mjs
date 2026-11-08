@@ -19,6 +19,9 @@ import * as logContractNs from './logContract.mjs'
 // ── 設定預設與詞彙(本套件自有;三套件無之模組)──
 import * as extractSettingsNs from './core/extractSettings.mjs'
 import * as extractVocabNs from './core/vocab/extractVocab.mjs'
+// ── 拒收類型別碼(日誌行與執行摘要之單一來源)與核心版本之產出鏈(本套件自有;三套件無之模組)──
+import * as rejectKindsNs from './core/rejectKinds.mjs'
+import * as producedChainNs from './core/producedChain.mjs'
 // ── stores:核心狀態(主張庫)與差量之套用、狀態摘要、其檔、投影寫入器、證據等級、待判之字樣與期限、失敗帳、帳檔與檔名、出處之快取、筆記之提煉面事實、選篇、選題 ──
 import * as coreStateNs from './stores/coreState.mjs'
 import * as coreDeltaNs from './stores/coreDelta.mjs'
@@ -43,6 +46,8 @@ import * as similarityNs from './guards/similarity.mjs'
 // ── ops:維運(重審、打掉重練、還原撤回)──
 import * as recheckOpsNs from './ops/recheckOps.mjs'
 import * as regenCoreNs from './ops/regenCore.mjs'
+import * as rollbackCoreNs from './ops/rollbackCore.mjs'
+import * as coreVersionsByProvenanceNs from './ops/coreVersionsByProvenance.mjs'
 import * as reviveClaimsNs from './ops/reviveClaims.mjs'
 // ── standards:檢定標準(解析、守門、納入閘、核心之確定性檢定、各覆核、全集、符合度掃描、核心之存量處置與其修法、重審項、關聯變更之影響、待判之登錄與結案、逐案題組之頁組法與類別)──
 import * as parseNs from './standards/parse.mjs'
@@ -94,6 +99,8 @@ export * from './extractRuntime.mjs'
 export * from './logContract.mjs'
 export * from './core/extractSettings.mjs'
 export * from './core/vocab/extractVocab.mjs'
+export * from './core/rejectKinds.mjs'
+export * from './core/producedChain.mjs'
 export * from './stores/coreState.mjs'
 export * from './stores/coreDelta.mjs'
 export * from './stores/stateDigest.mjs'
@@ -114,6 +121,8 @@ export * from './domain/prompts.mjs'
 export * from './guards/similarity.mjs'
 export * from './ops/recheckOps.mjs'
 export * from './ops/regenCore.mjs'
+export * from './ops/rollbackCore.mjs'
+export * from './ops/coreVersionsByProvenance.mjs'
 export * from './ops/reviveClaims.mjs'
 export * from './standards/parse.mjs'
 export * from './standards/opGuards.mjs'
@@ -162,11 +171,11 @@ export * from './bench/cli.mjs'
  */
 const NAMESPACES = [
     createKnowledgeExtractNs, extractObjectNs, extractRuntimeNs, logContractNs,
-    extractSettingsNs, extractVocabNs,
+    extractSettingsNs, extractVocabNs, rejectKindsNs, producedChainNs,
     coreStateNs, coreDeltaNs, stateDigestNs, coreStoreNs, coreProjectionNs, evidenceNs, extractHoldsNs, extractLedgerNs, extractFilesNs, contentCacheNs, rebaselineNs, regenIntentNs, noteFactsNs, noteSelectionNs, conceptSelectionNs,
     extractDomainNs, promptsNs,
     similarityNs,
-    recheckOpsNs, regenCoreNs, reviveClaimsNs,
+    recheckOpsNs, regenCoreNs, rollbackCoreNs, coreVersionsByProvenanceNs, reviveClaimsNs,
     parseNs, opGuardsNs, conflictDispositionNs, coreStandardsNs, disputeCheckNs, opStandardsNs, orphanCheckNs, panelVotesNs, supportCheckNs, supportReviseNs, supportStockNs, synonymCheckNs, registryNs, auditNs, stockFixNs, coreStockFixNs, recheckNs, relationImpactNs, holdSettleNs, esCasesNs,
     extractStageNs, extractChainNs, extractStepsNs, extractMaintainNs, synonymStepNs,
     aiCallNs, applyWithInvariantsNs, candidatesNs, disputePassNs, orphanPassNs, pendingNs, relationContextNs, reviewGuardsNs, runPassNs, supportGateNs, supportStockPassNs, verdictsNs,

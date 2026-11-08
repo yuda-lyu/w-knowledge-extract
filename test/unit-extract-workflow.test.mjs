@@ -752,18 +752,22 @@ describe('unit-extract-workflow', function() {
             for (const type of types) for (const severity of sevs) for (const ref of refs) for (const reason of reasons) {
                 const issues = normalizeIssues([{ ref, severity, type, detail: 'x', fix: 'y' }])
                 const got = removalAllowed(op, s, issues, reason)
-                assert.deepEqual(got, legacy(op, s, issues, reason), `${cls} type=${type} severity=${severity} ref=${ref} reason=${reason}`)
+                // 刻意更新(Gitea #109 §1):不許之回傳新增 kind 欄(型別碼);判準(ok／why)逐格同舊式,許可者無 kind
+                const { kind, ...judged } = got
+                assert.deepEqual(judged, legacy(op, s, issues, reason), `${cls} type=${type} severity=${severity} ref=${ref} reason=${reason}`)
+                assert.equal(got.ok ? kind === undefined : typeof kind === 'string' && kind.length > 0, true, `${cls} type=${type} severity=${severity} ref=${ref} reason=${reason} kind`)
                 cells++
                 if (got.ok) allowed++
             }
-            const none = removalAllowed(op, s, [], '')
+            const { kind: noneKind, ...none } = removalAllowed(op, s, [], '')
             assert.deepEqual(none, legacy(op, s, [], ''), `${cls} 無意見`)
+            assert.ok(noneKind === undefined || typeof noneKind === 'string')
         }
         assert.equal(cells, 3 * types.length * sevs.length * refs.length * reasons.length)
         assert.ok(allowed > 0 && allowed < cells, '格內有放行亦有擋下')
         // 兩條意見:任一條足以即放行;破壞性操作恆放行
         const two = normalizeIssues([{ ref: 'i_1', severity: '中', type: '離題' }, { ref: 'i_1', severity: '低', type: '重複' }])
-        assert.deepEqual(removalAllowed(ops.constructive, s, two, ''), legacy(ops.constructive, s, two, ''))
+        assert.deepEqual(removalAllowed(ops.constructive, s, two, ''), legacy(ops.constructive, s, two, '')) // 許可者(任一條足以)無 kind 欄
     })
 
     it('審計意見缺 ref(或為空字串)不指向任何操作(R8):issueOnOp、removalIssueOf、removalAllowed、applyPatch、gateVerdicts 皆不因缺 ref 之意見放行移除;非空 ref 照舊', () => {

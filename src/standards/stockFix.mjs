@@ -32,6 +32,7 @@ import isarr from 'wsemi/src/isarr.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import { strOf, STATUS, noteDocIdOf, jsonClone as clone } from '../core/capturePackage.mjs'
+import { standardsFixProducedOf } from '../core/producedChain.mjs'
 import { readMd } from '../core/summarizePackage.mjs'
 import { EXTRACT_LEDGER_SHAPES, readLedgerJson, saveLedgerJson } from '../stores/extractFiles.mjs'
 import {
@@ -223,12 +224,14 @@ export async function planCoreStockFix(deps, opt = {}) {
  * @param {Object} [opt={}] 輸入設定物件
  * @param {Boolean} [opt.material=false] 輸入現值重驗是否讀出處材料(同預演;ES2／ES16 之修不了者須讀之才驗得出仍違反)
  * @param {String} [opt.at] 輸入處置時刻 ISO(帳列之 at、沿革時刻、待判之登錄時刻;預設 clock.iso8() 或現在)
+ * @param {String|null} [opt.stamp=null] 輸入輪次 stamp(14 碼;於輪次內呼叫者給 ctx.stamp;輪次外之維運入口未給＝null)——寫入核心 changelog 該筆之
+ *   produced(stage `standards-fix`、不呼叫 AI 故 seat／provider 同時 null);非 14 碼字串即拋(任何寫入前)
  * @param {String} [opt.ledgerFile] 輸入處置帳(JSONL)絕對路徑(未給為 deps.dirs.state 下之 STOCK_LEDGER_FILE)
  * @param {Function} [opt.onRow] 輸入 (帳列) => void:每記一列即呼叫(呼叫端之總覽或日誌)
  * @returns {Promise} 回傳 Promise，resolve 回傳 { at, counts:{ ES3?, ES5?(核心數), held?(新登錄之待判數), resolved?(結案數) }, rows:Array(本次寫入之帳列),
  *   applied:[{ id, stds }], held:[{ key, id, std }], alreadyHeld:Array(已有未結或已豁免之登錄鍵), resolved:Array(結案之登錄鍵),
  *   stale:Array(現值已不須處置之核心 id), errors:[{ id, object, error }], ledgerFile }
- * @throws {Error} 處置帳之路徑皆未給時拋出(任何寫入前)
+ * @throws {Error} 處置帳之路徑皆未給、或 opt.stamp 非 14 碼字串時拋出(任何寫入前)
  * @example
  * need test in nodejs.
  *
@@ -239,6 +242,8 @@ export async function applyCoreStockFix(deps, plan, opt = {}) {
     if (!isobj(opt)) opt = {}
     const ledgerFile = stockLedgerFileOf(deps, opt, 'applyCoreStockFix')
     const at = stockAtOf(deps, opt)
+    // 產出鏈(不呼叫 AI 之確定性寫入;stage standards-fix):任何寫入前先組(stamp 不合即拋,不留半套);輪次外之維運入口未給 opt.stamp 即 null
+    const produced = standardsFixProducedOf({ stamp: opt.stamp ?? null, at })
     const stores = deps?.stores || {}
     // 寫列器開 seq:先記之核心列與其作廢列、同核心之待判列於同一次套用可並存,作廢列以 seq 精確對應
     const { log, rows } = stockLedgerWriter(ledgerFile, at, { onRow: opt.onRow, seq: true })
@@ -274,7 +279,7 @@ export async function applyCoreStockFix(deps, plan, opt = {}) {
                 const rec = await stores.cores.get(id)
                 if (!rec?.file) throw new Error('核心記錄或 md 路徑不在')
                 const before = clone(lu.state)
-                const fix = coreFixOf(lu.state, { stds: it.stds, at, locale: deps.locale, ...es5 })
+                const fix = coreFixOf(lu.state, { stds: it.stds, at, locale: deps.locale, produced, ...es5 })
                 if (!fix.changes.length) {
                     stale.push(id)
                     continue

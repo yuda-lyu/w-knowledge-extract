@@ -16,6 +16,7 @@ import path from 'path'
 import isarr from 'wsemi/src/isarr.mjs'
 import isobj from 'wsemi/src/isobj.mjs'
 import { appendJsonlRows, oneline, jsonClone as clone } from '../core/capturePackage.mjs'
+import { standardsFixProducedOf } from '../core/producedChain.mjs'
 import { openDeletions } from '../core/relatePackage.mjs'
 import { isPrimaryCore } from '../stores/conceptSelection.mjs'
 import { saveNoTopCache } from '../stores/contentCache.mjs'
@@ -274,7 +275,8 @@ export async function maintainCores(env, domain, log, stat, k) {
                 dangling.push(`${rec.concept}×${dang.length}`)
             }
             if (toWithdraw.length || toRestore.length) {
-                const w = withdrawSources(s, { withdraw: toWithdraw, restore: toRestore, at: env.at })
+                // 產出鏈(不呼叫 AI 之確定性寫入;stage standards-fix):stamp＝本輪 ctx.stamp(輪次內;手建 env 未給者 null)
+                const w = withdrawSources(s, { withdraw: toWithdraw, restore: toRestore, at: env.at, produced: standardsFixProducedOf({ stamp: env.roundStamp ?? null, at: env.at }) })
                 s = w.state
                 touched = true
                 stat.withdrawn += w.withdrawn.length

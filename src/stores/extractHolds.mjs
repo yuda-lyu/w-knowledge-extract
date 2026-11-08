@@ -10,7 +10,7 @@
 //   stores。觀察契約之字樣不在此改:同義核對之待判理由「建議於 vocab.conceptAliases 加入「…」→「…」」、逐棒日誌「提煉事件[…] <棒> <供應者> 成交」、
 //   「…條衝突交關聯段核對」與外部巡檢所讀之日誌前綴。
 
-import { holdDeadlineOf } from '../core/capturePackage.mjs'
+import { holdDeadlineOf, listHolds } from '../core/capturePackage.mjs'
 
 /** 待判之期限(天;提煉之全部待判同一期限) */
 export const EXTRACT_HOLD_DEADLINE_DAYS = 30
@@ -76,6 +76,25 @@ export const ES15 = Object.freeze({ std: 'ES15', object: EXTRACT_HOLD_OBJECTS.no
 /** 核心之存量處置修不了者之待判物件(存量處置之登錄與符合度掃描之豁免查核同讀) */
 export const CORE_HOLD_OBJECT = EXTRACT_HOLD_OBJECTS.core
 
+/**
+ * 某核心之待判中須隨「打掉重練」或「回退」結案者(未結 open 與已豁免 waived;以核心 id 為 oid 前綴之筆記層、爭議、主張待判,與以核心 id 為 oid 之核心待判;
+ *   新核心沿用同一 id 而條目編號重新配發、回退後其後各版之條目不再存在——舊登錄與舊裁示不得作用於其後之條目);依登錄 id 排序。regenCore 與 rollbackCore 同讀此一份
+ *
+ * @param {Object} holds 輸入待判集合(listHolds 所讀之集合)
+ * @param {String} coreId 輸入核心 id
+ * @returns {Promise} 回傳 Promise，resolve 回傳待判登錄陣列(依 id 排序)
+ * @example
+ * need test in nodejs.
+ *
+ * const hs = await coreHoldsToCloseOf(stores.holds, 'k1')
+ * console.log(hs.map((h) => h.id))
+ */
+export async function coreHoldsToCloseOf(holds, coreId) {
+    const perCore = new Set([EXTRACT_HOLD_OBJECTS.note, EXTRACT_HOLD_OBJECTS.dispute, EXTRACT_HOLD_OBJECTS.claim])
+    const mine = (h) => (perCore.has(h.object) && String(h.oid).startsWith(itemOidOf(coreId, ''))) || (h.object === CORE_HOLD_OBJECT && h.oid === coreId)
+    return (await listHolds(holds)).filter((h) => (h.status === 'open' || h.status === 'waived') && mine(h)).sort((a, b) => (a.id < b.id ? -1 : 1))
+}
+
 /** 落盤失敗時撤銷本次新登錄之處置方式(先記後寫之補償:登錄前無記錄者結案;有者寫回前像,不經結案) */
 export const HOLD_UNDO_HOW = '落盤失敗（登錄撤銷）'
 
@@ -123,4 +142,4 @@ export const EXTRACT_HOLD_NEXT = Object.freeze({
     coreStock: '使用者判讀：豁免（waiveHold：維持現狀，符合度掃描即記已豁免）；已不再違反者（內容經提煉改寫）於下次存量處置之套用時結案；或以 regenCore 打掉重練（隨之結案）',
 })
 
-export default { EXTRACT_HOLD_DEADLINE_DAYS, extractHoldDeadlineOf, EXTRACT_HOLD_OBJECTS, itemOidOf, parseItemOid, ES15, CORE_HOLD_OBJECT, HOLD_UNDO_HOW, HOLD_STALE_HOW_PREFIX, HOLD_VOID_HOWS, EXTRACT_API_HINT, EXTRACT_HOLD_NEXT }
+export default { EXTRACT_HOLD_DEADLINE_DAYS, extractHoldDeadlineOf, EXTRACT_HOLD_OBJECTS, itemOidOf, parseItemOid, coreHoldsToCloseOf, ES15, CORE_HOLD_OBJECT, HOLD_UNDO_HOW, HOLD_STALE_HOW_PREFIX, HOLD_VOID_HOWS, EXTRACT_API_HINT, EXTRACT_HOLD_NEXT }

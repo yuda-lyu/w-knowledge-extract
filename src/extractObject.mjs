@@ -21,6 +21,7 @@ import isobj from 'wsemi/src/isobj.mjs'
 import { subOpt, stageFields, runSubStages, summaryOf, objectReport } from './core/capturePackage.mjs'
 import { EXTRACT_REPORT_KEYS } from './logContract.mjs'
 import { stageExtract } from './stages/extractStage.mjs'
+import { extractBenchRoleOf } from './bench/extractBench.mjs'
 
 /**
  * 內建子階段之鍵(依執行順序;亦為 opt.<子階段名> 之可用鍵與物件 report 之 detail 鍵)——即日誌契約之 report 子階段鍵(EXTRACT_REPORT_KEYS.subStages,
@@ -112,7 +113,8 @@ export function createExtractObject(opt = {}) {
         opt = {}
     }
 
-    const stages = opt.stages || [stageExtract(subOpt(opt, opt.extract, 'extract.extract'))]
+    // 評比角色(提示詞指紋之來源)由本根檔注入提煉段:stages 層不取葉(bench),經 opt.benchRoleOf 取角色;自訂 opt.stages 者不經此
+    const stages = opt.stages || [stageExtract({ benchRoleOf: extractBenchRoleOf, ...subOpt(opt, opt.extract, 'extract.extract') })]
     return {
         ...stageFields(opt, { name: EXTRACT_REPORT_KEYS.stage }),
         run: async (ctx) => {

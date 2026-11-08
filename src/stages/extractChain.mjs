@@ -12,12 +12,14 @@ import isarr from 'wsemi/src/isarr.mjs'
 import isobj from 'wsemi/src/isobj.mjs'
 import { appendJsonlRows, count, defineMw, normalizeConcept, noteDocIdOf, oneline, sha1, jsonClone as clone } from '../core/capturePackage.mjs'
 import { readMd, writeMd } from '../core/summarizePackage.mjs'
+import { rejectKindOf, rejectStatKey, rejectTag, kindTally, passKindStats } from '../core/rejectKinds.mjs'
+import { producedOfCalls } from '../core/producedChain.mjs'
 import { coreForKey } from '../stores/conceptSelection.mjs'
 import { bodyHashOf } from '../stores/contentCache.mjs'
 import { commitBatch } from '../stores/coreDelta.mjs'
 import { highWater, knownHashesOf, newCoreIdOf, nextRenderHashes, programWriteProblems, recordOf, renderOf, repairCore, settleTwins, writeProjections } from '../stores/coreProjection.mjs'
 import { OFFTOPIC_REASON, TERMINAL_SET, citedNotesOf, emptyState, essenceNeedOf, findItem, holdItems, liveSourcesOf, withdrawnOf } from '../stores/coreState.mjs'
-import { mdHashOf, nextRevOf } from '../stores/coreStore.mjs'
+import { ARCHIVE_TAGS, hasCoreArchive, mdHashOf, nextRevOf } from '../stores/coreStore.mjs'
 import { PENDING_DROPPED_FILE } from '../stores/extractFiles.mjs'
 import { LEDGER_ERROR_CHARS } from '../stores/extractLedger.mjs'
 import { markExtracted } from '../stores/noteFacts.mjs'
@@ -419,12 +421,28 @@ export const mwPass = () => defineMw({
         // 逐棒紀錄;任一棒遇本機網路不通(調度層之 netDown)即記下——未完成時之字樣與中止原因據以分辨斷網與截止
         let netDown = false
         const logCall = aiCallLogOf(`提煉事件[${t.concept}]`, ctx.log, (key, n) => count(msg, key, n))
+        // 本 pass 逐棒呼叫之紀錄:日誌之外,亦為產出鏈(core/producedChain)之材料——成交者入 steps、遞補前失敗者入 failures
+        const calls = []
         const onCall = (c) => {
             if (c?.netDown === true) netDown = true
+            calls.push(c)
             logCall(c)
         }
+        // 產出鏈(changelog 每筆之 produced;各 pass 於各棒完成後、套用前呼叫一次):stage 為 regen-core＝重練(regenCore)後新核心之第一版
+        //   (核心尚無版本而封存目錄有該核心之重練封存),其餘為 extract;組不出(stamp、套件版、時刻不合共用件格式)者該版缺 produced 並 WARN(須見)
+        const stageOfProduced = core.state.version === 0 && hasCoreArchive(env.dirs, core.id, ARCHIVE_TAGS.regen) ? 'regen-core' : 'extract'
+        const producedOf = () => {
+            if (!env.pkg) return null // 無產出鏈脈絡(套件版取不到;單元測試自組之 env)
+            try {
+                return producedOfCalls({ calls, stamp: env.roundStamp ?? null, stage: stageOfProduced, mode, pkg: env.pkg, at: env.at, promptFpOf: env.promptFpOf })
+            }
+            catch (e) {
+                ctx.log.warn(`提煉產出鏈組不出[${t.concept}]：${oneline(e?.message, 160)}`)
+                return null
+            }
+        }
         // shouldStop／remainingMs 同源(整輪截止):給了即「截止感知」——席位預算用盡(errorType budget)且剩餘不足一次嘗試者視為截止、不計失敗
-        const common = { state: core.state, concept: t.concept, scope: t.scope, domain, seats, ai: ctx.deps.ai, notesById: env.notesById, contentOf: env.contentOf, at: env.at, keyOf: normalizeConcept, shouldStop: env.shouldStop, remainingMs: env.remainingMs, onCall, log: (l) => ctx.log.info(l), supportCheck: env.supportCheck, locale: ctx.deps.locale }
+        const common = { state: core.state, concept: t.concept, scope: t.scope, domain, seats, ai: ctx.deps.ai, notesById: env.notesById, contentOf: env.contentOf, at: env.at, keyOf: normalizeConcept, shouldStop: env.shouldStop, remainingMs: env.remainingMs, onCall, producedOf, log: (l) => ctx.log.info(l), supportCheck: env.supportCheck, locale: ctx.deps.locale }
         let r
         let shownConflicts = []
         let enforcedRows = []
@@ -443,7 +461,7 @@ export const mwPass = () => defineMw({
                 msg.data._halt = 'no-need'
                 return msg
             }
-            r = await runDisputePass({ state: core.state, concept: t.concept, ids, domain, seats: dc.seats, ai: ctx.deps.ai, notesById: env.notesById, contentOf: env.contentOf, noteKeyOf: env.noteKeyOf, at: env.at, keyOf: normalizeConcept, shouldStop: env.shouldStop, remainingMs: env.remainingMs, onCall, log: (l) => ctx.log.info(l), locale: ctx.deps.locale })
+            r = await runDisputePass({ state: core.state, concept: t.concept, ids, domain, seats: dc.seats, ai: ctx.deps.ai, notesById: env.notesById, contentOf: env.contentOf, noteKeyOf: env.noteKeyOf, at: env.at, keyOf: normalizeConcept, shouldStop: env.shouldStop, remainingMs: env.remainingMs, onCall, producedOf, log: (l) => ctx.log.info(l), locale: ctx.deps.locale })
         }
         else if (mode === 'support' || mode === 'orphan') {
             // 出處支持存量覆核(ES9 存量)／失撐主張(ES8)專步:以當下狀態再判須檢者(同輪已處置者不再呼叫 AI)
@@ -458,7 +476,7 @@ export const mwPass = () => defineMw({
                 msg.data._halt = 'no-need'
                 return msg
             }
-            const base = { state: core.state, concept: t.concept, ids, domain, seats: cfg.seats, ai: ctx.deps.ai, notesById: env.notesById, contentOf: env.contentOf, keyOf: env.noteKeyOf, at: env.at, shouldStop: env.shouldStop, remainingMs: env.remainingMs, onCall, log: (l) => ctx.log.info(l), locale: ctx.deps.locale }
+            const base = { state: core.state, concept: t.concept, ids, domain, seats: cfg.seats, ai: ctx.deps.ai, notesById: env.notesById, contentOf: env.contentOf, keyOf: env.noteKeyOf, at: env.at, shouldStop: env.shouldStop, remainingMs: env.remainingMs, onCall, producedOf, log: (l) => ctx.log.info(l), locale: ctx.deps.locale }
             r = mode === 'support' ? await runSupportStockPass({ ...base, reviseSeat: cfg.reviseSeat }) : await runOrphanPass(base)
         }
         else if (mode === 'pending') r = await runPending({ ...common, batch })
@@ -711,6 +729,9 @@ export const mwPass = () => defineMw({
         count(msg, 'overLimit', r.overLimit || 0)
         count(msg, 'lengthChecked', r.lengthChecked || 0)
         count(msg, 'guardRejected', st.guardRejected || 0)
+        // 型別計數(core/rejectKinds 之 passKindStats):各組之和等於其總數(opsRejected、guardRejected、patchBlocked、integrateRejected;終審剔除與存疑見 logVerdicts);
+        //   日誌行之碼與此同源
+        for (const [key, n] of Object.entries(passKindStats(r))) count(msg, key, n)
         // 檢定標準之納入閘(standards/opStandards):交修訂之程式意見數、定稿仍不合而不採之操作數(待審裁決之不採另計)
         count(msg, 'stdIssues', st.stdIssues || 0)
         count(msg, 'stdRejected', st.stdRejected || 0)
@@ -751,8 +772,12 @@ export const mwPass = () => defineMw({
         count(msg, 'notesUncovered', cov.uncovered.filter((id) => !rIds.has(id)).length - exhausted.filter((id) => !rIds.has(id)).length)
         count(msg, 'notesExhausted', exhausted.filter((id) => !rIds.has(id)).length)
         if (r.rejected.length) {
+            // 每項理由前插入型別碼〔碼〕(core/rejectKinds 之 opsRejected 組;理由字樣不變)
             const by = {}
-            for (const x of r.rejected) by[x.reason] = (by[x.reason] || 0) + 1
+            for (const x of r.rejected) {
+                const key = `${rejectTag(rejectKindOf('opsRejected', x.kind))}${x.reason}`
+                by[key] = (by[key] || 0) + 1
+            }
             ctx.log.info(`提煉拒收[${t.concept}]：${Object.entries(by).map(([k2, n]) => `${k2}×${n}`).join('、')}`)
         }
         if (cov.badSkipped?.length) ctx.log.info(`提煉未涵蓋[${t.concept}]：略過清單中 ${cov.badSkipped.length} 項代號或理由不合，按未涵蓋處理`)
@@ -765,6 +790,18 @@ export const mwPass = () => defineMw({
         return next(msg)
     },
 })
+
+/**
+ * 型別計數記入訊息統計(扁平鍵 `<By 鍵>:<碼>`,見 core/rejectKinds 之 rejectStatKey;段層彙總時轉成 { 碼: 計數 })
+ *
+ * @param {Object} msg 輸入訊息信封(計數用)
+ * @param {String} group 輸入分組鍵(core/rejectKinds 之 REJECT_GROUPS 之鍵)
+ * @param {Object} by 輸入 { 碼: 計數 }(未給視同空)
+ * @returns {void} 無回傳值(就地計入 msg.stats)
+ */
+function countKinds(msg, group, by) {
+    for (const [kind, n] of Object.entries(by || {})) count(msg, rejectStatKey(group, kind), n)
+}
 
 /**
  * 終審裁決之日誌與計數(剔除、存疑、依賴衝突、理由替代、無效裁決):終審之判斷須在生產日誌可見,
@@ -785,15 +822,22 @@ function logVerdicts(v, ops, t, msg, ctx) {
     const DISPUTE = new Set(['dispute_add', 'dispute_update', 'contest'])
     if (v.dropped.length) {
         count(msg, 'opsDropped', v.dropped.length)
+        countKinds(msg, 'acceptDropped', kindTally('acceptDropped', v.dropped))
+        // 每項理由前插入型別碼〔碼〕(core/rejectKinds 之 acceptDropped 組;理由字樣不變)
         const by = {}
-        for (const x of v.dropped) by[x.reason] = (by[x.reason] || 0) + 1
+        for (const x of v.dropped) {
+            const key = `${rejectTag(rejectKindOf('acceptDropped', x.kind))}${x.reason}`
+            by[key] = (by[key] || 0) + 1
+        }
         const disputes = v.dropped.filter((x) => DISPUTE.has(x.op))
         ctx.log.info(`提煉終審剔除[${t.concept}]：${Object.entries(by).map(([k, n]) => `${k}×${n}`).join('、')}${disputes.length ? `；爭議類 ${disputes.slice(0, 5).map((x) => `${label(x.index)}（${x.reason}${x.note ? `：${cut(x.note)}` : ''}）`).join('；')}` : ''}`)
     }
     if (v.doubted.length) {
         count(msg, 'opsDoubted', v.doubted.length)
+        countKinds(msg, 'doubted', kindTally('doubted', v.doubted))
         const byDrop = v.doubted.filter((x) => x.byDrop).length
-        ctx.log.info(`提煉終審存疑[${t.concept}]：${v.doubted.slice(0, 5).map((x) => `${label(x.index)}（${x.reason}：${cut(x.note || '（未附說明）')}）`).join('；')}${byDrop ? `（其中 ${byDrop} 則以「剔除＋${[...new Set(v.doubted.filter((x) => x.byDrop).map((x) => x.reason))].join('／')}」表達，已轉為存疑）` : ''}`)
+        // 每項理由前插入型別碼〔碼〕(core/rejectKinds 之 doubted 組;理由字樣不變)
+        ctx.log.info(`提煉終審存疑[${t.concept}]：${v.doubted.slice(0, 5).map((x) => `${label(x.index)}（${rejectTag(rejectKindOf('doubted', x.kind))}${x.reason}：${cut(x.note || '（未附說明）')}）`).join('；')}${byDrop ? `（其中 ${byDrop} 則以「剔除＋${[...new Set(v.doubted.filter((x) => x.byDrop).map((x) => x.reason))].join('／')}」表達，已轉為存疑）` : ''}`)
     }
     if (v.verdictRejected?.length) ctx.log.info(`提煉終審[${t.concept}]：${v.verdictRejected.length} 則裁決無效（${v.verdictRejected.slice(0, 3).map((x) => x.reason).join('；')}），相應操作按未裁決處理`)
     if (v.conflicts.length) {

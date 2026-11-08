@@ -135,19 +135,23 @@ export function removalIssueOf(op, issues, types = [ISSUE_TYPES.duplicate, ...RE
  * @param {Object} state 輸入目前狀態
  * @param {Array} issues 輸入正規化之審計意見
  * @param {String} [reason=''] 輸入移除方自述之理由(終審 drop 之 reason)
- * @returns {Object} 回傳 { ok:Boolean, why:String }
+ * @returns {Object} 回傳 { ok:Boolean, why:String, kind?:String(不許時之型別碼;core/rejectKinds 之 reviseBlocked 組:removal-dispute-not-offtopic、severity-too-low) }
  * @example
  * console.log(removalAllowed({ _oid: 'a1_0', op: 'add', kind: 'rule', text: '甲', sources: ['N1'] }, emptyState(), [], ''))
- * // => { ok: false, why: '建設性操作只准以「重複」或「高」嚴重度之離題／捏造意見移除（中、低嚴重度請修訂措辭）' }
+ * // => {
+ * //   ok: false,
+ * //   why: '建設性操作只准以「重複」或「高」嚴重度之離題／捏造意見移除（中、低嚴重度請修訂措辭）',
+ * //   kind: 'severity-too-low'
+ * // }
  */
 export function removalAllowed(op, state, issues, reason = '') {
     if (opClass(op, state) === 'destructive') return { ok: true, why: '破壞性操作，移除即保住既有知識' }
     if (DISPUTE_OPS.has(op.op) && !DISPUTE_DROP_REASONS.includes(str(reason)) && !removalIssueOf(op, issues, REMOVE_TYPES)) {
-        return { ok: false, why: `爭議類操作只能以「${DISPUTE_DROP_REASONS.join('」「')}」移除（假爭議不是移除理由）` }
+        return { ok: false, why: `爭議類操作只能以「${DISPUTE_DROP_REASONS.join('」「')}」移除（假爭議不是移除理由）`, kind: 'removal-dispute-not-offtopic' }
     }
     if (removalIssueOf(op, issues, DUP_ONLY) || str(reason) === '重複') return { ok: true, why: '重複' }
     if (removalIssueOf(op, issues, REMOVE_TYPES)) return { ok: true, why: '引用高嚴重度之離題／捏造意見' }
-    return { ok: false, why: '建設性操作只准以「重複」或「高」嚴重度之離題／捏造意見移除（中、低嚴重度請修訂措辭）' }
+    return { ok: false, why: '建設性操作只准以「重複」或「高」嚴重度之離題／捏造意見移除（中、低嚴重度請修訂措辭）', kind: 'severity-too-low' }
 }
 
 /**
@@ -157,7 +161,7 @@ export function removalAllowed(op, state, issues, reason = '') {
  * @param {Object} patch 輸入修訂回傳
  * @param {Object} ctx 輸入 { state, issues(正規化), guard:(ops)=>{ops,rejected}(新增操作之操作守門), limits?(長度上限,同 applyDelta;未給用 DEFAULT_LIMITS),
  *        problemsOf?:(ops)=>Map(op → 檢定標準問題)(extract/standards/opStandards;給了即「補丁不得新增問題、新增須已合標準」) }
- * @returns {Object} 回傳 { ops, log:Array({act,ref,ok,why}), droppedRefs:Object(被移除之新項 ref → '修訂移除';交 applyDelta 之 ctx.droppedRefs——引用者拒收時寫明根因) }
+ * @returns {Object} 回傳 { ops, log:Array({act,ref,ok,why,kind?(被擋者之型別碼;core/rejectKinds 之 reviseBlocked 組)}), droppedRefs:Object(被移除之新項 ref → '修訂移除';交 applyDelta 之 ctx.droppedRefs——引用者拒收時寫明根因) }
  * @example
  * need test in nodejs.
  *
@@ -174,12 +178,12 @@ export function applyPatch(ops, patch, ctx = {}) {
     for (const r of Array.isArray(patch?.removes) ? patch.removes : []) {
         const ref = str(r?.ref ?? r)
         const op = find(ref)
-        if (!op) { log.push({ act: 'remove', ref, ok: false, why: '找不到操作' }); continue }
+        if (!op) { log.push({ act: 'remove', ref, ok: false, why: '找不到操作', kind: 'op-not-found' }); continue }
         const issueRef = r?.issue
         const iss = issues.filter((x) => str(issueRef) && (String(x.k) === str(issueRef) || x.ref === str(issueRef)))
         const allIss = iss.length ? [...iss, ...issues] : issues
         const v = removalAllowed(op, state, allIss, str(r?.reason))
-        if (!v.ok) { log.push({ act: 'remove', ref, ok: false, why: v.why }); continue }
+        if (!v.ok) { log.push({ act: 'remove', ref, ok: false, why: v.why, kind: v.kind }); continue }
         out = out.filter((o) => o !== op)
         log.push({ act: 'remove', ref, ok: true, why: v.why })
         // 被移除者為新項(帶 ref)→ 引用它之操作一併移除(建設性者同受移除判準,不合者留著、套用時以根因拒收;破壞性者放行);ref 記為修訂移除
@@ -187,7 +191,7 @@ export function applyPatch(ops, patch, ctx = {}) {
             droppedRefs[str(op.ref)] = '修訂移除'
             for (const dep of out.filter((o) => o !== op && refsOf(o).includes(str(op.ref)))) {
                 const dv = removalAllowed(dep, state, allIss, str(r?.reason))
-                if (!dv.ok) { log.push({ act: 'remove', ref: dep._oid, ok: false, why: `引用已移除之新項 @${str(op.ref)}，但${dv.why}` }); continue }
+                if (!dv.ok) { log.push({ act: 'remove', ref: dep._oid, ok: false, why: `引用已移除之新項 @${str(op.ref)}，但${dv.why}`, kind: dv.kind }); continue }
                 out = out.filter((o) => o !== dep)
                 log.push({ act: 'remove', ref: dep._oid, ok: true, why: `引用已移除之新項 @${str(op.ref)}（${dv.why}）` })
             }
@@ -196,7 +200,7 @@ export function applyPatch(ops, patch, ctx = {}) {
     for (const e of Array.isArray(patch?.edits) ? patch.edits : []) {
         const ref = str(e?.ref)
         const op = find(ref)
-        if (!op) { log.push({ act: 'edit', ref, ok: false, why: '找不到操作' }); continue }
+        if (!op) { log.push({ act: 'edit', ref, ok: false, why: '找不到操作', kind: 'op-not-found' }); continue }
         const allow = FIXABLE_FIELDS[op.op] || []
         let fields = e?.fields && typeof e.fields === 'object' ? { ...e.fields } : {}
         if (op.op === 'revise') {
@@ -211,7 +215,7 @@ export function applyPatch(ops, patch, ctx = {}) {
             delete fields.note
         }
         const keys = Object.keys(fields).filter((k) => allow.includes(k) && k !== 'sources')
-        if (!keys.length) { log.push({ act: 'edit', ref, ok: false, why: `無可改之欄位（試改：${Object.keys(fields).join('、') || '無'}；${op.op} 可改：${allow.join('、')}）` }); continue }
+        if (!keys.length) { log.push({ act: 'edit', ref, ok: false, why: `無可改之欄位（試改：${Object.keys(fields).join('、') || '無'}；${op.op} 可改：${allow.join('、')}）`, kind: 'no-editable-field' }); continue }
         let bad = ''
         const next = clone(op)
         for (const k of keys) {
@@ -228,19 +232,19 @@ export function applyPatch(ops, patch, ctx = {}) {
             if (k === 'fields') next.fields = { ...(op.fields || {}), ...(typeof after === 'object' ? after : {}) }
             else next[k] = after
         }
-        if (bad) { log.push({ act: 'edit', ref, ok: false, why: bad }); continue }
+        if (bad) { log.push({ act: 'edit', ref, ok: false, why: bad, kind: 'text-overwrite' }); continue }
         const g = typeof ctx.guard === 'function' ? ctx.guard([next]) : { ops: [next], rejected: [] }
-        if (!g.ops.length) { log.push({ act: 'edit', ref, ok: false, why: g.rejected[0]?.reason || '守門拒收' }); continue }
+        if (!g.ops.length) { log.push({ act: 'edit', ref, ok: false, why: g.rejected[0]?.reason || '守門拒收', kind: 'guard-rejected' }); continue }
         // 審後不得比審前差:補丁使本條由合格變超限(套用時必被拒收)者不採,保留原稿;原本就超限者不在此擋(交定稿前處置)
         const lp = opLengthProblem(g.ops[0], ctx.limits)
-        if (lp && !opLengthProblem(op, ctx.limits)) { log.push({ act: 'edit', ref, ok: false, why: `補丁使本條超限（${lp}），保留原稿` }); continue }
+        if (lp && !opLengthProblem(op, ctx.limits)) { log.push({ act: 'edit', ref, ok: false, why: `補丁使本條超限（${lp}），保留原稿`, kind: 'over-limit' }); continue }
         // 審後不得比審前差(檢定標準):補丁使本條新增問題(新的未紮根數字、新提及筆記、新缺標注…)者不採,保留原稿;減少問題者照採
         if (typeof ctx.problemsOf === 'function') {
             const keys = (ps) => (Array.isArray(ps) ? ps : []).flatMap((p) => (Array.isArray(p.items) ? p.items : [p.detail]).map((i) => `${p.std}|${p.field}|${i}`))
             const before = new Set(keys(ctx.problemsOf(out).get(op)))
             const trialOut = out.map((o) => (o === op ? g.ops[0] : o))
             const added = keys(ctx.problemsOf(trialOut).get(g.ops[0])).filter((k) => !before.has(k))
-            if (added.length) { log.push({ act: 'edit', ref, ok: false, why: `補丁使本條新增檢定標準問題（${added.slice(0, 3).join('、')}），保留原稿` }); continue }
+            if (added.length) { log.push({ act: 'edit', ref, ok: false, why: `補丁使本條新增檢定標準問題（${added.slice(0, 3).join('、')}），保留原稿`, kind: 'new-standard-issue' }); continue }
         }
         out = out.map((o) => (o === op ? g.ops[0] : o))
         log.push({ act: 'edit', ref, ok: true, why: keys.join('、') })
@@ -251,16 +255,16 @@ export function applyPatch(ops, patch, ctx = {}) {
         if (op && op.issue !== undefined) delete op.issue
         op = inferOp(op)
         const issueRef = str(a?.issue)
-        if (!op || !str(op.op)) { log.push({ act: 'add', ok: false, why: '新增缺 op' }); continue }
-        if (!issueRef || !issues.some((x) => String(x.k) === issueRef || x.ref === issueRef)) { log.push({ act: 'add', ok: false, why: '新增須對應某條審計意見（issue）' }); continue }
+        if (!op || !str(op.op)) { log.push({ act: 'add', ok: false, why: '新增缺 op', kind: 'add-op-missing' }); continue }
+        if (!issueRef || !issues.some((x) => String(x.k) === issueRef || x.ref === issueRef)) { log.push({ act: 'add', ok: false, why: '新增須對應某條審計意見（issue）', kind: 'add-needs-issue' }); continue }
         const g = typeof ctx.guard === 'function' ? ctx.guard([op]) : { ops: [op], rejected: [] }
-        if (!g.ops.length) { log.push({ act: 'add', ok: false, why: g.rejected[0]?.reason || '守門拒收' }); continue }
+        if (!g.ops.length) { log.push({ act: 'add', ok: false, why: g.rejected[0]?.reason || '守門拒收', kind: 'guard-rejected' }); continue }
         const lp = opLengthProblem(g.ops[0], ctx.limits)
-        if (lp) { log.push({ act: 'add', ok: false, why: `新增超限（${lp}），套用時必被拒收` }); continue }
+        if (lp) { log.push({ act: 'add', ok: false, why: `新增超限（${lp}），套用時必被拒收`, kind: 'over-limit' }); continue }
         // 新增之操作(補遺漏)須已合檢定標準:定稿時不合者不採,此處先擋——它不再有修訂機會
         if (typeof ctx.problemsOf === 'function') {
             const ps = ctx.problemsOf([...out, g.ops[0]]).get(g.ops[0])
-            if (ps?.length) { log.push({ act: 'add', ok: false, why: `新增未達檢定標準（${ps.map((p) => `${p.std}：${p.detail}`).slice(0, 2).join('；')}）` }); continue }
+            if (ps?.length) { log.push({ act: 'add', ok: false, why: `新增未達檢定標準（${ps.map((p) => `${p.std}：${p.detail}`).slice(0, 2).join('；')}）`, kind: 'add-standard-issue' }); continue }
         }
         n++
         const added = { ...g.ops[0], _oid: `b2_${n}`, _via: [`issue:${issueRef}`] }

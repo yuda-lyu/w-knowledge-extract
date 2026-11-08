@@ -22,6 +22,7 @@ import { panelRetryOf, panelWhyLabelOf, voteTextOf } from '../standards/panelVot
 import { callerOf } from './aiCall.mjs'
 import { extractStatInit } from '../logContract.mjs'
 import { textValueOf as str } from '../core/capturePackage.mjs'
+import { producedMetaOf } from '../core/producedChain.mjs'
 import { noteTitleFnOf } from '../stores/noteFacts.mjs'
 
 
@@ -43,6 +44,7 @@ import { noteTitleFnOf } from '../stores/noteFacts.mjs'
  * @param {Function} [o.shouldStop] 輸入截止判斷;給了即截止感知
  * @param {Function} [o.remainingMs] 輸入 ()=>整輪剩餘毫秒數
  * @param {Function} [o.onCall] 輸入每棒回來時之回呼 (entry:{ stage, ok, providerId, ms, error, tried }) => void
+ * @param {Function} [o.producedOf] 輸入 () => produced|null:各棒完成後、套用前呼叫一次,回傳寫入該版 changelog 之產出鏈(未給或回 null 即不寫)
  * @param {Object} [o.locale] 輸入語言設定(操作守門之正體轉換依之,未給＝臺灣正體)
  * @param {Function} [o.log] 輸入 (line) => void
  * @returns {Promise<Object>} 回傳 { ok, noop?, state, applied, rejected, stats, held:[{ id, why, detail }], retry:Array(id), decided:Array(id), undecided:Array(id;中止而未判),
@@ -86,7 +88,7 @@ export async function runDisputePass(o) {
     if (judged.every((it) => panelRetryOf(rc.decisions.get(it.key)))) {
         return { ok: false, error: '爭議覆核（ES14）未完成：全部受檢項皆缺票或同一供應者（各席皆未回、回覆不合格、席位未設或提示詞放不下、兩票成交於同一供應者）', state, stats, retry: judged.map((it) => it.key) }
     }
-    const applyCtx = applyCtxOf(domain, { batch: [], mode: 'delta', step: 'dispute', onlyOps: ['dispute_dissolve'], at, keyOf: o.keyOf, self: concept })
+    const applyCtx = applyCtxOf(domain, { batch: [], mode: 'delta', step: 'dispute', onlyOps: ['dispute_dissolve'], at, keyOf: o.keyOf, self: concept, meta: producedMetaOf(o.producedOf) })
     const std = createOpStandards(opStandardsCtxOf({ state, batch: [], contentOf, notesById: o.notesById, applyCtx, domain }))
     const held = []
     const retry = []

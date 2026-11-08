@@ -138,6 +138,10 @@ describe('unit-flow-extract', function() {
         assert.ok(citingA.length >= 1, '出處欄不動')
         for (const c of citingA) assert.ok(!liveSourcesOf(c, st).includes(N.a.id), `${c.id}:存活出處不含已撤者`)
         assert.match(reps[2].stages[0].result.summary, /、撤出處 1 篇/)
+        // 產出鏈(EXT-39):撤出處為不呼叫 AI 之確定性寫入——changelog 該筆之 produced 為 standards-fix 單一形,stamp＝該輪 run.json 之 stamp(總組裝之輪次內)
+        const w = st.changelog.find((x) => x.mode === 'withdraw')
+        assert.deepEqual([w.produced.stage, w.produced.seat, w.produced.provider, w.produced.stamp], ['standards-fix', null, null, readJsonFile(reps[2].summaryFile).stamp])
+        assert.equal('promptFp' in w.produced || 'steps' in w.produced, false)
     })
 
     it('F4 還原 → 第四輪之維護恢復 a(撤出集合移除);摘要附「恢復 1 篇」', async () => {
@@ -148,5 +152,9 @@ describe('unit-flow-extract', function() {
         const citingA = statesOfRound[3].claims.filter((c) => (c.sources || []).includes(N.a.id))
         for (const c of citingA) assert.ok(liveSourcesOf(c, statesOfRound[3]).includes(N.a.id), `${c.id}:還原後存活出處含 a`)
         assert.match(reps[3].stages[0].result.summary, /、恢復 1 篇/)
+        // 產出鏈(EXT-39):恢復同為 standards-fix 單一形,stamp＝該輪(第四輪)run.json 之 stamp,與撤出處那輪不同
+        const r = statesOfRound[3].changelog.find((x) => x.mode === 'restore')
+        assert.deepEqual([r.produced.stage, r.produced.seat, r.produced.provider, r.produced.stamp], ['standards-fix', null, null, readJsonFile(reps[3].summaryFile).stamp])
+        assert.notEqual(r.produced.stamp, statesOfRound[2].changelog.find((x) => x.mode === 'withdraw').produced.stamp)
     })
 })

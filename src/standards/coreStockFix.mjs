@@ -77,7 +77,8 @@ function fixValue(v, script) {
  *
  * @param {Object} state 輸入核心狀態(不修改)
  * @param {Object} [ctx={}] 輸入 { stds:Array(預設全部), at:String, conflictEndsOf:(邊 id)=>[a, b]|null(ES5;未給不處置), rs4HeldOf:(邊 id)=>Boolean,
- *   locale?:語言設定或字形政策(ES3 之修正依之;非繁體中文之語言為恆等、無改動;未給＝臺灣正體) }
+ *   locale?:語言設定或字形政策(ES3 之修正依之;非繁體中文之語言為恆等、無改動;未給＝臺灣正體),
+ *   produced?:不呼叫 AI 之產出鏈(core/producedChain 之 standardsFixProducedOf 之產物;升版而寫 changelog 時帶入其 produced 欄,未給不寫——預演不必給) }
  * @returns {Object} 回傳 { state, changes:[{ std, id, what }], touched:Array(條目 id;不含 essence), bumped:Boolean, seenRemoved:Array(邊 id) }
  * @throws {Error} ctx.locale 不合時拋出
  * @example
@@ -157,7 +158,7 @@ export function coreFixOf(state, ctx = {}) {
     if (bumped) {
         s.version = version
         s.updatedAt = at
-        s.changelog = [...(isarr(s.changelog) ? s.changelog : []), { version, at, mode: 'stock-fix', std: 'ES3', items: [...touched, ...(essenceFixed ? ['essence'] : [])] }]
+        s.changelog = [...(isarr(s.changelog) ? s.changelog : []), { version, at, mode: 'stock-fix', std: 'ES3', items: [...touched, ...(essenceFixed ? ['essence'] : [])], ...(isobj(ctx.produced) ? { produced: clone(ctx.produced) } : {}) }]
     }
     return { state: changes.length ? s : state, changes, touched, bumped, seenRemoved }
 }

@@ -29,6 +29,7 @@ import { touchedText, rulesTextOf } from './runPass.mjs'
 import { callerOf, extractAiCall } from './aiCall.mjs'
 import { extractStatInit } from '../logContract.mjs'
 import { textValueOf as str, jsonClone as clone } from '../core/capturePackage.mjs'
+import { producedMetaOf } from '../core/producedChain.mjs'
 import { noteTitleFnOf } from '../stores/noteFacts.mjs'
 
 
@@ -77,6 +78,7 @@ export function pendingReviewPromptOf(o) {
  * @param {Function} [o.shouldStop] 輸入截止判斷(呼叫前檢查;到點即不呼叫、待審保留);給了即截止感知(見 workflow/aiCall)
  * @param {Function} [o.remainingMs] 輸入 ()=>整輪剩餘毫秒數(與 shouldStop 同源)
  * @param {Function} [o.onCall] 輸入每棒回來時之回呼 (entry:{ stage, ok, providerId, ms, error, promptLen, tried }) => void
+ * @param {Function} [o.producedOf] 輸入 () => produced|null:各棒完成後、套用前呼叫一次,回傳寫入該版 changelog 之產出鏈(未給或回 null 即不寫;既有之 meta.step／reviewed／provider 照舊)
  * @param {Object} [o.supportCheck] 輸入出處支持覆核(ES9){ seats:{ first, second?, third? }, maxTries?(判不了逾此次數 → 移出待審改登錄使用者待判;預設取設定預設) };未給即不覆核
  * @param {Object} [o.locale] 輸入語言設定(操作守門之正體轉換依之,未給＝臺灣正體)
  * @param {Function} [o.log] 輸入 (line) => void
@@ -202,6 +204,8 @@ export async function runPending(o) {
         if (o.notesById instanceof Map && domain.evidence?.apply) domain.evidence.apply(s, o.notesById)
         return { state: s, queued, pendingDropped }
     }
+    // 產出鏈(core/producedChain):各棒(終審、出處覆核)皆已完成,套用前組出一次;既有之 meta.step／reviewed／provider 保留(provider＝終審席之成交者,與 produced 之 pending 步同值)
+    applyCtx.meta = { ...applyCtx.meta, ...producedMetaOf(o.producedOf) }
     const res = applyWithInvariants(state, delta.ops, applyCtx, {
         finish,
         onDropped: (dropped, firstInv) => {

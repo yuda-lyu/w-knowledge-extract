@@ -21,6 +21,7 @@ import { normalizeConflictDecl } from '../standards/conflictDisposition.mjs'
 import { containment, mutualContainment, sameSubstance } from '../guards/similarity.mjs'
 import { REF_FIELDS, findItem } from '../stores/coreState.mjs'
 import { textValueOf as str, textListOf as strs, uniq, jsonClone as clone } from '../core/capturePackage.mjs'
+import { rejectKindOf } from '../core/rejectKinds.mjs'
 
 const REF_KEYS = REF_FIELDS.ids
 const REF_LIST_KEYS = REF_FIELDS.lists
@@ -225,25 +226,26 @@ export function refAliasOf(ops, defs) {
 }
 
 /**
- * 單條整合輸出之判式(依序:via、操作種類、目標、出處、文字),回第一個不合之拒收理由,合格回空字串;sameTarget 為 null 時略過目標比對
+ * 單條整合輸出之判式(依序:via、操作種類、目標、出處、文字),回第一個不合之 { why:拒收理由, kind:型別碼(core/rejectKinds 之 integrateRejected 組) },合格回空字串;
+ *   sameTarget 為 null 時略過目標比對
  */
 function viaProblemOf(op, via, byOid, sameTarget) {
-    if (!via.length) return 'via 未指回任何候選操作（整合不可新增候選沒有之操作）'
+    if (!via.length) return { why: 'via 未指回任何候選操作（整合不可新增候選沒有之操作）', kind: 'via-missing' }
     const cands = via.map((x) => byOid.get(x))
-    if (!cands.some((c) => str(c.op) === str(op.op))) return `操作種類 ${str(op.op) || '?'} 與所引候選（${uniq(cands.map((c) => str(c.op))).join('、')}）不同（整合不可改變操作種類）`
+    if (!cands.some((c) => str(c.op) === str(op.op))) return { why: `操作種類 ${str(op.op) || '?'} 與所引候選（${uniq(cands.map((c) => str(c.op))).join('、')}）不同（整合不可改變操作種類）`, kind: 'op-type-changed' }
     // 目標比對:必填欄(id、into、dispute)一律逐條比對;選填欄(OPTIONAL_TARGET_KEYS)只在所引候選至少一條帶該欄時比對——候選皆缺選填欄(str 為空字串:缺鍵、null、空白)者
     //   無「原目標」可改,整合員替它指定目標是補上、不是改變(起草席漏寫 param_add 之 claim 等),目標是否存在交其後 closeRefs／applyDelta 守門;
     //   所引候選只要有一條帶該欄,仍逐條比對(混引孤兒不放寬)。必填欄候選皆缺者是格式不合之候選(試套已拒),整合員不得替它自訂目標(破壞性操作之目標不放寬)
     const compared = (k) => !OPTIONAL_TARGET_KEYS.includes(k) || cands.some((c) => str(c[k]))
     const badTarget = sameTarget ? TARGET_KEYS.find((k) => typeof op[k] === 'string' && str(op[k]) && compared(k) && !cands.some((c) => sameTarget(str(op[k]), str(c[k])))) : ''
-    if (badTarget) return `目標 ${badTarget}＝${str(op[badTarget])} 與所引候選不同（整合不可改變操作之目標）`
+    if (badTarget) return { why: `目標 ${badTarget}＝${str(op[badTarget])} 與所引候選不同（整合不可改變操作之目標）`, kind: 'target-mismatch' }
     const srcs = srcUnion(cands)
     const extra = [...strs(op.sources), ...(Array.isArray(op.sides) ? op.sides.flatMap((sd) => strs(sd?.sources)) : [])].filter((x) => !srcs.has(x))
-    if (extra.length) return `出處 ${uniq(extra).join('、')} 不在所引候選之出處內`
+    if (extra.length) return { why: `出處 ${uniq(extra).join('、')} 不在所引候選之出處內`, kind: 'source-not-in-candidates' }
     const t = viaTextOf(op)
     if (t) {
         const base = cands.map(viaTextOf).filter(Boolean)
-        if (base.length && Math.max(...base.map((b) => containment(t, b))) < 0.5 && Math.max(...base.map((b) => containment(b, t))) < 0.5) return '文字與所引候選差異過大（整合不可改寫成候選沒有之內容）'
+        if (base.length && Math.max(...base.map((b) => containment(t, b))) < 0.5 && Math.max(...base.map((b) => containment(b, t))) < 0.5) return { why: '文字與所引候選差異過大（整合不可改寫成候選沒有之內容）', kind: 'text-diverged' }
     }
     return ''
 }
@@ -261,7 +263,7 @@ function viaProblemOf(op, via, byOid, sameTarget) {
  *
  * @param {Array} ops 輸入整合者回傳之操作(各帶 via:Array)
  * @param {Map} byOid 輸入 _oid → 候選操作
- * @returns {Object} 回傳 { ops:Array(通過者,帶 _via), rejected:Array({op,reason}) }
+ * @returns {Object} 回傳 { ops:Array(通過者,帶 _via), rejected:Array({op,reason,kind(型別碼;core/rejectKinds 之 integrateRejected 組:via-missing、op-type-changed、target-mismatch、source-not-in-candidates、text-diverged)}) }
  * @example
  * const cand = { _oid: 'a1_0', op: 'add', kind: 'rule', text: '甲乙丙丁', sources: ['N1'] }
  * const r = validateVia([{ op: 'add', kind: 'rule', text: '甲乙丙丁', sources: ['N1'], via: ['a1_0'] }, { op: 'add', kind: 'rule', text: '全新文字', sources: ['N1'], via: ['a1_0'] }], new Map([['a1_0', cand]]))
@@ -285,9 +287,9 @@ export function validateVia(ops, byOid) {
     const ok = []
     const rejected = []
     for (const { op, via } of items) {
-        const reason = viaProblemOf(op, via, byOid, sameTarget)
-        if (reason) {
-            rejected.push({ op, reason })
+        const problem = viaProblemOf(op, via, byOid, sameTarget)
+        if (problem) {
+            rejected.push({ op, reason: problem.why, kind: rejectKindOf('integrateRejected', problem.kind) })
             continue
         }
         op._via = via

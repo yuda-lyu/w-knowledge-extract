@@ -8,6 +8,7 @@
 
 import isobj from 'wsemi/src/isobj.mjs'
 import { cmp, makeMsg, normalizeConcept, oneline, runChainOverMsgs } from '../core/capturePackage.mjs'
+import { rejectStatSplit } from '../core/rejectKinds.mjs'
 import { CORE_STATUS, isMainCore, isPrimaryCore, liveCoresOf } from '../stores/conceptSelection.mjs'
 import { TERMINAL_SET } from '../stores/coreState.mjs'
 import { LEDGER_ERROR_CHARS, coreLedgerKeyOf } from '../stores/extractLedger.mjs'
@@ -62,6 +63,13 @@ export function createSteps(o) {
     const agg = (r) => {
         for (const [key, v] of Object.entries(r.stats || {})) {
             if (key === 'backlog') continue
+            // 型別計數(core/rejectKinds):鏈內以扁平鍵 `<By 鍵>:<碼>` 累加(count 為純數字),此處轉入本輪統計之 { 碼: 計數 }
+            const kindKey = rejectStatSplit(key)
+            if (kindKey) {
+                const m = stat[kindKey[0]] && typeof stat[kindKey[0]] === 'object' ? stat[kindKey[0]] : (stat[kindKey[0]] = {})
+                m[kindKey[1]] = (m[kindKey[1]] || 0) + v
+                continue
+            }
             if (key in stat) stat[key] += v
             else if (!unknownStat.has(key)) {
                 unknownStat.add(key)

@@ -199,7 +199,7 @@ describe('unit-extract-registry', function() {
     it('不經納入閘之寫入入口(回退與機械寫入;刻意):每列 { entry, kind, why },entry 為「套件內檔案:函數」(檔存在、宣告、import 後為函數);kind 只 undo／mechanical;凍結;回退入口不列於各標準之執行處', async () => {
         assert.ok(Object.isFrozen(EXTRACT_UNGATED_WRITE_ENTRIES) && EXTRACT_UNGATED_WRITE_ENTRIES.every(Object.isFrozen))
         assert.deepEqual(EXTRACT_UNGATED_WRITE_ENTRIES.map((x) => [x.entry, x.kind]), [
-            ['standards/stockFix.mjs:rollbackCoreStockFix', 'undo'], ['ops/regenCore.mjs:regenCore', 'mechanical'], ['stores/coreState.mjs:releaseHeld', 'mechanical'],
+            ['standards/stockFix.mjs:rollbackCoreStockFix', 'undo'], ['ops/regenCore.mjs:regenCore', 'mechanical'], ['ops/rollbackCore.mjs:rollbackCore', 'undo'], ['stores/coreState.mjs:releaseHeld', 'mechanical'],
             ['standards/stockFix.mjs:edgeSeenSyncOf', 'mechanical'], ['stores/coreProjection.mjs:writeProjections', 'mechanical'], ['stores/coreProjection.mjs:repairCore', 'mechanical'],
             ['stores/coreProjection.mjs:settleTwins', 'mechanical'],
         ])

@@ -21,15 +21,12 @@ import isobj from 'wsemi/src/isobj.mjs'
 import isestr from 'wsemi/src/isestr.mjs'
 import isfun from 'wsemi/src/isfun.mjs'
 import { normalizeConcept, resolveClockCfg } from '../core/capturePackage.mjs'
-import { listHolds, resolveHold } from '../core/capturePackage.mjs'
+import { resolveHold } from '../core/capturePackage.mjs'
 import { liveCoresOf, coreForKey } from '../stores/conceptSelection.mjs'
 import { ARCHIVE_TAGS, coreStoreOf, coreAuxDirs } from '../stores/coreStore.mjs'
 import { acquireLock } from '../core/capturePackage.mjs'
-import { EXTRACT_API_HINT, EXTRACT_HOLD_OBJECTS, CORE_HOLD_OBJECT, itemOidOf } from '../stores/extractHolds.mjs'
+import { EXTRACT_API_HINT, coreHoldsToCloseOf } from '../stores/extractHolds.mjs'
 import { readRegenIntents, writeRegenIntents } from '../stores/regenIntent.mjs'
-
-/** 以核心 id 為 oid 前綴(`<核心 id>:<條目或筆記 id>`)之待判物件 */
-const PER_CORE_OBJECTS = new Set([EXTRACT_HOLD_OBJECTS.note, EXTRACT_HOLD_OBJECTS.dispute, EXTRACT_HOLD_OBJECTS.claim])
 
 /**
  * 不撞名之路徑(同一時戳已有者加 -1、-2 序號)
@@ -147,8 +144,7 @@ export async function regenCore(stores, conceptArg, opt = {}) {
         const aux = coreAuxDirs(dirs)
         const mdFile = target?.file || path.join(dirs.core, `${id}.md`)
         const how = `打掉重練（regenCore；執行者 ${by}）：舊核心已封存，新核心自 v1 重起、條目編號重新配發`
-        const mine = (h) => (PER_CORE_OBJECTS.has(h.object) && String(h.oid).startsWith(itemOidOf(id, ''))) || (h.object === CORE_HOLD_OBJECT && h.oid === id)
-        const holdsToClose = (await listHolds(stores.holds)).filter((h) => (h.status === 'open' || h.status === 'waived') && mine(h)).sort((a, b) => (a.id < b.id ? -1 : 1))
+        const holdsToClose = await coreHoldsToCloseOf(stores.holds, id)
         const plan = {
             state: fs.existsSync(store.fileOf(id)) ? store.fileOf(id).replace(/\\/g, '/') : '',
             prev: fs.existsSync(store.prevOf(id)) ? store.prevOf(id).replace(/\\/g, '/') : '',

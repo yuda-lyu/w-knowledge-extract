@@ -7,6 +7,7 @@ import isarr from 'wsemi/src/isarr.mjs'
 import isobj from 'wsemi/src/isobj.mjs'
 import { DISPUTE_OPS, OFFTOPIC_REASON, REF_FIELDS, TERMINAL_SET, findItem, withdrawnOf } from '../stores/coreState.mjs'
 import { textValueOf as str, textListOf as strs, uniq } from '../core/capturePackage.mjs'
+import { rejectKindOf, DROP_REASON_KINDS, DOUBT_REASON_KINDS } from '../core/rejectKinds.mjs'
 
 /** 終審剔除之理由(列舉);「性質標錯」指操作類別用錯(如應立爭議卻寫成取代或待解問題),標籤錯誤以 fix 改正 */
 export const DROP_REASONS = [OFFTOPIC_REASON, '無出處支持', '同篇', '重複', '性質標錯', '捏造']
@@ -64,9 +65,9 @@ function refFields(o) {
  * @param {Array} verdicts 輸入裁決 [{ i, action:'keep'|'drop'|'doubt'|'fix', reason?, note?, fields? }]，未裁決之操作視為 keep；
  *   doubt(存疑)只適用於爭議類操作:照保留並帶 _doubt,由 applyDelta 記於爭議;爭議類之 drop＋「非對立」視同 doubt
  * @param {Object} [opt={}] 輸入設定物件，非物件視為{}(保留供擴充)
- * @returns {Object} 回傳 { delta:{ ops }(保留與修正者,各帶 _i＝差量原序號), dropped:Array({index,op,reason,note,sources}), fixed:Array(index),
+ * @returns {Object} 回傳 { delta:{ ops }(保留與修正者,各帶 _i＝差量原序號), dropped:Array({index,op,reason,note,sources,ref,kind(型別碼;core/rejectKinds 之 acceptDropped 組)}), fixed:Array(index),
  *   removed:Array({note,reason})(fix 刪去之出處), unverdicted:Array(index)(未得有效裁決者;其中終態操作由呼叫端比照降級), verdictRejected:Array({i,reason}),
- *   doubted:Array({index,op,reason,note,byDrop(以 drop＋非對立表達者)}), droppedRefs:Object(被剔除之新項 ref → 剔除理由；交 applyDelta 之 ctx.droppedRefs),
+ *   doubted:Array({index,op,reason,note,byDrop(以 drop＋非對立表達者),kind(型別碼;core/rejectKinds 之 doubted 組)}), droppedRefs:Object(被剔除之新項 ref → 剔除理由；交 applyDelta 之 ctx.droppedRefs),
  *   conflicts:Array({kept,dropped,ref,reason})(保留之操作引用被剔除之新項) }
  * @example
  * const delta = { ops: [{ op: 'add', ref: 'r0', kind: 'rule', text: '甲', sources: ['N1'] }, { op: 'add', ref: 'r1', kind: 'rule', text: '乙', sources: ['N2'] }] }
@@ -132,7 +133,7 @@ export function applyVerdicts(delta, verdicts, opt = {}) {
             }
             const reason = DOUBT_REASONS.includes(str(v.reason)) ? str(v.reason) : DOUBT_REASONS[0]
             const note = noteOf(v)
-            doubted.push({ index: i, op: str(op.op), reason, note, byDrop })
+            doubted.push({ index: i, op: str(op.op), reason, note, byDrop, kind: rejectKindOf('doubted', DOUBT_REASON_KINDS[reason]) })
             kept.push({ ...op, _i: i, _doubt: { reason, note, byDrop } })
             return
         }
@@ -151,7 +152,7 @@ export function applyVerdicts(delta, verdicts, opt = {}) {
                 kept.push({ ...op, _i: i })
                 return
             }
-            dropped.push({ index: i, op: str(op?.op) || '?', reason, note: noteOf(v), sources: srcOf(op), ref: str(op?.ref) })
+            dropped.push({ index: i, op: str(op?.op) || '?', reason, note: noteOf(v), sources: srcOf(op), ref: str(op?.ref), kind: rejectKindOf('acceptDropped', DROP_REASON_KINDS[reason]) })
             return
         }
         if (action === 'fix') {

@@ -9,7 +9,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { memStore, STOCK_LEDGER_FILE, silentLog } from './tools/captureForTest.mjs'
 import { seedCore, readState, ANN } from './tools/extractKit.mjs'
-import { tmpRoot, removeRoots } from './tools/extractTestKit.mjs'
+import { tmpRoot, removeRoots, PKG_ROOT } from './tools/extractTestKit.mjs'
+import { coreVersionsByProvenance } from '../src/ops/coreVersionsByProvenance.mjs'
 import { writeMd, readMd } from '../src/core/summarizePackage.mjs'
 import { createRelateDomain } from '../src/core/relatePackage.mjs'
 import { createExtractDomain } from '../src/domain/extractDomain.mjs'
@@ -183,6 +184,45 @@ describe('unit-extract-stockfix', function() {
             const rev = readState(env, 'core-a').rev
             const again = await rollbackCoreStockFix({ ...env.deps, clock: clockAt(AT2) }, r.rows)
             assert.deepEqual([again.restored, again.conflicts, again.errors, readState(env, 'core-a').rev], [1, [], [], rev])
+        })
+
+        it('產出鏈(EXT-39;stage standards-fix):套用寫入之 changelog 該筆(mode stock-fix)帶 produced——單一形(seat／provider 皆 null、無 promptFp／steps)、stamp 依 opt.stamp(輪次內給、輪次外 null)、at＝套用時刻;stamp 不合式即拋且未寫入未記帳;只移出已見(不升版)者不寫 changelog;依產出鏈取回該版(stage 選得到、provider 選不到)', async () => {
+            const KEYS = ['v', 'stamp', 'stage', 'seat', 'provider', 'pkg', 'at']
+            const PKG = `w-knowledge-extract@${JSON.parse(fs.readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')).version}`
+            const STAMP_A = '20261108150000'
+            // 輪次內(給 opt.stamp)
+            const env = mkEnv()
+            const r = await applyCoreStockFix(env.deps, await planCoreStockFix(env.deps, { at: AT }), { at: AT, stamp: STAMP_A })
+            assert.deepEqual(r.errors, [])
+            const s = readState(env, 'core-a')
+            const e = s.changelog.at(-1)
+            assert.deepEqual([e.mode, e.version, e.at], ['stock-fix', s.version, AT], '前提:存量處置升版並寫一筆 stock-fix')
+            assert.deepEqual(Object.keys(e.produced), KEYS, '規格 §2.1 單一形')
+            assert.deepEqual([e.produced.v, e.produced.stamp, e.produced.stage, e.produced.seat, e.produced.provider, e.produced.pkg, e.produced.at], [1, STAMP_A, 'standards-fix', null, null, PKG, AT])
+            // 輪次外(未給 opt.stamp):stamp 為 null
+            const env2 = mkEnv()
+            await applyCoreStockFix(env2.deps, await planCoreStockFix(env2.deps, { at: AT }), { at: AT })
+            assert.deepEqual(Object.keys(readState(env2, 'core-a').changelog.at(-1).produced), KEYS)
+            assert.equal(readState(env2, 'core-a').changelog.at(-1).produced.stamp, null)
+            // stamp 不合式:寫入前即拋(狀態檔不動、不記帳)
+            const env3 = mkEnv()
+            const plan3 = await planCoreStockFix(env3.deps, { at: AT })
+            const file3 = `${env3.dirs.coreState}/core-a.state.json`
+            const before3 = fs.readFileSync(file3, 'utf8')
+            await assert.rejects(() => applyCoreStockFix(env3.deps, plan3, { at: AT, stamp: 'BADSTAMP' }), (x) => /invalid o\.stamp/.test(x.message) && !x.message.includes('BADSTAMP'))
+            assert.deepEqual([fs.readFileSync(file3, 'utf8') === before3, fs.existsSync(env3.ledger)], [true, false], '未寫入、未記帳')
+            // 只移出已見(ES5;不升版)→ 不寫 changelog(無版本可掛產出鏈)
+            const env4 = mkEnv()
+            const n4 = readState(env4, 'core-a').changelog.length
+            const r4 = await applyCoreStockFix(env4.deps, await planCoreStockFix(env4.deps, { at: AT, stds: ['ES5'] }), { at: AT, stamp: STAMP_A })
+            assert.deepEqual([r4.errors, r4.applied.length, readState(env4, 'core-a').changelog.length], [[], 1, n4], '只改記帳欄位,不升版、不寫沿革')
+            // 依產出鏈取回:stage 選得到該版、起草席成交者選不到、不呼叫 AI(provider null)選得到
+            const q = (o) => coreVersionsByProvenance(env.stores, { dirs: env.dirs, ...o })
+            assert.deepEqual((await q({ stage: 'standards-fix' })).map((x) => [x.concept, x.version]), [['甲', s.version]])
+            assert.deepEqual((await q({ stage: 'standards-fix', stamp: STAMP_A })).map((x) => x.version), [s.version])
+            assert.deepEqual((await q({ stage: 'standards-fix', stamp: '20200101000000' })).map((x) => x.version), [])
+            assert.deepEqual((await q({ provider: 'stub-d1' })).map((x) => x.version), [], '成交者選不到不呼叫 AI 之版本')
+            assert.deepEqual((await q({ provider: null })).map((x) => x.version), [s.version])
         })
 
         it('回退＝撤銷:其後被改寫(版次≠處置後)→ 衝突、不覆寫、不記回退列(仍列於帳);acceptCurrent 記取代列;核心已不在 → 衝突;缺 after 之列即錯', async () => {
