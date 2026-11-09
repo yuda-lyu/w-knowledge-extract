@@ -276,8 +276,8 @@ describe('unit-extract-rollback', function() {
         it('依產出鏈取版本:現行狀態之 rollback 版本可被選出(stage rollback;provider null);被回退之 v2 不在現行狀態', async () => {
             const rows = await withStores(flow, (s) => coreVersionsByProvenance(s, { dirs: dirs(), stage: 'rollback' }))
             assert.deepEqual(rows.map((x) => [x.concept, x.version, x.produced.stage]), [[concept, 1, 'rollback']])
-            const noAi = await withStores(flow, (s) => coreVersionsByProvenance(s, { dirs: dirs(), provider: null, seat: null }))
-            assert.deepEqual(noAi.map((x) => x.produced.stage), ['rollback'], '不呼叫 AI 之寫入以 provider／seat 為 null 選出')
+            const noAiRows = await withStores(flow, (s) => coreVersionsByProvenance(s, { dirs: dirs(), provider: null, seat: null }))
+            assert.deepEqual(noAiRows.map((x) => x.produced.stage), ['rollback'], '不呼叫 AI 之寫入以 provider／seat 為 null 選出')
             assert.deepEqual((await withStores(flow, (s) => coreVersionsByProvenance(s, { dirs: dirs(), stage: 'extract' }))).map((x) => x.version), [1], 'v1 之原產出鏈仍在')
         })
 

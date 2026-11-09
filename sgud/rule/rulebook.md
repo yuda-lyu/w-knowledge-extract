@@ -95,7 +95,7 @@
 - **EXT-37 提示詞須以字面寫出程式以字面判讀之要求**：納入閘、守門或檢定標準以字面判讀（字串包含、固定清單、固定片語、整條層級之必備條件）而拒收、不採或交修訂之要求，起草提示詞須以同樣之字面寫出——模型照提示詞之字面做，提示詞只寫語意則語意正確之回覆仍被拒收，且越照範例做越失分；列表取自詞彙者由詞彙組出（不寫死、與程式判讀同一來源）；不改判定。已套二處：①dispute_add 整條須至少一個本批出處 sources（提示詞：至少一方要寫本批出處 sources，各方只引主張〔含同一差量之新主張 @名〕而整條無 sources 者會被拒收）；②param_add 弱證據參數之 conditions 須含限制語（ES13；提示詞列出 `selfLimitPhrases` ∪ `guide.extract.weakEvidence` 並註明程式以字面判讀、同義改寫不算）。其餘由程式字面判讀而提示詞未以字面寫出者之盤點（十四項，已核者標明）與判準見 `rulebook_prompt.md`——**只記帳，未改**（改提示詞須先以正式席位 A/B）。新增或修改程式端字面判讀時同輪回頭看該表。使用端需求出處：Gitea #90。
   - 測試：`unit-extract-domain`〈EXT-37〉四案（dispute_add 行含字面要求、與納入閘實際行為一致〔各方只引主張→拒收「無本批出處」，一方寫本批出處→落地〕、param_add 行之列表隨詞彙〔預設／測試詞彙／整鍵替換／`[]`／去重〕、所列限制語逐項經 `weakEvidenceProblem` 放行而同義改寫不放行）；`unit-extract-golden`（中立基準 `delta-draft`、`delta-draft-partial` 重產，覆寫重現同名兩檔手改，登錄於其檔頭【覆寫重現之手改紀錄】）。
 - **測試件與守門**：暫存根一律 `extractTestKit` 之 `tmpRoot`／`removeRoots`（`before` 內建、`after` 回驗；模組層以 TMP 建構之 env 延後實例化，`mkEnvIn` 拒非絕對路徑）；原始檔走訪取抓取 `sourceFilesOf`（根為 `src/`）、JSONL 讀取取 `readJsonlRows`、概念折疊還原一律 `resetConceptFold()`、失敗帳讀取 `ledgerOf`、替身 `scriptAi` 之 `netDown`／`skipped`、`noAi`／`blankAi`；橋接三檔檔頭【移植】指定詞「<上游>/src/<入口>」「<上游>/test/tools/<檔>」皆可映射；README §17 表＝實際 `test/*.test.mjs`；固定埠 8881（死埠）、8882（假埠）、8883～8889 保留；真 AI 評分之工作目錄與報表一律 `WK_BENCH_OUT`（專案外絕對路徑）；golden 中立組以 `test/tools/regen-golden.mjs` 重產（預設預演、`GOLDEN_WRITE=1` 才寫；覆寫組 16 檔不可重產）。
-  - 測試：`unit-extract-package` ⑧（暫存根、單例不跨檔汙染、橋接映射、README §17 ↔ 檔、固定埠與暫存敘述；各含判準自檢）、`unit-extract-golden`「重產工具」三案。
+  - 測試：`unit-extract-package` ⑧（暫存根、單例不跨檔汙染、測試檔不另定義共用件之名、橋接映射、README §17 ↔ 檔、固定埠與暫存敘述；各含判準自檢）、`unit-extract-golden`「重產工具」三案。
 
 ## 盤點指令與判準
 

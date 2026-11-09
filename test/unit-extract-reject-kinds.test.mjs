@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { PKG_ROOT, tmpRoot, removeRoots, resetConceptFold } from './tools/extractTestKit.mjs'
-import { seedCore, SEATS, seatAi, scriptAi, keepAll, codesIn, auditHigh, auditOps, verdictOn, draftAll, mkEnvIn, runStage } from './tools/extractKit.mjs'
+import { seedCore, SEATS, ANN, seatAi, scriptAi, keepAll, codesIn, auditHigh, auditOps, verdictOn, draftAll, mkEnvIn, runStage } from './tools/extractKit.mjs'
 import { runPass } from '../src/workflow/runPass.mjs'
 import { createExtractDomain } from '../src/domain/extractDomain.mjs'
 import { applyDelta } from '../src/stores/coreDelta.mjs'
@@ -31,7 +31,6 @@ import {
 } from '../src/core/rejectKinds.mjs'
 
 const CTX = { batch: [{ code: 'N1', id: 'n1' }, { code: 'N2', id: 'n2' }] }
-const ANN = { critique: '僅單一案例', pros: ['出處未載'], cons: ['出處未載'] }
 const add = (ref, text, src = 'N1') => ({ op: 'add', ref, kind: 'rule', text, basis: '案例', sources: [src], ...ANN })
 
 /** 兩條主張(C1、C2)、一參數(P1)、一問題(Q1) */

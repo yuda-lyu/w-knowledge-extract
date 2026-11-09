@@ -62,8 +62,11 @@
 
 39. **「凡寫某資料之一筆者皆須帶某欄」要先盤點寫入站點全集，並以靜態掃描釘住站點數；純狀態函數只接收、由呼叫端組好傳入**（2026-11-08，使用端 Gitea #109 第二輪）：第一輪只接了 AI 之各 pass，確定性寫入（存量處置、撤出處／恢復、還原撤回）未帶 `produced`，是因為當時只看「呼叫 AI 之處」而非「寫 changelog 之處」。第二輪以 `changelog.push(`／`changelog = [`／`changelog: [非空` 於 `src/` 盤點，恰 5 站（`applyDelta`、`rollbackCore`、`reviveItems`、`withdrawSources`、`coreFixOf`）；`bench／esCases／opStandards／candidates` 之 `applyDelta` 為記憶體內試算不落盤。作法：①純狀態函數（`coreFixOf` 等）以選件 `produced` 接收並寫入複本，未給者無鍵（既有輸出不變、預演不必給）；②`produced` 由呼叫端經 `standardsFixProducedOf` 於**任何寫入之前**組好，不合式之 stamp 即拋（不留半套、不記帳）；③維運入口（`applyCoreStockFix`、`reviveClaims`）加選件 `opt.stamp`，輪次內之維護取 `env.roundStamp`；④`unit-extract-provenance` P6 之靜態掃描釘住「恰此 5 站、逐行含 produced 或 ctx.meta」，新增站點而不帶即紅。不升版之寫入（只移出已見、只落帳、`withdrawSources` 無受影響條目）不寫 changelog，不需 produced；`rollbackCoreStockFix` 寫回處置前之整份狀態而不新寫 changelog。
 
+40. **規則已寫在帳本、盤點卻只有手動 grep，使用端之自動守門先抓到**（2026-11-09，使用端 Gitea #117）：GEN-19 早寫「他測試檔不得另定義 `test/tools` 之同名件」，`unit-extract-package` ⑦ 卻只掃非測試原始碼；`unit-extract-rollback` 之區域變數 `noAi`（查詢結果之列，與替身無關）與 `extractKit.noAi` 同名，直到使用端升版 1.0.28 後其宣告式守門才紅。補成 ⑧〈測試檔不另定義共用件之名〉後，**同一守門另抓出 `ANN` 三處**（原先連手動盤點也沒發現）：其中兩處內容不同（同名他義 → 改名 `ANN_STUDY`、`ANN_OBS`），一處與共用件逐字相同（自寫副本 → 改自 `extractKit` 匯入、刪副本，共用件為 deepFreeze，該檔 `...ANN` 展開後全案仍綠）。守則：①規則帳本寫了「不得 X」就要同時有自動盤點，只寫「手動 grep」等於沒守；②共用件之名＝`test/tools/*.mjs` 具名匯出之動態載入命名空間（含橋接轉出之上游名，121 名；`regen-golden.mjs` 有「直接執行才跑」之守，被 import 安全），不在測試檔內另維護名單；③掃描走骨架（`lexSource`）以免註解、字串、樣板與正規表示式字面之內容誤中——本檔之判準自檢樣本本身就是字串字面；`function` 要加 `\b`（否則 `functionOf` 被拆出 `Of`）；④解構宣告（`const { x } = await import(home)`、`...rest`）不計——其值取自他處，且 `rest` 為共用件之名會誤中剩餘元素；此為已知界線，判準自檢釘住。
+
 ## 通用之坑
 
 - 套件測試一律自套件根跑（`npm test`），不自他處以 mocha 直跑單檔（暫存根與掃描根皆以測試檔位置推導，GEN-09）。
 - 工具（演練、往返、評分）之輸出路徑要用絕對路徑，相對路徑會落到各自 cwd 下。
+- 以 Edit 刪除一行而 `old_string` 以空格結尾、停在下一行行中時，`new_string` 結尾之空白會被修掉，與其後緊接之文字黏在一起（曾使 `const add = (…` 變成 `const add =(…`，測試仍綠、只有 eslint `space-infix-ops` 抓到）：`old_string`／`new_string` 一律以非空白字元結尾；改動後對被改之測試檔跑 eslint，並與 `git archive HEAD` 之複本比規則別計數。
 - 以免費模型跑評分時逐批即存、限流即停（限流字樣取抓取套件之判定，不自寫）；額度與同一供應者之其他席位共用。

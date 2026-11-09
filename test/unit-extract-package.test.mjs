@@ -28,6 +28,9 @@
 //   違反之邊＝0、檔級無環(DFS);判準自檢(合成之 import 清單與圖)
 // ⑦ 區域同名件:非測試原始碼之頂層與巢狀函數型宣告(同審計盤查工具之判準),逐字同之跨檔同名＝0(同一規則一份——收斂為共用件);各自語意之
 //   跨檔同名列白名單(名＋理由),白名單之名須仍為跨檔同名(過時即移除);判準自檢(合成之原始碼)
+// ⑧ 測試檔:模組級單例(概念折疊)不跨檔汙染、暫存根一律 tmpRoot＋removeRoots、測試件只定義於其家(test/*.test.mjs 不以 const／let／var／function／class
+//   宣告與 test/tools/*.mjs 具名匯出〔含橋接轉出之上游名〕同名之識別字;自共用件之家匯入、轉出皆不算;不列白名單——同名他義者改名)、橋接之發布後指定詞、
+//   README §17 之測試表與固定埠之敘述 ↔ 實際之測試檔;判準自檢(合成之原始碼)
 // 執行:在套件根 node <mocha> test/unit-extract-package.test.mjs(掃描為唯讀;〈打包清單〉執行 npm pack --dry-run、〈範例 g.mjs〉於 test/_tmp 暫存夾執行;不連網、不呼叫 AI)
 
 import assert from 'node:assert/strict'
@@ -429,6 +432,41 @@ function tmpProblemsOf(docs, exempt = {}) {
     }
     return bad
 }
+
+/** 宣告式之識別字:const／let／var 之單一識別字、function(含 async、generator)與 class 之名(於骨架上比對;解構宣告不計——其值取自他處,非另定義) */
+const DECLARED_NAME_RE = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)|\bfunction\b\s*\*?\s*([A-Za-z_$][\w$]*)|\bclass\s+([A-Za-z_$][\w$]*)/g
+
+/**
+ * 一份測試原始碼以 const／let／var／function／class 宣告之識別字(依出現序、去重;註解、字串、樣板與正規表示式字面之內容不算;
+ * import／export … from 之名不是宣告,故自共用件之家匯入——含 import { x as y } 之別名——與轉出皆不計;任何巢狀層級之宣告皆計)
+ *
+ * @param {String} src 輸入原始碼
+ * @returns {Array} 回傳識別字陣列
+ */
+const declaredNamesOf = (src) => [...new Set([...lexSource(src).skeleton.matchAll(DECLARED_NAME_RE)].map((m) => m[1] || m[2] || m[3]))]
+
+/**
+ * 共用件之名:test/tools/*.mjs 之具名匯出(動態載入取其命名空間;經橋接 {capture,summarize,relate}ForTest.mjs 轉出之上游名亦在內)
+ *
+ * @returns {Promise<Map>} 回傳 名 → 匯出該名之 test/tools 檔(相對套件根,排序)
+ */
+async function toolHomesOf() {
+    const homes = new Map()
+    for (const f of fs.readdirSync(`${ROOT}/test/tools`).filter((x) => x.endsWith('.mjs')).sort()) {
+        const ns = await import(pathToFileURL(`${ROOT}/test/tools/${f}`).href)
+        for (const k of Object.keys(ns)) if (k !== 'default') homes.set(k, [...(homes.get(k) || []), `test/tools/${f}`])
+    }
+    return homes
+}
+
+/**
+ * 測試檔另定義共用件之名者(共用件只定義於其家;他測試檔另宣告同名識別字即命中,不辨語意——同名他義者改名)
+ *
+ * @param {Array} docs 輸入 [{ file, src }](test/tools 下之檔本身不在其內)
+ * @param {Map} homes 輸入共用件之名 → 其家(toolHomesOf)
+ * @returns {Array} 回傳 `檔:名(家:…)` 陣列
+ */
+const sharedRedefsOf = (docs, homes) => docs.flatMap(({ file, src }) => declaredNamesOf(src).filter((n) => homes.has(n)).map((n) => `${file}:${n}(家:${homes.get(n).join('、')})`))
 
 describe('unit-extract-package', function() {
 
@@ -1058,6 +1096,41 @@ describe('unit-extract-package', function() {
             ]).map((x) => x.split(':')[0]), ['x1', 'x2', 'x3'])
             for (const f of Object.keys(EXEMPT)) assert.ok(fs.existsSync(`${ROOT}/${f}`), `例外之檔須存在:${f}`)
             assert.deepEqual(tmpProblemsOf(testDocs(), EXEMPT), [])
+        })
+
+        it('判準自檢(測試件只定義於其家):const／let／var(含 for 之 const、巢狀)／function(含 async、generator)／class 宣告同名識別字被抓到;自家匯入(含別名)、轉出、註解、字串、樣板、正規表示式字面、屬性名、非完全同名者、解構取自家不誤判', () => {
+            const home = (...names) => names.map((f) => `test/tools/${f}.mjs`)
+            const homes = new Map([['noAi', home('extractKit')], ['sleep', home('captureForTest')], ['rest', home('captureForTest')], ['recLog', home('captureForTest', 'extractKit')], ['ANN', home('extractKit')], ['has', home('extractKit')]])
+            const docs = [
+                { file: 'h1', src: 'const noAi = await rows()\nassert.deepEqual(noAi.map((x) => x), [])' },
+                { file: 'h2', src: 'describe(\'x\', () => {\n    it(\'y\', () => {\n        let sleep = 0\n        var rest = 1\n        for (const has of xs) {}\n    })\n})' },
+                { file: 'h3', src: 'export function recLog() {}\nasync function* ANN() {}\nclass ANN {}\nconst ANN = 1' },
+                { file: 'n1', src: 'import { noAi, sleep as nap } from \'./tools/extractKit.mjs\'\nimport { other as rest } from \'./x.mjs\'\nexport { has, recLog } from \'./tools/extractKit.mjs\'\nexport { noAi as ANN }' },
+                { file: 'n2', src: 'const noAiRows = 1\nconst flow = makeFlow({ noAi: 1 })\nobj.sleep = 2\nconst o = { rest: 3, ANN: 4, class: 5 }\nconst { recLog } = await import(\'./tools/captureForTest.mjs\')\nconst fn = function () {}\nconst functionOf = 1\nconst [has2] = xs' },
+                { file: 'n3', src: '// const noAi = 1\n/* let sleep = 2 */\nconst s = \'const rest = 1\'\nconst t = `function ANN() {}`\nconst r = /const has/g\nconst u = "class recLog {}"' },
+            ]
+            assert.deepEqual(sharedRedefsOf(docs, homes), [
+                'h1:noAi(家:test/tools/extractKit.mjs)',
+                'h2:sleep(家:test/tools/captureForTest.mjs)',
+                'h2:rest(家:test/tools/captureForTest.mjs)',
+                'h2:has(家:test/tools/extractKit.mjs)',
+                'h3:recLog(家:test/tools/captureForTest.mjs、test/tools/extractKit.mjs)',
+                'h3:ANN(家:test/tools/extractKit.mjs)',
+            ])
+            assert.deepEqual(declaredNamesOf(docs[2].src), ['recLog', 'ANN'], '同一檔重複宣告同名只計一次')
+            assert.deepEqual(declaredNamesOf(docs[4].src), ['noAiRows', 'flow', 'o', 'fn', 'functionOf'], '只取宣告之名:解構不計、匿名 function 無名、functionOf 不被拆出 Of')
+        })
+
+        it('測試檔(test/*.test.mjs)不另定義 test/tools 具名匯出之名(含橋接轉出之上游名):宣告同名識別字＝0——共用件只定義於其家,同名他義者改名(不列白名單)', async () => {
+            // 規則:規則帳本 GEN-19「本套件 test/tools 之具名定義為其家,他測試檔不得另定義同名件」(測試檔另寫副本即漂移;同名他義亦使一名兩義)
+            const homes = await toolHomesOf()
+            assert.ok(homes.size >= 60, `共用件之名過少(載入或掃描空轉?):${homes.size}`)
+            for (const [name, file] of [['noAi', 'extractKit'], ['seedNotes', 'extractTestKit'], ['sleep', 'captureForTest'], ['landNoteOf', 'summarizeForTest'], ['makeEdge', 'relateForTest']]) {
+                assert.ok((homes.get(name) || []).includes(`test/tools/${file}.mjs`), `前提:${name} 應為 ${file}.mjs 之具名匯出(含橋接轉出之上游名)`)
+            }
+            const docs = testDocs()
+            assert.ok(docs.length >= 38, `走訪檔數過少(走訪空轉?):${docs.length}`)
+            assert.deepEqual(sharedRedefsOf(docs, homes), [], '測試檔另定義共用件之名(改名;或改自共用件之家匯入)')
         })
 
         it('橋接之指定詞映射:三上游皆為已發布之 npm 套件——橋接之每個指定詞為其主入口「<上游>/src/<主入口>」或其 test/tools/ 之實有檔(映射由解析本身證明);判準自檢:指向上游內部檔、不存在之測試件、相對路徑者皆判無從映射', () => {

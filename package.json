@@ -1,6 +1,6 @@
 {
   "name": "w-knowledge-extract",
-  "version": "1.0.28",
+  "version": "1.0.29",
   "main": "dist/w-knowledge-extract.umd.js",
   "dependencies": {
     "json5": "^2.2.3",
@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "w-data-pipeline": "^1.0.31",
-    "w-dispatch-ai": "^1.0.81",
+    "w-dispatch-ai": "^1.0.82",
     "w-orm-lmdb": "^1.0.57",
     "w-package-tools": "^1.1.23"
   },

@@ -25,13 +25,13 @@ const BASE = `http://127.0.0.1:${FAKE_PORT}/v1`
 const DEAD = `http://127.0.0.1:${DEAD_PORT}/v1`
 const AT = '2026-10-03T16:00:00+08:00'
 const domain = createExtractDomain({})
-const ANN = { critique: '僅兩組觀測', pros: ['出處未載'], cons: ['出處未載'] }
+const ANN_OBS = { critique: '僅兩組觀測', pros: ['出處未載'], cons: ['出處未載'] }
 
 // ── 本機假 REST(OpenAI 相容;共用件 startServer 於 before 啟動、after 關閉):model 名以「情境~延遲毫秒」組成 ──
 const DRAFT = JSON.stringify({
     ops: [
-        { op: 'add', ref: 'x', kind: 'rule', text: '以三角視差法量測近距恆星之距離', basis: '實證', sources: ['N1'], ...ANN },
-        { op: 'add', kind: 'pitfall', text: '大氣擾動大時視差量測之誤差上升', basis: '實證', sources: ['N2'], ...ANN },
+        { op: 'add', ref: 'x', kind: 'rule', text: '以三角視差法量測近距恆星之距離', basis: '實證', sources: ['N1'], ...ANN_OBS },
+        { op: 'add', kind: 'pitfall', text: '大氣擾動大時視差量測之誤差上升', basis: '實證', sources: ['N2'], ...ANN_OBS },
     ],
     skipped: [],
 })
@@ -50,8 +50,8 @@ const SEED_BATCH = [{ code: 'N0', id: 's0' }]
 /** 既有核心(兩條主張與本質) */
 const baseState = () => {
     const r = applyDelta(emptyState({ coreId: 'm', concept: '視差量測' }), { ops: [
-        { op: 'add', ref: 'a', kind: 'rule', text: '視差愈小之恆星距離愈遠', basis: '實證', sources: ['N0'], ...ANN },
-        { op: 'add', kind: 'pitfall', text: '單站觀測無法排除儀器之系統誤差', basis: '實證', sources: ['N0'], ...ANN },
+        { op: 'add', ref: 'a', kind: 'rule', text: '視差愈小之恆星距離愈遠', basis: '實證', sources: ['N0'], ...ANN_OBS },
+        { op: 'add', kind: 'pitfall', text: '單站觀測無法排除儀器之系統誤差', basis: '實證', sources: ['N0'], ...ANN_OBS },
         { op: 'essence', text: '視差量測以幾何關係推算恆星距離。', claims: ['@a'], reason: '首版' },
     ] }, { batch: SEED_BATCH, mode: 'delta', at: AT })
     assert.deepEqual(r.rejected, [])

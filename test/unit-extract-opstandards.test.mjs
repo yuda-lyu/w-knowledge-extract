@@ -17,12 +17,12 @@ import { seedCore, seatAi, keepAll } from './tools/extractKit.mjs'
 
 const AT = '2026-10-04T21:00:00+08:00'
 const domain = createExtractDomain({})
-// 本檔之標注另寫(不取共用件之 ANN):「拆分各部」之案以種子主張之銳評原文為拆出之銳評(拆分之各欄須取自原條),銳評之字樣即該案之前提
-const ANN = { critique: '僅單一研究之結論', pros: ['出處未載'], cons: ['出處未載'] }
+// 本檔之標注另寫(名 ANN_STUDY,不取共用件之 ANN——同名則一名兩義):「拆分各部」之案以種子主張之銳評原文為拆出之銳評(拆分之各欄須取自原條),銳評之字樣即該案之前提
+const ANN_STUDY = { critique: '僅單一研究之結論', pros: ['出處未載'], cons: ['出處未載'] }
 // 既有核心:s0、s1 兩篇(不同文件)為出處
 const SEED_BATCH = [{ code: 'N0', id: 's0' }, { code: 'N9', id: 's1' }]
 const seedState = () => seedCore({ coreId: 'm', concept: '動量', ops: [
-    { op: 'add', ref: 'a', kind: 'rule', text: '動量策略持有期 6 個月之報酬最高', basis: '實證', sources: ['N0'], ...ANN },
+    { op: 'add', ref: 'a', kind: 'rule', text: '動量策略持有期 6 個月之報酬最高', basis: '實證', sources: ['N0'], ...ANN_STUDY },
     { op: 'add', ref: 'b', kind: 'pitfall', text: '交易成本 0.5% 時淨報酬消失', basis: '實證', conditions: ['高周轉'], critique: '單一市場', sources: ['N9'] },
     { op: 'essence', text: '動量是贏家續贏之傾向。', claims: ['@a'], reason: '首版' },
 ], batch: SEED_BATCH, at: AT })
@@ -54,8 +54,8 @@ describe('unit-extract-opstandards', function() {
     describe('ES2／ES16 數字紮根(逐操作之材料)', function() {
 
         it('數字須見於本操作所引出處:引 N1 而數字只在 N2 → 不合(此前全批聯集即過);引 N2 → 合', () => {
-            const a = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN }
-            const b = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N2'], ...ANN }
+            const a = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN_STUDY }
+            const b = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N2'], ...ANN_STUDY }
             const m = stdOf([a, b])
             assert.deepEqual(only(m, a), ['ES2'])
             assert.match(m.get(a)[0].detail, /數字 40% 不見於本操作所引出處/)
@@ -83,7 +83,7 @@ describe('unit-extract-opstandards', function() {
         })
 
         it('同差量所引新項之文字與出處亦為材料(dispute_add 之方引 @ref)', () => {
-            const add = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N2'], ...ANN }
+            const add = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N2'], ...ANN_STUDY }
             const dp = { op: 'dispute_add', question: '動量是否在反轉期失效', sides: [{ position: '反轉期虧損 40%', claims: ['@x'] }, { position: '長期仍有效', sources: ['N1'] }] }
             assert.deepEqual(only(stdOf([add, dp]), dp), [])
         })
@@ -103,7 +103,7 @@ describe('unit-extract-opstandards', function() {
         it('ES4:新主張之銳評必填;principle／rule 之利弊須有內容或「出處未載」;temporal 須期間;pitfall 須條件', () => {
             const ops = [
                 { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'] },
-                { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月，限美股', sources: ['N1'], ...ANN },
+                { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月，限美股', sources: ['N1'], ...ANN_STUDY },
                 { op: 'add', kind: 'temporal', text: '動量效應於 2009 後減弱', sources: ['N1'], critique: '推測' },
                 { op: 'add', kind: 'pitfall', text: '空頭反轉時動量虧損 40%', sources: ['N2'], critique: '單一事件' },
             ]
@@ -126,8 +126,8 @@ describe('unit-extract-opstandards', function() {
         })
 
         it('ES12:principle 之存活出處相異文件 ≥2(同一研究之轉載只算一份);改為 principle 者亦檢', () => {
-            const one = { op: 'add', kind: 'principle', text: '動量報酬可持續 3 到 12 個月', sources: ['N1', 'N3'], ...ANN }
-            const two = { op: 'add', kind: 'principle', text: '動量報酬可持續 3 到 12 個月，反轉期虧損 40%', sources: ['N1', 'N2'], ...ANN }
+            const one = { op: 'add', kind: 'principle', text: '動量報酬可持續 3 到 12 個月', sources: ['N1', 'N3'], ...ANN_STUDY }
+            const two = { op: 'add', kind: 'principle', text: '動量報酬可持續 3 到 12 個月，反轉期虧損 40%', sources: ['N1', 'N2'], ...ANN_STUDY }
             const m = stdOf([one, two])
             assert.deepEqual(only(m, one), ['ES12'])
             assert.match(m.get(one)[0].detail, /principle 之存活出處只來自 1 份文件/)
@@ -167,9 +167,9 @@ describe('unit-extract-opstandards', function() {
 
         it('ES17:本批代號與筆記連結不得出現在內容文字;非本批之 N 數字(如 N225)不算;理由欄不檢', () => {
             const ops = [
-                { op: 'add', kind: 'rule', text: 'N1 指出動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN },
-                { op: 'add', kind: 'rule', text: '日經 N225 成分股之動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN },
-                { op: 'add', kind: 'rule', text: '見 [[某筆記]]：動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN },
+                { op: 'add', kind: 'rule', text: 'N1 指出動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN_STUDY },
+                { op: 'add', kind: 'rule', text: '日經 N225 成分股之動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN_STUDY },
+                { op: 'add', kind: 'rule', text: '見 [[某筆記]]：動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN_STUDY },
                 { op: 'supersede', id: 'C1', reason: 'N2 之樣本外結果否定', validPeriod: '至 2020' },
             ]
             const m = stdOf(ops)
@@ -188,8 +188,8 @@ describe('unit-extract-opstandards', function() {
     describe('程式意見、定稿篩選、補丁', function() {
 
         it('issuesOf:審計意見形狀(ref＝_oid、嚴重度高、類型「檢定標準」、附修法);screen:不合者不採,其 ref 記為已剔除(寫明標準)', () => {
-            const a = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN, _oid: 'i_1' }
-            const b = { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN, _oid: 'i_2' }
+            const a = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN_STUDY, _oid: 'i_1' }
+            const b = { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN_STUDY, _oid: 'i_2' }
             const std = createOpStandards(ctxOf(seedState()))
             const is = std.issuesOf([a, b])
             assert.equal(is.length, 1)
@@ -204,7 +204,7 @@ describe('unit-extract-opstandards', function() {
         it('applyPatch:補丁使本條新增問題(新的未紮根數字)→ 保留原稿;減少問題 → 照採;新增之操作須已合標準', () => {
             const state = seedState()
             const std = createOpStandards(ctxOf(state))
-            const op = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%、年化 9%', sources: ['N2'], ...ANN, _oid: 'i_1' }
+            const op = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%、年化 9%', sources: ['N2'], ...ANN_STUDY, _oid: 'i_1' }
             const issues = [{ k: 0, ref: 'i_1', severity: '高', type: STD_ISSUE_TYPE, detail: 'ES2', fix: '' }]
             const ctx = { state, issues, guard: (xs) => ({ ops: xs, rejected: [] }), limits: domain.limits, problemsOf: (xs) => std.problemsOf(xs) }
             const worse = applyPatch([op], { edits: [{ ref: 'i_1', fields: { text: '空頭反轉時動量虧損 40%、年化 7%' } }] }, ctx)
@@ -212,7 +212,7 @@ describe('unit-extract-opstandards', function() {
             assert.match(worse.log[0].why, /新增檢定標準問題（ES2\|\|7%）/)
             const better = applyPatch([op], { edits: [{ ref: 'i_1', fields: { text: '空頭反轉時動量虧損 40%' } }] }, ctx)
             assert.equal(better.log[0].ok, true, better.log[0].why)
-            const added = applyPatch([op], { adds: [{ issue: '0', op: { op: 'add', kind: 'rule', text: '年化 9%', sources: ['N2'], ...ANN } }] }, ctx)
+            const added = applyPatch([op], { adds: [{ issue: '0', op: { op: 'add', kind: 'rule', text: '年化 9%', sources: ['N2'], ...ANN_STUDY } }] }, ctx)
             assert.match(added.log[0].why, /^新增未達檢定標準（ES2：數字 9%/)
         })
     })
@@ -230,8 +230,8 @@ describe('unit-extract-opstandards', function() {
         it('gateOps:守門之拒收與納入閘之不合皆入 rejected(理由陣列;守門者以「守門：」起頭、納入閘者「<標準>：<細節>」);通過者經 remap;droppedRefs 記納入閘所剔之 ref;無 guard 即拋', () => {
             const state = seedState()
             const std = createOpStandards(ctxOf(state))
-            const bad = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN }
-            const ok = { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN }
+            const bad = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN_STUDY }
+            const ok = { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN_STUDY }
             // 可見性守門:對只見索引行之條目改狀態 → 守門拒
             const hidden = { op: 'retract', id: 'C1', reason: '已被取代' }
             const g = gateOps([bad, ok, hidden], { guard: guardOps, state, visible: new Set(), std, remap: (xs) => xs.map((x) => ({ ...x, _seen: true })) })
@@ -246,8 +246,8 @@ describe('unit-extract-opstandards', function() {
         it('applyWithInvariants:尾端寫入(finish)在不變式之前;違反者逐條剔除(dropped 帶原操作與首條違反)、其餘重套,onDropped 於最終重套前呼叫;全部剔除後仍違反 → ok:false', () => {
             const state = seedState()
             const ctx = { batch: BATCH, mode: 'delta', claimKinds: domain.claimKinds, limits: domain.limits, at: AT }
-            const a = { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN }
-            const b = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N2'], ...ANN }
+            const a = { op: 'add', kind: 'rule', text: '動量報酬可持續 3 到 12 個月', sources: ['N1'], ...ANN_STUDY }
+            const b = { op: 'add', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N2'], ...ANN_STUDY }
             // 尾端寫入(涵蓋落帳:出處入已用筆記——不變式「出處必為已用筆記」賴之)在不變式之前;finish 以 extra 回傳;正常路徑無剔除
             const commit = (ap) => commitBatch(ap.state, coverageOf({ batch: BATCH, applied: ap.applied }))
             const ok = applyWithInvariants(state, [a, b], ctx, { finish: (ap) => ({ state: commit(ap), n: ap.applied.length }) })
@@ -275,7 +275,7 @@ describe('unit-extract-opstandards', function() {
         const fakeAi = seatAi
         const digestBatch = () => BATCH.map((b) => ({ ...b, digest: `### ${b.code}\n${CONTENT[b.id]}` }))
         const run = (ai) => runPass({ state: seedState(), concept: '動量', batch: digestBatch(), domain, seats: SEATS1, ai, notesById: NOTES, contentOf: (nid) => CONTENT[nid] ?? null, at: AT })
-        const bad = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN }
+        const bad = { op: 'add', ref: 'x', kind: 'rule', text: '空頭反轉時動量虧損 40%', sources: ['N1'], ...ANN_STUDY }
         const dep = { op: 'param_add', name: '虧損幅度', value: '40%', claim: '@x', conditions: ['單一研究'], sources: ['N2'] }
 
         it('不合者成程式意見交修訂;修訂改對 → 套用', async () => {
