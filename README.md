@@ -330,7 +330,7 @@ createKnowledgeExtract({
 | | `synonymCheck.perRun`／`.maxTries` | 0／3 | 同義核心核對(ES11;每輪至多幾對)／同上 |
 | | `ai` | `{ first:null, second:null, third:null }` | 上列各項共用之判定小組(任一項開啟時 first、second 必填;兩票之實際成交供應者須不同才成立) |
 | | `scanEachRun` | false | 每輪結束掃一次確定性標準(逐核心讀狀態與出處筆記,大庫耗時) |
-| `ai` | 抓取套件之 `AI_SCHEMA` 各鍵 | 同抓取套件 | `timeoutMs`、`maxRetries`、`cooldownMs`、`providerTimeouts`、`extraProviders`、`pools`、`providerLimits` |
+| `ai` | 抓取套件之 `AI_SCHEMA` 各鍵 | 同抓取套件(鍵序同抓取套件之預設) | `timeoutMs`、`maxRetries`、`cooldownMs`、`cooldownGrowth`(冷卻加長倍率,≥ 1 之有限數,預設 1＝不加長)、`cooldownMaxMs`(冷卻視窗上限,預設 24 小時)、`providerTimeouts`、`extraProviders`、`pools`、`providerLimits` |
 | | `healthStreak` | 3 | 供應商健康降序之門檻(連續幾次整組皆敗即降至鏈尾) |
 
 `ai` 段不含 `parallel`:每輪之概念數由 `extract.perRun` 定,起草三席同時、其餘逐棒。
@@ -573,6 +573,7 @@ node src/bench/cli.mjs [--role <角色 id|all>] [--lang <語言代碼>] [--model
 - **工作流類**:案給合成之核心狀態(`esCases.coreStateOf` 之精簡描述)、材料與本批;**每案須於 `input.state.concept` 給概念名**(見下「自己的題組與詞彙」);`expect` 列模型須做到之謂詞,類別＝首個不成立之謂詞(皆成立為 `ok`)。第二批(起草、修訂、整併、本質)為**結構合規**——只驗格式、涵蓋與程式可判之性質,不驗是否抓到該抓之要點;評比表之角色欄標「〔結構合規〕」。
 - **一席兩用取兩用之最低分**:`extract.ai.revise` 兼 `wf-revise` 與 `support-revise`、`extract.ai.accept` 兼 `wf-accept` 與 `wf-pending`——換席位時兩列皆須看,取低者。
 - **`--batch`**:只限單一角色、且只 `support-check`／`support-revise`／`dispute-check`／`synonym-check` 收(每頁案數);`--role all` 給之即拋。**`--lang`**:本套件之參數(全部角色共用,`--role all` 亦可),語言設定同正式之 `cfg.lang`(輸出語言句與操作守門之字形政策);程式呼叫為 `opt.lang`。
+- **停測**:受測模型遇限流即停止該模型(其餘模型照跑);限流以調度層 `cooled` 事件之 `reason` 為 `rate-limit` 或 `detect`、或錯誤訊息含限流字樣為準(判準在抓取套件之 `benchFailOf`,各套件同一份)。`streak`(連續失敗降序)、`budget`(鏈首被期限封頂)、`quota`(整組沒額度)之冷卻**不算限流**,該次記為執行錯誤、計入連續失敗,達停測門檻才停。
 - **免費額度**:`--role all` 每模型之呼叫數＝各角色之頁數×`runs`——判定類六角色 40 頁(出處支持 2、修訂 2、失撐 16、爭議 2、同義覆核 2、同義提議 16)＝80 次;工作流類八角色一案一頁,各 16 案共 128 頁＝256 次;合計 336 次(`runs` 2)。
 - **自己的題組與詞彙**:`--cases` 給與內建同形之題組、`--vocab` 給詞彙物件之 JSON(只收本套件之鍵;與他段共用一份詞彙表者加 `--vocab-pick`)。**工作流類八角色(`wf-*`)自帶題組時,每案須於 `input.state.concept` 給概念名**(已有 `input.state` 者在其內加 `concept` 鍵):這八角色之正式提示詞皆含規則 1「只收與本概念直接相關之知識;離題之筆記列入 skipped」(審計之「離題」意見亦然),「離題」以概念名為準;未給時預設為「題組」(`ES_CASE_CONCEPT`),與合成材料全無關係,模型會把全部材料判為離題、得分失真。概念名須**涵蓋**該案應收錄、應接受、應判為捏造／重複／出處錯誤等之材料與操作及 `state` 內既有條目,**不涵蓋**應判「離題」者(中性日常主題,建議 4～10 字);缺、為空(含全空白)或明給「題組」之案於準備期(未呼叫 AI 前)即被拒,訊息指明欄名 `input.state.concept`。判定類六角色之提示詞無離題規則,不要求。程式呼叫:`runExtractBench(role, opt)`、`planExtractBench(role, opt)`(只備題、不呼叫 AI)、`runExtractBenchCli(argv)`。
 - **評比表 `模型評比.csv`**:套件根之 `模型評比.csv` 為 `--board` 累積之評比表(現只有出處修訂、出處支持覆核、失撐找支持三角色之列)。`--board` 為一角色一模型一列,以本次覆蓋同角色同模型之舊列(命令列不擋自己之題組——以自己之題組評分時不給 `--board`,或指向自己之評比表;「題組」欄＝題組之 std 與 v,自己之同形題組之列只能以提示詞指紋分辨,`--vocab`、`--lang` 亦改變指紋)。CLI 型模型會讀 AI 工作目錄上層之指示檔,**量通用能力時 `--out` 放在任何專案之外**。
@@ -685,3 +686,14 @@ createKnowledgeExtract({
 - **產出鏈 `produced` 只記 AI 產出之版本**:存量處置、撤出處／恢復、還原撤回等無 AI 之寫入不帶(規格之 stage 列舉只有 `extract`、`regen-core`、`rollback`);整條遞補鏈皆敗之呼叫不入 `steps`／`failures`;`regen-core` 只標重練後新核心之第一版(其後之版本為 `extract`);經 dist(UMD)取用時內建評比題組不隨包,`promptFp` 省略(其餘照寫)。
 - **拒收型別碼只涵蓋六組**:`提煉守門（終審後）`、`提煉終審擋下`、`提煉終審裁決無效`、`提煉未達檢定標準`、`提煉超限`／`提煉檢定標準`、`提煉不變式剔除` 等拒收類日誌行未帶型別碼、無 By 計數(其總數雖有部分既有,但不在六組之內);`dependency-rejected` 為連鎖拒收,其根因之碼在被依附之操作自己之拒收上,兩者各計一次。
 - **已知而未改(改即行為變更,須 A/B 或另案)**:狀態摘要之待審段不可逆清單缺「拆分」(由 `TERMINAL_OPS` 產生即多一詞——提示詞變更);ES3 之存量掃描欄位集未含理由類欄(`statusNote`、沿革說明)而新進閘檢全部文字欄;`checkCore` 對隔離／失撐之參數整條跳過而 `coreFixOf` 照修、ES1 之受檢範圍含已結案而 ES3 不含;`@ref` 之文字欄集於換號(5／4 欄)與 `REF_FIELDS.texts`(9 欄)不同;重審項兩端皆被引用時以 `createdAt` 字串比較選呈現端(混合時區);`standards/holdSettle` 取整包本段環境且 `sweepStaleHolds → env.stateCache → maintainCores` 隱性耦合;專步排程以閉包序列而非表驅動;`domain/prompts` 之匯出函數直接呼叫時須自給 `ctx.kb`。
+
+---
+
+## Breaking changes
+
+**配合上游 `w-dispatch-ai` 1.0.86、`w-knowledge-capture` 1.0.18、`w-knowledge-summarize` 1.0.15、`w-knowledge-relate` 1.0.14(冷卻、健康、預算之修正)**
+
+- **`ai` 設定段新增兩鍵**:`cooldownGrowth`(冷卻加長倍率,≥ 1 之有限數,預設 1)、`cooldownMaxMs`(冷卻視窗上限,正整數毫秒,預設 86400000)。預設值下有效冷卻視窗恆為 `cooldownMs`(不加長;`cooldownMs` 自行設得大於 24 小時者另受 `cooldownMaxMs` 封頂),行為不變;打錯型別(如 `cooldownGrowth: 0.5`)於解析設定時即拋。解析後之 `settings.ai` 與 `EXTRACT_AI_DEFAULT` 因而多此兩鍵(緊接 `cooldownMs`,鍵序同抓取套件之預設)。
+- **評分(`--role`、`runExtractBench`)之停測判準收嚴**:只有冷卻原因為 `rate-limit`、`detect`(或錯誤訊息含限流字樣)才立即停測該模型;`streak`、`budget`、`quota` 之冷卻改記為執行錯誤、計入連續失敗,達停測門檻才停(詳見第 15 節〈停測〉)。評分結果之失敗類別欄因而可能由「額度用盡或限流」變為「執行錯誤」。
+- **經 `cfg.aiOptions.persistStore` 注入持久層者**:健康降序(`ai.healthStreak`)之連續失敗數改由調度層的遞補層持久計數,跨行程累計(成交歸零、達門檻以 `streak` 冷卻);`ai.cooldownMs` 為 0 時不計連敗、健康降序無效果。本套件預設不注入持久層,連敗仍只在行程內累計。
+- **其餘不變**:截止判斷(`errorType:'budget'` 與整輪剩餘)、斷網不計、席位形狀與預設席位、提示詞與指紋皆未改。

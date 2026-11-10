@@ -894,7 +894,7 @@ describe('unit-extract-bench', function() {
             const ai = wkfStub({
                 plan: { 'synonym-check': { cases } },
                 raw: { 'synonym-check': (cs, base, m) => (m === 'bad' ? '我無法判斷' : (m === 'shape' ? '{"items":[]}' : JSON.stringify(ORACLE['synonym-check'](cs)))) },
-                fail: { slow: { error: 'TIMEOUT after 1000ms', errorType: 'timeout', tried: [{ providerId: 'slow', outcome: 'skip-group', errorType: 'timeout', durationMs: 1000 }] }, cool: { error: 'x', errorType: 'exec', events: [{ type: 'cooled', error: 'FreeUsageLimitError' }], tried: [{ providerId: 'cool', outcome: 'skip-group', errorType: 'exec', durationMs: 5 }] } },
+                fail: { slow: { error: 'TIMEOUT after 1000ms', errorType: 'timeout', tried: [{ providerId: 'slow', outcome: 'skip-group', errorType: 'timeout', durationMs: 1000 }] }, cool: { error: 'x', errorType: 'exec', events: [{ type: 'cooled', reason: 'rate-limit', error: 'FreeUsageLimitError' }], tried: [{ providerId: 'cool', outcome: 'skip-group', errorType: 'exec', durationMs: 5 }] } },
             })
             const r = await runExtractBench('synonym-check', { models: ['ok', 'bad', 'shape', 'slow', 'cool'], runs: 1, aiAdapter: ai, cases })
             const m = Object.fromEntries(r.models.map((x) => [x.model, x]))
@@ -904,6 +904,29 @@ describe('unit-extract-bench', function() {
             assert.match(m.shape.cases[0].runs[0].error, /shape:validation\(1\.2s\)：回覆中無含指定鍵之物件/, '缺鍵之物件亦解析不出')
             assert.equal(m.slow.cases[0].runs[0].failKind, 'timeout')
             assert.ok(m.cool.stopped, '限流即停')
+        })
+
+        it('冷卻事件之 reason 決定是否停測(抓取套件 1.0.18 之契約):rate-limit／detect → 限流即停(failKind limit);streak／budget／quota → 不停測、歸執行錯誤(連敗、期限封頂、整組沒額度皆非限流);他模型照跑', async () => {
+            const cases = SET['synonym-check'].cases.slice(0, 2)
+            const cooled = (reason) => ({ error: 'x', errorType: 'exec', events: [{ type: 'cooled', reason, error: 'x' }], tried: [{ providerId: reason, outcome: 'skip-group', errorType: 'exec', durationMs: 5 }] })
+            const fail = { 'rate-limit': cooled('rate-limit'), 'detect': cooled('detect'), 'streak': cooled('streak'), 'budget': cooled('budget'), 'quota': cooled('quota') }
+            const ai = wkfStub({
+                plan: { 'synonym-check': { cases } },
+                raw: { 'synonym-check': (cs) => JSON.stringify(ORACLE['synonym-check'](cs)) },
+                fail,
+            })
+            const r = await runExtractBench('synonym-check', { models: ['ok', ...Object.keys(fail)], runs: 1, aiAdapter: ai, cases })
+            const m = Object.fromEntries(r.models.map((x) => [x.model, x]))
+            assert.equal(m.ok.score.pass, 2, '他模型照跑')
+            for (const reason of ['rate-limit', 'detect']) {
+                assert.ok(m[reason].stopped, `${reason}:限流即停`)
+                assert.equal(m[reason].cases[0].runs[0].failKind, 'limit', `${reason}:歸額度用盡或限流`)
+            }
+            for (const reason of ['streak', 'budget', 'quota']) {
+                assert.ok(!m[reason].stopped, `${reason}:非限流,不停測`)
+                assert.equal(m[reason].cases[0].runs[0].failKind, 'error', `${reason}:歸執行錯誤`)
+                assert.equal(m[reason].cases.length, cases.length, `${reason}:每案照跑`)
+            }
         })
     })
 

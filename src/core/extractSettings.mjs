@@ -30,11 +30,13 @@ import { PANEL_SCHEMA, panelGroupOf, panelSameProviderWarnings, panelSeatRowsOf,
 
 /**
  * ai 段之預設:摘要套件之 ai 段預設(抓取套件之 AI 調度層預設＋健康降序 3;健康降序之預設只在摘要套件)取 ai 段之 schema(抓取套件之 AI_SCHEMA)
- *   之鍵——正向取鍵:摘要之 ai 段另有之鍵(parallel 等;提煉不讀,每輪之概念數由 extract.perRun 定)不會漏進來
+ *   之鍵——正向取鍵:摘要之 ai 段另有之鍵(parallel 等;提煉不讀,每輪之概念數由 extract.perRun 定)不會漏進來。
+ *   鍵序取預設本身(＝抓取套件之 AI_DEFAULT 之序,摘要套件之預設由其展開而來),不取 AI_SCHEMA 之序:抓取套件之 schema 與預設之鍵序可不同
+ *   (1.0.18 新增之 cooldownGrowth／cooldownMaxMs 在預設緊接 cooldownMs、在 schema 則排最後),以 schema 之序組出會使本段之鍵序偏離抓取套件
  *
  * @type {Object}
  */
-export const EXTRACT_AI_DEFAULT = cloneSettingsDefault(Object.fromEntries(Object.keys(AI_SCHEMA).map((k) => [k, SUMMARIZE_AI_DEFAULT[k]])))
+export const EXTRACT_AI_DEFAULT = cloneSettingsDefault(Object.fromEntries(Object.keys(SUMMARIZE_AI_DEFAULT).filter((k) => k in AI_SCHEMA).map((k) => [k, SUMMARIZE_AI_DEFAULT[k]])))
 
 /** ai 段之 schema:抓取套件之 ai 段(同一物件,不另寫;不含 parallel) */
 export const EXTRACT_AI_SCHEMA = AI_SCHEMA

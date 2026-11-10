@@ -126,6 +126,7 @@ const SAMPLES = {
     pint: { valid: [7, 8], invalid: [0, -1, 1.5, '5', NaN, null, Infinity] },
     p0int: { valid: [7, 8], invalid: [-1, 1.5, '5', NaN, null] },
     p0num: { valid: [0, 1.5, 7], invalid: [-1, '5', NaN, null, Infinity] },
+    growth: { valid: [1, 1.5, 4], invalid: [0.5, 0, -1, '2', NaN, Infinity, null] }, // 冷卻加長倍率:≥ 1 之有限數(抓取套件 SETTING_TYPES.growth)
     bool: { valid: [true, false], invalid: ['true', 1, 0, null] },
     objArr: { valid: [[{ id: 'x' }], [{ a: 1 }, { b: 2 }]], invalid: [{}, [1], ['x'], 'x', null] },
     timeouts: { valid: [{ 'x:y': 1000 }], invalid: [{ a: 0 }, { a: 1.5 }, { a: '5' }, [], 'x', null] },

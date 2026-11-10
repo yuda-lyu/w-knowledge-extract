@@ -1160,7 +1160,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line178">line 178</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line180">line 180</a>
     </li></ul></dd>
     
 
@@ -3788,7 +3788,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line137">line 137</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line139">line 139</a>
     </li></ul></dd>
     
 
@@ -5214,13 +5214,15 @@
     
     <dt class="tag-description">Description:</dt>
     <dd class="tag-description"><ul class="dummy"><li><p>ai 段之預設:摘要套件之 ai 段預設(抓取套件之 AI 調度層預設＋健康降序 3;健康降序之預設只在摘要套件)取 ai 段之 schema(抓取套件之 AI_SCHEMA)
-之鍵——正向取鍵:摘要之 ai 段另有之鍵(parallel 等;提煉不讀,每輪之概念數由 extract.perRun 定)不會漏進來</p></li></ul></dd>
+之鍵——正向取鍵:摘要之 ai 段另有之鍵(parallel 等;提煉不讀,每輪之概念數由 extract.perRun 定)不會漏進來。
+鍵序取預設本身(＝抓取套件之 AI_DEFAULT 之序,摘要套件之預設由其展開而來),不取 AI_SCHEMA 之序:抓取套件之 schema 與預設之鍵序可不同
+(1.0.18 新增之 cooldownGrowth／cooldownMaxMs 在預設緊接 cooldownMs、在 schema 則排最後),以 schema 之序組出會使本段之鍵序偏離抓取套件</p></li></ul></dd>
     
 
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line37">line 37</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line39">line 39</a>
     </li></ul></dd>
     
 
@@ -5261,7 +5263,9 @@
 
 <div class="description usertext">
     <p>ai 段之預設:摘要套件之 ai 段預設(抓取套件之 AI 調度層預設＋健康降序 3;健康降序之預設只在摘要套件)取 ai 段之 schema(抓取套件之 AI_SCHEMA)
-之鍵——正向取鍵:摘要之 ai 段另有之鍵(parallel 等;提煉不讀,每輪之概念數由 extract.perRun 定)不會漏進來</p>
+之鍵——正向取鍵:摘要之 ai 段另有之鍵(parallel 等;提煉不讀,每輪之概念數由 extract.perRun 定)不會漏進來。
+鍵序取預設本身(＝抓取套件之 AI_DEFAULT 之序,摘要套件之預設由其展開而來),不取 AI_SCHEMA 之序:抓取套件之 schema 與預設之鍵序可不同
+(1.0.18 新增之 cooldownGrowth／cooldownMaxMs 在預設緊接 cooldownMs、在 schema 則排最後),以 schema 之序組出會使本段之鍵序偏離抓取套件</p>
 </div>
 
 
@@ -5299,7 +5303,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line40">line 40</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line42">line 42</a>
     </li></ul></dd>
     
 
@@ -5968,7 +5972,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line272">line 272</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line274">line 274</a>
     </li></ul></dd>
     
 
@@ -6124,7 +6128,7 @@
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line44">line 44</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line46">line 46</a>
     </li></ul></dd>
     
 
@@ -6352,7 +6356,7 @@ synonymCheck＝同義核心 ES11)</p></li></ul></dd>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line526">line 526</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line528">line 528</a>
     </li></ul></dd>
     
 
@@ -6436,7 +6440,7 @@ first、second 必填——只有一席永遠判不成)。出處支持覆核(ES9
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line288">line 288</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line290">line 290</a>
     </li></ul></dd>
     
 
@@ -7637,7 +7641,7 @@ rules → rules(資料成員;建構時套用一次,收內建規則表之複本):
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line197">line 197</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line199">line 199</a>
     </li></ul></dd>
     
 
@@ -7705,7 +7709,7 @@ rules → rules(資料成員;建構時套用一次,收內建規則表之複本):
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line402">line 402</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line404">line 404</a>
     </li></ul></dd>
     
 
@@ -7784,7 +7788,7 @@ rules → rules(資料成員;建構時套用一次,收內建規則表之複本):
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line134">line 134</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line136">line 136</a>
     </li></ul></dd>
     
 
@@ -7862,7 +7866,7 @@ rules → rules(資料成員;建構時套用一次,收內建規則表之複本):
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line413">line 413</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line415">line 415</a>
     </li></ul></dd>
     
 
@@ -7941,7 +7945,7 @@ rules → rules(資料成員;建構時套用一次,收內建規則表之複本):
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line186">line 186</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line188">line 188</a>
     </li></ul></dd>
     
 
@@ -8766,7 +8770,7 @@ opt.&lt;鍵&gt;.tap／chain 與總組裝之插件掛載(stageOpts)之可用鍵;�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line562">line 562</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line564">line 564</a>
     </li></ul></dd>
     
 
@@ -8834,7 +8838,7 @@ opt.&lt;鍵&gt;.tap／chain 與總組裝之插件掛載(stageOpts)之可用鍵;�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line572">line 572</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line574">line 574</a>
     </li></ul></dd>
     
 
@@ -12254,7 +12258,7 @@ panel＝以判定小組判定(全部受檢項皆缺票或同一供應者＝專�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line304">line 304</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line306">line 306</a>
     </li></ul></dd>
     
 
@@ -12399,7 +12403,7 @@ panel＝以判定小組判定(全部受檢項皆缺票或同一供應者＝專�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line278">line 278</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line280">line 280</a>
     </li></ul></dd>
     
 
@@ -12466,7 +12470,7 @@ panel＝以判定小組判定(全部受檢項皆缺票或同一供應者＝專�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line297">line 297</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line299">line 299</a>
     </li></ul></dd>
     
 
@@ -14998,7 +15002,7 @@ to-version-not-lower toVersion 不低於現版、version-unavailable 上一份�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line249">line 249</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line251">line 251</a>
     </li></ul></dd>
     
 
@@ -18763,7 +18767,7 @@ console.log(report.ok)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line394">line 394</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line396">line 396</a>
     </li></ul></dd>
     
 
@@ -45281,7 +45285,7 @@ console.log(doubtCheckedOf(s, s.disputes[0]))
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line391">line 391</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line393">line 393</a>
     </li></ul></dd>
     
 
@@ -51794,7 +51798,7 @@ onEvent?:(ev)=&gt;void(調度事件;明給才轉交工作流入口,見檔頭) }<
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line262">line 262</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line264">line 264</a>
     </li></ul></dd>
     
 
@@ -52321,7 +52325,7 @@ domain 函數成員(EXTRACT_DOMAIN_MEMBERS 之 need 'feature';成員一句列出
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line593">line 593</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line595">line 595</a>
     </li></ul></dd>
     
 
@@ -53311,7 +53315,7 @@ const material = extractMaterialOf(note)</code></pre>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line322">line 322</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line324">line 324</a>
     </li></ul></dd>
     
 
@@ -53477,7 +53481,7 @@ graceDays(未關聯筆記之寬限天數)、catchup(同核心同輪至多幾批,
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line492">line 492</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line494">line 494</a>
     </li></ul></dd>
     
 
@@ -53861,7 +53865,7 @@ console.log(extractPromptId(domain, EXTRACT_DEFAULT.ai) === extractPromptId(doma
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line472">line 472</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line474">line 474</a>
     </li></ul></dd>
     
 
@@ -54027,7 +54031,7 @@ resolveExtractSettings 或他總組裝以同一 schema 解析之設定恆合格<
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line225">line 225</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line227">line 227</a>
     </li></ul></dd>
     
 
@@ -54360,7 +54364,7 @@ stale, holdsOpen, holdsWaived, v, total?, due? } }, checksRead:Boolean }</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line440">line 440</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line442">line 442</a>
     </li></ul></dd>
     
 
@@ -54525,7 +54529,7 @@ stale, holdsOpen, holdsWaived, v, total?, due? } }, checksRead:Boolean }</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line425">line 425</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line427">line 427</a>
     </li></ul></dd>
     
 
@@ -54689,7 +54693,7 @@ stale, holdsOpen, holdsWaived, v, total?, due? } }, checksRead:Boolean }</p>
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line151">line 151</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line153">line 153</a>
     </li></ul></dd>
     
 
@@ -54857,7 +54861,7 @@ console.log(extractSeatsProblem(resolveExtractSettings({}).extract.ai))
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line169">line 169</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line171">line 171</a>
     </li></ul></dd>
     
 
@@ -55872,7 +55876,7 @@ resolveExtractSettings 之 warnings 即本函數不給 inflow 之結果;他總�
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line341">line 341</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line343">line 343</a>
     </li></ul></dd>
     
 
@@ -66398,7 +66402,7 @@ await markExtracted(stores.notes, notesById, ['n-a', 'n-b'], '2026-09-01T00:00:0
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line516">line 516</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line518">line 518</a>
     </li></ul></dd>
     
 
@@ -90884,7 +90888,7 @@ console.log(resolveExtractDirs('c:/kb', undefined, { notes: 'knowledge/notes' })
     
     <dt class="tag-source">Source:</dt>
     <dd class="tag-source"><ul class="dummy"><li>
-        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line372">line 372</a>
+        <a href="core_extractSettings.mjs.html">core/extractSettings.mjs</a>, <a href="core_extractSettings.mjs.html#line374">line 374</a>
     </li></ul></dd>
     
 
@@ -118074,7 +118078,7 @@ writeRegenIntents(dirs, { cores: { [coreId]: intent } })</code></pre>
 <br class="clear">
 
 <footer>
-    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Tue Nov 10 2026 20:43:33 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 4.0.5</a> on Wed Nov 11 2026 07:38:46 GMT+0800 (台北標準時間) using the <a href="https://github.com/clenemt/docdash">docdash</a> theme.
 </footer>
 
 <script>prettyPrint();</script>
