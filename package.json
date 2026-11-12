@@ -1,18 +1,18 @@
 {
   "name": "w-knowledge-extract",
-  "version": "1.0.38",
+  "version": "1.0.39",
   "main": "dist/w-knowledge-extract.umd.js",
   "dependencies": {
     "json5": "^2.2.3",
-    "w-knowledge-capture": "^1.0.22",
-    "w-knowledge-relate": "^1.0.18",
-    "w-knowledge-summarize": "^1.0.19",
-    "wsemi": "^1.9.58"
+    "w-knowledge-capture": "^1.0.23",
+    "w-knowledge-relate": "^1.0.19",
+    "w-knowledge-summarize": "^1.0.20",
+    "wsemi": "^1.9.59"
   },
   "devDependencies": {
-    "w-data-pipeline": "^1.0.36",
-    "w-dispatch-ai": "^1.0.90",
-    "w-orm-lmdb": "^1.0.62",
+    "w-data-pipeline": "^1.0.37",
+    "w-dispatch-ai": "^1.0.91",
+    "w-orm-lmdb": "^1.0.63",
     "w-package-tools": "^1.1.28"
   },
   "scripts": {
