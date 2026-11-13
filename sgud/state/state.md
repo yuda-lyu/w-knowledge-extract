@@ -97,6 +97,11 @@
 8. 型別碼未涵蓋之拒收類日誌行（終審後守門、終審擋下、裁決無效、未達檢定標準、超限／檢定標準交修訂、不變式剔除）：各須有既有總數可對才能納入（`verdictBlocked`、`stdRejected`、`invariantDropped` 已有總數，可日後各立 By 鍵）；本輪不擴（主控已裁）。
 9. 產出鏈與型別碼皆**未在正式庫實跑**：待使用端升版後連看數輪（`detail` 之 By 鍵、changelog 末筆之 `produced`〔含 `standards-fix`〕、`coreVersionsByProvenance` 之取回）。
 
+## 瀏覽器之啟動改經 w-playwright(2026-11-13,主控;排程第 442 項)
+
+- 本套件打包 w-knowledge-capture 之原始碼,其抓取階梯經 w-fetch-web 啟動 Chromium;w-fetch-web 1.0.44 起一律經自有套件 `w-playwright`(合併 `--disable-features` 以免 Chromium 每次啟動以錯誤密碼登入 Windows、10 次即鎖帳號).
+- 改動:`toolg/gDistRollup.mjs` 之 globals／external 由 `'playwright'` 改 `'w-playwright'`(各 1 處);`dependencies` 不另宣告 `w-playwright`(依本套件帳本之依賴對帳:`src/` 未直接匯入者不列;經 w-knowledge-capture 之依賴取得,同原 playwright 之作法);w-knowledge-capture 隨發布升至最新.
+
 ## 需使用者決定者
 
 - 無。

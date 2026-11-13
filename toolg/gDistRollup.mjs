@@ -57,7 +57,7 @@ rollupFiles({
         //w-fetch-web、w-dwdata-hub剔除清單
         '@mozilla/readability': '@mozilla/readability',
         'jsdom': 'jsdom',
-        'playwright': 'playwright',
+        'w-playwright': 'w-playwright',
         'rss-parser': 'rss-parser',
 
         //w-orm-lmdb剔除清單
@@ -89,7 +89,7 @@ rollupFiles({
         //w-fetch-web、w-dwdata-hub剔除清單
         '@mozilla/readability',
         'jsdom',
-        'playwright',
+        'w-playwright',
         'rss-parser',
 
         //w-orm-lmdb剔除清單
