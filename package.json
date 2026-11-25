@@ -1,19 +1,19 @@
 {
   "name": "w-knowledge-extract",
-  "version": "1.0.64",
+  "version": "1.0.65",
   "main": "dist/w-knowledge-extract.umd.js",
   "dependencies": {
     "json5": "^2.2.3",
-    "w-knowledge-capture": "^1.0.50",
-    "w-knowledge-relate": "^1.0.44",
-    "w-knowledge-summarize": "^1.0.45",
-    "wsemi": "^1.9.76"
+    "w-knowledge-capture": "^1.0.51",
+    "w-knowledge-relate": "^1.0.45",
+    "w-knowledge-summarize": "^1.0.46",
+    "wsemi": "^1.9.77"
   },
   "devDependencies": {
-    "w-data-pipeline": "^1.0.55",
-    "w-dispatch-ai": "^1.0.116",
-    "w-orm-lmdb": "^1.0.83",
-    "w-package-tools": "^1.1.30"
+    "w-data-pipeline": "^1.0.56",
+    "w-dispatch-ai": "^1.0.117",
+    "w-orm-lmdb": "^1.0.85",
+    "w-package-tools": "^1.1.31"
   },
   "scripts": {
     "test": "mocha --parallel \"test/*.test.mjs\" --timeout 180000",
