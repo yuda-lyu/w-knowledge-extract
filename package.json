@@ -1,12 +1,12 @@
 {
   "name": "w-knowledge-extract",
-  "version": "1.0.66",
+  "version": "1.0.67",
   "main": "dist/w-knowledge-extract.umd.js",
   "dependencies": {
     "json5": "^2.2.3",
-    "w-knowledge-capture": "^1.0.52",
-    "w-knowledge-relate": "^1.0.46",
-    "w-knowledge-summarize": "^1.0.47",
+    "w-knowledge-capture": "^1.0.53",
+    "w-knowledge-relate": "^1.0.47",
+    "w-knowledge-summarize": "^1.0.48",
     "wsemi": "^1.9.78"
   },
   "devDependencies": {
